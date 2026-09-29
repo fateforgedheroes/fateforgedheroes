@@ -22,11 +22,18 @@
   const AREA_OF = { Ember: 4, Verdant: 3, Frost: 1, Storm: 2, Radiant: 0, Umbral: 2, Aether: 1 };
 
   // ---------- state ----------
+  // player profile: account level gates the Fate Altar and the Boss Hall
+  const PLAYER_UNLOCK = { altaar: 5, kerkers: 10 };
+  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall' };
+  const pxNeed = l => 80 + 40 * (l - 1);
+  const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
+  const levelSilver = l => 100 * l;
+  function newPlayer() { return { name: 'Adventurer', avatar: null, lvl: 1, xp: 0, st: { won: 0, lost: 0, bossWon: 0, summons: 0 } }; }
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
   function fresh() {
     const roster = {};
     K.START_ROSTER.forEach(id => (roster[id] = newHero(id)));
-    const s = { v: 6, silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster, team: K.START_TEAM.slice(), inv: [], nid: 1, cleared: -1, clearedHard: -1, hard: false, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
+    const s = { v: 7, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster, team: K.START_TEAM.slice(), inv: [], nid: 1, cleared: -1, clearedHard: -1, hard: false, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
     for (let i = 0; i < 4; i++) s.inv.push(K.genGear({ il: 1 }, s.nid++));
     return s;
   }
@@ -53,13 +60,20 @@
     o.v = 6; o.migrated6 = true;
     return o;
   }
+  // v6 -> v7: player profile and player level; everyone starts at level 1
+  function to7(o) {
+    o.p = newPlayer();
+    o.v = 7; o.migrated7 = true;
+    return o;
+  }
   function migrate(o) {
     if (!o || !o.roster) return null;
-    if (o.v === 6) return o;
-    if (o.v === 5) return to6(o);
-    if (o.v === 4) return to6(to5(o));
+    if (o.v === 7) return o;
+    if (o.v === 6) return to7(o);
+    if (o.v === 5) return to7(to6(o));
+    if (o.v === 4) return to7(to6(to5(o)));
     const m = migrate3(o);
-    return m ? to6(to5(to4(m))) : null;
+    return m ? to7(to6(to5(to4(m)))) : null;
   }
   function migrate3(o) {
     if (o.v === 3) return o;
@@ -85,7 +99,7 @@
     return null;
   }
   function load(snap) {
-    if (snap && snap.v === 6) return snap;
+    if (snap && snap.v === 7) return snap;
     try { const raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem(OLD_SAVE_KEY); if (raw) { const m = migrate(JSON.parse(raw)); if (m) return m; } } catch (e) { /* no storage */ }
     return fresh();
   }
@@ -154,9 +168,9 @@
   function power(st) { return Math.round(st.hp * 0.12 + st.atk * 1.8 + st.def * 1.3 + st.spd * 4 + st.crit * 5 + st.cdmg * 2 + (st.acc + st.res) * 0.8); }
   const teamPower = () => S.team.reduce((s, id) => s + power(statsOf(id)), 0);
   let toastT;
-  function toast(msg, bad) {
+  function toast(msg, bad, ms) {
     const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
-    clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 2400);
+    clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms || 2400);
   }
   function hud() {
     $('#silver').textContent = S.silver.toLocaleString('en-US');
@@ -164,7 +178,32 @@
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones;
     const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
     sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${S.sound ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${S.sound ? 'Sound on' : 'Sound off'}</span>`;
-    document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0);
+    document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0 && unlocked('altaar'));
+    for (const t in PLAYER_UNLOCK) document.querySelector(`#tabs [data-tab="${t}"]`).classList.toggle('locked', !unlocked(t));
+    paintAccount();
+  }
+  const unlocked = t => !PLAYER_UNLOCK[t] || S.p.lvl >= PLAYER_UNLOCK[t];
+  const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.team[0]);
+  function paintAccount() {
+    const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
+    const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
+    b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
+    b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
+    if (tab === 'profiel' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = profileHtml();
+  }
+  function lockedHtml(t, lede) {
+    const need = PLAYER_UNLOCK[t];
+    return `<div class="section-head"><div><h2>${UNLOCK_NAME[t]}</h2><p class="lede">${lede}</p></div></div>
+      <div class="lockbox"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>
+        <div><h3>Unlocks at player level ${need}</h3><p class="empty-note">You are level ${S.p.lvl}. Win battles in the campaign to earn player XP.</p>
+        <div class="xpbar"><i style="width:${Math.round(levelProgress(need) * 100)}%"></i></div>
+        <button class="btn primary" data-act="tab" data-tab="campagne">To the campaign</button></div></div>`;
+  }
+  // share of the XP between level 1 and level `to` that the player already has
+  function levelProgress(to) {
+    let have = S.p.xp, total = 0;
+    for (let l = 1; l < to; l++) { total += pxNeed(l); if (l < S.p.lvl) have += pxNeed(l); }
+    return Math.min(1, have / total);
   }
 
   // ---------- tabs ----------
@@ -177,7 +216,7 @@
   function render() {
     hud();
     const el = $('#screen');
-    el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : champsHtml();
+    el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml();
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
     // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
@@ -234,8 +273,9 @@
   }
 
   // ----- boss hall -----
-  const bossOpen = i => i === 0 ? S.cleared >= 6 : (S.bh[K.BOSS_ORDER[i - 1]] || 0) >= 1;
+  const bossOpen = i => i === 0 ? unlocked('kerkers') : (S.bh[K.BOSS_ORDER[i - 1]] || 0) >= 1;
   function dungeonsHtml() {
+    if (!unlocked('kerkers')) return lockedHtml('kerkers', 'Twenty-five bosses, each with phases, a passive and a Break Meter. Each boss has ten levels and drops gear from its own sets.');
     const cur = S.bhCur && K.BOSSES[S.bhCur] ? S.bhCur : K.BOSS_ORDER[0];
     const ci = K.BOSS_ORDER.indexOf(cur), B0 = K.BOSSES[cur];
     const list = K.BOSS_ORDER.map((id, i) => {
@@ -259,7 +299,7 @@
           <div class="lvls" role="group" aria-label="Level">${lvls}</div>
           <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · boss level ${lv}</span><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge</button></div>
         </div></div>`
-      : `<div class="dg locked"><div class="dg-body"><h3 style="margin:0">Locked</h3><p class="empty-note">${ci === 0 ? 'Clear Chapter I of the campaign to open the Boss Hall.' : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></div></div>`;
+      : `<div class="dg locked"><div class="dg-body"><h3 style="margin:0">Locked</h3><p class="empty-note">${ci === 0 ? `Reach player level ${PLAYER_UNLOCK.kerkers} to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></div></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
       <div class="bh"><div class="bh-list">${list}</div><div>${detail}</div></div>`;
   }
@@ -271,6 +311,7 @@
   const shardIc = (id, cls) => `<img class="shard-ic ${cls || 'ic'}" src="${SHARD_ART[id + '0']}" alt="">`;
   const shardAnim = id => `<span class="fs-anim">${[0, 1, 2].map(k => `<img src="${SHARD_ART[id + k]}" alt="">`).join('')}</span>`;
   function altarHtml() {
+    if (!unlocked('altaar')) return lockedHtml('altaar', 'Offer Fate Shards to summon heroes. Legendary heroes can only be summoned here. Keep the Fate Shards you find: they are waiting for you when the altar opens.');
     const cards = K.FATE_SHARDS.map((f, t) => {
       const have = S.fs[f.id] || 0;
       const rates = f.rates.map((r, i) => r ? `<span class="rar-${i}"><b class="rartxt">${K.RARITIES[i]}</b> ${r}%</span>` : '').join('');
@@ -397,17 +438,64 @@
         <div class="row"><button class="btn small primary" data-act="feed" data-f="${f}" ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${K.feedXp(f, h.lvl).toLocaleString('en-US')} XP</button><button class="btn small" data-act="breakdown" data-f="${f}">Break down · +${K.breakStones(f)} ${ic('stone')}</button></div></div>`).join('')}</div></div>`;
   }
 
+  // ----- player profile -----
+  let editName = false;
+  function profileHtml() {
+    const p = S.p, need = pxNeed(p.lvl), av = avatarId(), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
+    const bossesBeaten = Object.values(S.bh).filter(n => n > 0).length;
+    const heroes = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
+    const nameRow = editName
+      ? `<form class="pname" data-form="pname"><input name="pname" value="${esc(p.name)}" maxlength="20" autocomplete="nickname" aria-label="Player name" required><button class="btn primary small" type="submit">Save</button><button class="btn small" type="button" data-act="pnamecancel">Cancel</button></form>`
+      : `<div class="pname"><h2>${esc(p.name)}</h2><button class="btn small" data-act="pnameedit">Change name</button></div>`;
+    const road = Object.keys(PLAYER_UNLOCK).sort((a, b) => PLAYER_UNLOCK[a] - PLAYER_UNLOCK[b]).map(t => {
+      const ok = unlocked(t);
+      return `<li class="${ok ? 'on' : ''}"><span class="lvtag">Lv ${PLAYER_UNLOCK[t]}</span><b>${UNLOCK_NAME[t]}</b><span class="empty-note">${ok ? 'Unlocked' : `${PLAYER_UNLOCK[t] - p.lvl} ${PLAYER_UNLOCK[t] - p.lvl === 1 ? 'level' : 'levels'} to go`}</span></li>`;
+    }).join('');
+    const avatars = Object.keys(S.roster).filter(id => C[id]).sort((a, b) => C[b].rar - C[a].rar).map(id => `<button type="button" class="av-pick rar-${C[id].rar} ${id === av ? 'sel' : ''}" data-act="avatar" data-id="${id}" title="${esc(C[id].name)}" aria-label="${esc(C[id].name)}" aria-pressed="${id === av}">${por(id)}</button>`).join('');
+    const stat = (k, v) => `<dt>${k}</dt><dd>${typeof v === 'number' ? v.toLocaleString('en-US') : v}</dd>`;
+    const account = !cl || !cl.enabled
+      ? '<p class="empty-note">Offline mode: your progress is saved in this browser only.</p>'
+      : cl.email
+        ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
+        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
+    return `<div class="profile">
+      <div class="prof-head rar-${C[av].rar}"><div class="prof-av">${por(av)}</div>
+        <div class="prof-main">${nameRow}
+          <div class="prof-lv"><span class="lvbadge">${p.lvl}</span><span>Player level ${p.lvl}</span></div>
+          <div class="xpbar"><i style="width:${Math.round(p.xp / need * 100)}%"></i></div>
+          <small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP</small></div></div>
+      <div class="prof-cols">
+        <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out silver. Every fifth level also gives a Greater Fate Shard.</p></section>
+        <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${S.clearedHard >= 0 ? stat('Brutal stages cleared', `${S.clearedHard + 1} / ${K.STAGES.length}`) : ''}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
+      </div>
+      <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
+      <section class="prof-acc"><h3>Account</h3>${account}</section>
+    </div>`;
+  }
+
   // ---------- screen events ----------
+  document.addEventListener('submit', e => {
+    const f = e.target.closest('[data-form="pname"]'); if (!f) return;
+    e.preventDefault();
+    const name = f.pname.value.replace(/[<>"&\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+    if (name.length < 2) { toast('Pick a name of at least 2 characters.', true); return; }
+    S.p.name = name; editName = false; save(); render(); toast('Name saved.');
+  });
   document.addEventListener('click', e => {
     SFX.unlock();
     const tb = e.target.closest('#tabs button');
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
+    if (e.target.closest('#account')) { if (B) return; SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
     if (act === 'tab') setTab(a.dataset.tab);
+    else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
+    else if (act === 'pnamecancel') { editName = false; render(); }
+    else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
+    else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
     else if (act === 'mode') { S.hard = a.dataset.hard === '1'; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'play') startCampaign(+a.dataset.stage);
@@ -479,8 +567,8 @@
   let lastType = 'fate';
   function doSummon(n, type) {
     type = type || lastType; lastType = type;
-    if ((S.fs[type] || 0) < n) return;
-    S.fs[type] -= n;
+    if ((S.fs[type] || 0) < n || !unlocked('altaar')) return;
+    S.fs[type] -= n; S.p.st.summons += n;
     const res = [];
     for (let i = 0; i < n; i++) res.push(K.summonOne(S, type));
     save(); render();
@@ -1070,6 +1158,18 @@
     }
     return ups;
   }
+  // returns one entry per level gained: [level, silver, shard, unlocked tab or null]
+  function grantPlayerXp(amount) {
+    const p = S.p, ups = [];
+    p.xp += amount;
+    while (p.xp >= pxNeed(p.lvl)) {
+      p.xp -= pxNeed(p.lvl); p.lvl++;
+      const silver = levelSilver(p.lvl), shard = p.lvl % 5 === 0 ? 'greater' : null;
+      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1;
+      ups.push([p.lvl, silver, shard, Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl) || null]);
+    }
+    return ups;
+  }
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
     const items = [], loot = [];
@@ -1108,10 +1208,15 @@
     for (const t of gotShards) S.fs[t] = (S.fs[t] || 0) + 1;
     loot.forEach(it => S.inv.push(it));
     const ups = grantXp(xp);
+    const pxp = win ? playerWinXp(lvl, first, cfg.type === 'boss') : b.aborted ? 0 : Math.round(playerWinXp(lvl) * 0.25);
+    const pups = grantPlayerXp(pxp);
+    if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
     items.push(`<li ${d()}><img class="spr ic" src="${SPR.iconUrl('coin', 2)}" alt="">+${silver.toLocaleString('en-US')} silver</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
+    if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
+    pups.forEach(([l, sv, sh, t]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${sv.toLocaleString('en-US')} silver${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     if (stones) items.push(`<li ${d()}>${ic('stone')}+${stones} ${stones === 1 ? 'Ascension Stone' : 'Ascension Stones'}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
@@ -1128,7 +1233,6 @@
     const isStage = cfg.type === 'stage';
     const last = isStage && cfg.i === K.STAGES.length - 1;
     const note = win && first && last && !cfg.hard ? '<p class="lede">You finished all ten chapters. Brutal difficulty is now open.</p>'
-      : win && first && isStage && !cfg.hard && cfg.stage.n === 6 && cfg.stage.chapter === 0 ? '<p class="lede">Chapter I cleared. The Boss Hall is now open.</p>'
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
       : win ? '' : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits.</p>';
@@ -1136,8 +1240,10 @@
     const acts = win
       ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : 'Next level'}</button>` : ''}<button class="btn" data-act="modal" data-go="again">Replay</button><button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
       : `<button class="btn primary" data-act="modal" data-go="again">Try again</button><button class="btn" data-act="modal" data-go="champs">Upgrade champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`;
+    const openBtns = pups.map(u => u[3]).filter(Boolean).map(t => `<button class="btn violet" data-act="modal" data-go="open-${t}">Open the ${UNLOCK_NAME[t]}</button>`).join('');
+    if (pups.length) SFX.up();
     const m = $('#modal');
-    m.innerHTML = `<div class="modal-box ${win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)}${win && first ? ' · first clear' : ''}</p>${mvp}<ul class="rewards">${items.join('')}</ul>${note}<div class="modal-actions">${acts}</div></div>`;
+    m.innerHTML = `<div class="modal-box ${win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)}${win && first ? ' · first clear' : ''}</p>${mvp}<ul class="rewards">${items.join('')}</ul>${note}<div class="modal-actions">${openBtns}${acts}</div></div>`;
     m.hidden = false;
     const f = m.querySelector('.btn'); if (f) f.focus();
   }
@@ -1153,7 +1259,8 @@
     const cfg = B && B.cfg;
     endBattleView(); B = null;
     if (!cfg) { render(); return; }
-    if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else startDungeon(cfg.id, cfg.n + 1); }
+    if (go.startsWith('open-')) setTab(go.slice(5));
+    else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'champs') setTab('champions');
     else setTab(cfg.type === 'stage' ? 'campagne' : 'kerkers');
@@ -1167,15 +1274,18 @@
       get: () => S,
       set: ns => { const m = migrate(ns); if (!m) return; S = m; S.fodder = S.fodder || {}; save(); if (!B) render(); else hud(); },
       toast: msg => toast(msg),
+      paint: () => paintAccount(),
     });
     save();
     $('#logo').src = LOGO_URL;
     $('#ic-coin').src = SPR.iconUrl('coin', 2); $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
     render();
+    const m7 = S.migrated7; delete S.migrated7;
     if (S.migrated) { delete S.migrated; delete S.migrated4; delete S.migrated5; delete S.migrated6; save(); toast('Your progress was carried over. Your champions were replaced by the new heroes.'); }
     else if (S.migrated4) { delete S.migrated4; delete S.migrated5; save(); toast('New combat system: Essences, Speed and the Boss Hall. Your progress was kept.'); }
     else if (S.migrated5) { delete S.migrated5; delete S.migrated6; save(); toast('The campaign now has 10 chapters of 7 stages. Your progress was moved to the matching stage.'); }
     else if (S.migrated6) { delete S.migrated6; save(); toast('The Fate Altar is open: your crown shards are now Fate Shards, and you got a Greater Fate Shard.'); }
+    else if (m7) { save(); toast(`New: player levels. Win battles to level up. The Fate Altar opens at level ${PLAYER_UNLOCK.altaar}, the Boss Hall at level ${PLAYER_UNLOCK.kerkers}. Tap your avatar for your profile.`, false, 7000); }
   }
   window.claude?.hot?.snapshot?.(() => ({ S }));
   const boot = data => SPR.preload().then(() => start(data));

@@ -94,18 +94,8 @@
   const $ = s => document.querySelector(s);
   let status = { k: 'off', msg: '' };
   function setStatus(k, msg) { status = { k, msg: msg || '' }; paintAccount(); }
-  const ACC_IC = '<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg>';
-  function paintAccount() {
-    const b = $('#account'); if (!b) return;
-    if (!enabled) { b.hidden = true; return; }
-    b.hidden = false;
-    if (session && session.user) {
-      const who = session.user.email || 'Account';
-      const dot = status.k === 'error' ? 'err' : status.k === 'syncing' ? 'sync' : 'ok';
-      b.innerHTML = `${ACC_IC}<i class="acc-dot ${dot}"></i><span class="acc-name">${who.replace(/[&<>"]/g, '')}</span>`;
-      b.title = status.k === 'error' ? 'Cloud save failed: ' + status.msg : status.k === 'syncing' ? 'Syncing…' : 'Progress saved to your account';
-    } else { b.innerHTML = `${ACC_IC}<span class="acc-name">Sign in</span>`; b.title = 'Sign in to save your progress in the cloud'; }
-  }
+  // the game paints the account button (avatar, level) and the profile screen; it reads our state via FFH_CLOUD.info()
+  function paintAccount() { if (api && api.paint) api.paint(); }
   function overlay(html) {
     let o = $('#auth');
     if (!o) { o = document.createElement('div'); o.id = 'auth'; document.body.appendChild(o); }
@@ -195,7 +185,6 @@
       if (!enabled) return;
       // Only show "Continue with Google" when the Google provider is switched on in Supabase
       try { const st = await req('/auth/v1/settings', { auth: false }); googleOn = !!(st && st.external && st.external.google); } catch (e) { googleOn = false; }
-      document.addEventListener('click', e => { if (e.target.closest('#account')) { session && session.user ? accountMenu() : loginScreen(); } });
       session = store.get(SESSION_KEY);
       const back = fromUrlHash();
       if (back && back.error) { loginScreen(back.error, true); return; }
@@ -206,6 +195,10 @@
       setInterval(() => { if (session) push(); }, 30000);
       document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && session) push(); });
     },
+    // account state for the profile screen: { enabled, email, status: 'off' | 'syncing' | 'saved' | 'error' }
+    info() { return { enabled, email: session && session.user ? session.user.email || 'your account' : null, status: status.k }; },
+    // sign-in dialog, or the account menu when signed in
+    openAccount() { if (!enabled) return; session && session.user ? accountMenu() : loginScreen(); },
     // called on every local save; uploads a few seconds later
     queue() { if (!enabled || !session) return; clearTimeout(pushT); pushT = setTimeout(() => push(), 3000); },
   };

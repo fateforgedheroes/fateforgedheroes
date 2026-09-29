@@ -36,11 +36,12 @@ Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…)
 - **Campaign:** `CHAPTERS` (10 × 7 stages, names/desc/set per chapter). Stage 1–6 drop weapon/helmet/shield/gloves/chest/boots, stage 7 = chapter boss, random slot. Each chapter drops its own gear set.
 - **Boss Hall:** 25 bosses × 10 levels, `bossLvl(i, n)`.
 - **Fate Altar:** `FATE_SHARDS` (fate, greater, ancient, mythic, legendary) with drop chance per win and rarity table.
+- **Player profile** (`S.p`, app.js): name, avatar (a hero id), player level + XP, stats. Player XP comes from battles (`playerWinXp`, curve `pxNeed`); level-ups pay silver, every 5th level a Greater Fate Shard. `PLAYER_UNLOCK` gates tabs: Fate Altar at level 5, Boss Hall at level 10. The header `#account` button opens the profile screen (tab `profiel`), which also holds the cloud account section (`FFH_CLOUD.info()` / `openAccount()`).
 - **Ascension Stones** (`S.stones`) buy stars. **Fodder** (`S.fodder`): 5% chance per stage win to capture a non-boss enemy.
 
 ## Save format (app.js)
 
-`S` in localStorage key `ffh-save` (old key `kronen-van-as-v1` still read). Current version `v: 6`; `migrate()` upgrades older saves. When changing the save shape: bump `v`, add a migration step, keep old saves working. `save()` also queues a cloud upload.
+`S` in localStorage key `ffh-save` (old key `kronen-van-as-v1` still read). Current version `v: 7`; `migrate()` upgrades older saves. When changing the save shape: bump `v`, add a migration step, keep old saves working. `save()` also queues a cloud upload.
 
 ## Working rules
 
