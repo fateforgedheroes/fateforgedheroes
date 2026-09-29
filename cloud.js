@@ -8,7 +8,7 @@
   const enabled = !!(URL0 && KEY);
   const SESSION_KEY = 'ffh-session';
   const GUEST_KEY = 'ffh-guest';
-  let session = null, api = null, pushT = 0, lastPushed = '', busy = false;
+  let session = null, api = null, pushT = 0, lastPushed = '', busy = false, googleOn = false;
 
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
@@ -118,8 +118,8 @@
       <h2 id="auth-h">Sign in to save your progress</h2>
       <p class="auth-sub">Your heroes, gear and progress are stored in your account, so you can continue on any device.</p>
       ${msg ? `<p class="auth-msg ${isErr ? 'bad' : ''}">${msg}</p>` : ''}
-      <button class="btn primary auth-google" type="button" data-auth="google"><svg viewBox="0 0 18 18" aria-hidden="true"><path fill="#EA4335" d="M9 3.5c1.6 0 2.7.7 3.3 1.3l2.4-2.4C13.3 1 11.3 0 9 0 5.5 0 2.4 2 1 5l2.8 2.2C4.4 5.1 6.5 3.5 9 3.5z"/><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.1-.2-1.7H9v3.3h4.8c-.2 1.1-.8 2-1.8 2.6l2.7 2.1c1.6-1.5 2.9-3.7 2.9-6.3z"/><path fill="#FBBC05" d="M3.8 10.8c-.2-.5-.3-1.1-.3-1.8s.1-1.2.3-1.8L1 5C.4 6.2 0 7.6 0 9s.4 2.8 1 4l2.8-2.2z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.7-2.1c-.8.5-1.9.9-3.3.9-2.5 0-4.6-1.7-5.3-3.9L1 13c1.5 3 4.5 5 8 5z"/></svg>Continue with Google</button>
-      <div class="auth-or"><span>or with email</span></div>
+      <button class="btn primary auth-google" type="button" data-auth="google" ${googleOn ? '' : 'hidden'}><svg viewBox="0 0 18 18" aria-hidden="true"><path fill="#EA4335" d="M9 3.5c1.6 0 2.7.7 3.3 1.3l2.4-2.4C13.3 1 11.3 0 9 0 5.5 0 2.4 2 1 5l2.8 2.2C4.4 5.1 6.5 3.5 9 3.5z"/><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.1-.2-1.7H9v3.3h4.8c-.2 1.1-.8 2-1.8 2.6l2.7 2.1c1.6-1.5 2.9-3.7 2.9-6.3z"/><path fill="#FBBC05" d="M3.8 10.8c-.2-.5-.3-1.1-.3-1.8s.1-1.2.3-1.8L1 5C.4 6.2 0 7.6 0 9s.4 2.8 1 4l2.8-2.2z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.7-2.1c-.8.5-1.9.9-3.3.9-2.5 0-4.6-1.7-5.3-3.9L1 13c1.5 3 4.5 5 8 5z"/></svg>Continue with Google</button>
+      ${googleOn ? '<div class="auth-or"><span>or with email</span></div>' : ''}
       <form class="auth-form" novalidate>
         <label>Email<input type="email" name="email" autocomplete="email" required></label>
         <label>Password<input type="password" name="password" autocomplete="current-password" minlength="6" required></label>
@@ -192,6 +192,8 @@
     async attach(gameApi) {
       api = gameApi;
       if (!enabled) return;
+      // Only show "Continue with Google" when the Google provider is switched on in Supabase
+      try { const st = await req('/auth/v1/settings', { auth: false }); googleOn = !!(st && st.external && st.external.google); } catch (e) { googleOn = false; }
       document.addEventListener('click', e => { if (e.target.closest('#account')) { session && session.user ? accountMenu() : loginScreen(); } });
       session = store.get(SESSION_KEY);
       const back = fromUrlHash();

@@ -8,5 +8,5 @@
     "build": "node build.mjs",
     "test": "node tests/campaign-sim.cjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": { "node": "24.x" }
 }
