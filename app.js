@@ -28,7 +28,11 @@
   const pxNeed = l => 80 + 40 * (l - 1);
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
-  function newPlayer() { return { name: 'Adventurer', avatar: null, lvl: 1, xp: 0, st: { won: 0, lost: 0, bossWon: 0, summons: 0 } }; }
+  const RENAME_COST = 2500; // the first name change is free
+  const renameCost = () => (S.p.renames ? RENAME_COST : 0);
+  function newPlayer() { return { name: 'Adventurer', avatar: null, renames: 0, lvl: 1, xp: 0, st: { won: 0, lost: 0, bossWon: 0, summons: 0 } }; }
+  // fields added to v7 after release: fill them in on load (a player who already changed their name used the free change)
+  function fixup(s) { if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {}; return s; }
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
   function fresh() {
     const roster = {};
@@ -444,9 +448,10 @@
     const p = S.p, need = pxNeed(p.lvl), av = avatarId(), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const bossesBeaten = Object.values(S.bh).filter(n => n > 0).length;
     const heroes = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
+    const cost = renameCost(), costTxt = cost ? `${ic('coin')} ${cost.toLocaleString('en-US')}` : 'free once';
     const nameRow = editName
-      ? `<form class="pname" data-form="pname"><input name="pname" value="${esc(p.name)}" maxlength="20" autocomplete="nickname" aria-label="Player name" required><button class="btn primary small" type="submit">Save</button><button class="btn small" type="button" data-act="pnamecancel">Cancel</button></form>`
-      : `<div class="pname"><h2>${esc(p.name)}</h2><button class="btn small" data-act="pnameedit">Change name</button></div>`;
+      ? `<form class="pname" data-form="pname"><input name="pname" value="${esc(p.name)}" maxlength="20" autocomplete="nickname" aria-label="Player name" required><button class="btn primary small" type="submit">Save · ${costTxt}</button><button class="btn small" type="button" data-act="pnamecancel">Cancel</button></form>`
+      : `<div class="pname"><h2>${esc(p.name)}</h2><button class="btn small" data-act="pnameedit" ${S.silver < cost ? `disabled title="Changing your name costs ${cost.toLocaleString('en-US')} silver"` : ''}>Change name · ${costTxt}</button></div>`;
     const road = Object.keys(PLAYER_UNLOCK).sort((a, b) => PLAYER_UNLOCK[a] - PLAYER_UNLOCK[b]).map(t => {
       const ok = unlocked(t);
       return `<li class="${ok ? 'on' : ''}"><span class="lvtag">Lv ${PLAYER_UNLOCK[t]}</span><b>${UNLOCK_NAME[t]}</b><span class="empty-note">${ok ? 'Unlocked' : `${PLAYER_UNLOCK[t] - p.lvl} ${PLAYER_UNLOCK[t] - p.lvl === 1 ? 'level' : 'levels'} to go`}</span></li>`;
@@ -479,7 +484,11 @@
     e.preventDefault();
     const name = f.pname.value.replace(/[<>"&\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
     if (name.length < 2) { toast('Pick a name of at least 2 characters.', true); return; }
-    S.p.name = name; editName = false; save(); render(); toast('Name saved.');
+    if (name === S.p.name) { editName = false; render(); return; }
+    const cost = renameCost();
+    if (S.silver < cost) { toast(`Changing your name costs ${cost.toLocaleString('en-US')} silver.`, true); return; }
+    S.silver -= cost; S.p.renames++;
+    S.p.name = name; editName = false; save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} silver.` : 'Name saved.');
   });
   document.addEventListener('click', e => {
     SFX.unlock();
@@ -1289,10 +1298,10 @@
   // ---------- boot ----------
   function start(data) {
     S = load(data && data.S);
-    S.fodder = S.fodder || {};
+    fixup(S);
     if (window.FFH_CLOUD) window.FFH_CLOUD.attach({
       get: () => S,
-      set: ns => { const m = migrate(ns); if (!m) return; S = m; S.fodder = S.fodder || {}; save(); if (!B) render(); else hud(); },
+      set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
     });
