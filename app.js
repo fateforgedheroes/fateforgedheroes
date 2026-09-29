@@ -1255,7 +1255,7 @@
         if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), rarBoost: (hard ? 0.15 : 0) + (cfg.stage.slot ? 0 : 0.1), sets: [cfg.stage.set] }, S.nid++));
         if (first && cfg.stage.n === 6) delete S.chap;
         const u = K.STAGES[cfg.i].unlock;
-        const catchable = cfg.stage.foes.filter(f => !K.BOSSES[f]);
+        const catchable = [...new Set(cfg.stage.phases.flat())].filter(f => !K.BOSSES[f]);
         if (catchable.length && Math.random() < K.CAPTURE_CHANCE) {
           const cid = K.pick(catchable);
           if (!S.roster[cid]) { S.roster[cid] = newHero(cid); captured = { id: cid, isNew: true }; }
