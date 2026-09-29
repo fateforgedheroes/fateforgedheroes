@@ -159,7 +159,9 @@ h3 { font-size: 1.05rem; color: var(--gold); margin-bottom: 8px; }
 .card .nm { font-weight: 600; font-size: .98rem; }
 .card .sub { font-size: .8rem; color: var(--muted); }
 .card .aff { position: absolute; top: 6px; left: 6px; }
-.card .lv { position: absolute; top: 6px; right: 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* hero level: a small gold square in the top-right corner */
+.card .lv, .slot .lv { position: absolute; top: 4px; right: 4px; z-index: 1; min-width: 20px; height: 20px; padding: 0 3px; display: grid; place-items: center; background: var(--gold); color: #140f0a; font-family: var(--font-display); font-weight: 900; font-size: 11px; line-height: 1; font-variant-numeric: lining-nums tabular-nums; box-shadow: 0 0 0 1px #000, inset 0 -2px 0 rgba(0,0,0,.25); }
+.slot.filled { position: relative; }
 .card.sel { border-color: var(--gold); border-bottom-color: var(--rc); background: var(--panel-2); }
 .card.inteam { padding-bottom: 20px; }
 .card.inteam::after { content: "In team"; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); background: var(--gold); color: #1a130a; font-family: var(--font-tag); font-size: 9px; padding: 1px 5px; }
