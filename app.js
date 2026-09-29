@@ -177,7 +177,11 @@
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const affChip = a => `<span class="aff ess-chip" style="--c:${AFF_COL[a]}" title="Essence: ${a}" aria-label="${a}">${essIcon(a)}</span>`;
   const por = (id, scale, cls) => `<img class="spr ${cls || ''}" src="${SPR.url(id, scale || 1)}" alt="">`;
-  const ic = (name, cls) => name === 'stone' ? `<img class="shard-ic ${cls || 'ic'}" src="${STONE_ART}" alt="Ascension Stone">` : `<img class="spr ${cls || 'ic'}" src="${SPR.iconUrl(name, 2)}" alt="">`;
+  // Sigils are the currency (stored as S.silver for save compatibility)
+  const ic = (name, cls) => name === 'stone' ? `<img class="shard-ic ${cls || 'ic'}" src="${STONE_ART}" alt="Ascension Stone">`
+    : name === 'coin' ? `<img class="sigil-ic ${cls || 'ic'}" src="${SIGIL_ART}" alt="Sigils">`
+    : `<img class="spr ${cls || 'ic'}" src="${SPR.iconUrl(name, 2)}" alt="">`;
+  const sigils = n => `${ic('coin')} ${n.toLocaleString('en-US')} Sigils`;
   const itemsOf = id => S.inv.filter(it => it.owner === id);
   const itemName = it => `${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()}${it.lvl ? ' +' + it.lvl : ''}`;
   const starStr = (n, max) => `<span class="stars" title="${n} sterren">${'★'.repeat(n)}<i>${'★'.repeat((max || K.MAX_STARS) - n)}</i></span>`;
@@ -350,7 +354,7 @@
     return `<div class="section-head"><div><h2>Fate Altar</h2><p class="lede">Offer Fate Shards to summon heroes. The rarer the shard, the stronger the pool. Legendary heroes can only be summoned here. A hero you already own upgrades one of their skills.</p></div></div>
       <div class="altar">
         <div class="altar-stage">${shardAnim('legendary').replace('class="fs-anim"', 'class="fs-anim big"')}
-          <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${K.SHARD_PRICE.toLocaleString('en-US')} silver</button></div>
+          <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${sigils(K.SHARD_PRICE)}</button></div>
           <span class="empty-note">Fate Shards drop from every victory in the campaign and the Boss Hall. First clears give a guaranteed shard.</span>
           <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div></div>
         </div>
@@ -417,7 +421,7 @@
     if (r.stars < mxs) {
       const rc = K.rankCost(r.stars), ok = atCap && S.stones >= rc.stones && S.silver >= rc.silver;
       canRank = ok;
-      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${ic('stone')} ${rc.stones} Ascension Stones · ${rc.silver.toLocaleString('en-US')} silver${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
+      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${ic('stone')} ${rc.stones} Ascension Stones · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
     }
     const items = itemsOf(id), counts = K.setCounts(items);
     const setInfo = Object.keys(counts).map(k => { const SS = K.SETS[k], on = counts[k] >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${counts[k]}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }).join('');
@@ -426,7 +430,7 @@
       if (!it) return `<div class="gslot empty"><span class="tag">${K.SLOT_NAMES[slot]}</span><span class="empty-note">Nothing equipped</span><div class="row"><button class="btn small" data-act="inv" data-slot="${slot}">Choose</button></div></div>`;
       const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it);
       return `<div class="gslot rar-${it.rar}"><span class="tag">${K.SLOT_NAMES[slot]} · level ${it.il}</span><span class="item-name">${itemName(it)}</span><span class="item-set">${K.SETS[it.set].name}</span>${itemStatsHtml(it)}
-        <div class="row"><button class="btn small primary" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade · ${cost.toLocaleString('en-US')} · ${Math.round(K.upgradeChance(it) * 100)}%`}</button>
+        <div class="row"><button class="btn small primary" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade · ${ic('coin')} ${cost.toLocaleString('en-US')} · ${Math.round(K.upgradeChance(it) * 100)}%`}</button>
         <button class="btn small" data-act="inv" data-slot="${slot}">Swap</button><button class="btn small" data-act="unequip" data-item="${it.id}">Remove</button></div></div>`;
     }).join('');
     let inv = '';
@@ -520,7 +524,7 @@
     const cost = renameCost(), costTxt = cost ? `${ic('coin')} ${cost.toLocaleString('en-US')}` : 'free once';
     const nameRow = editName
       ? `<form class="pname" data-form="pname"><input name="pname" value="${esc(p.name)}" maxlength="20" autocomplete="nickname" aria-label="Player name" required><button class="btn primary small" type="submit">Save · ${costTxt}</button><button class="btn small" type="button" data-act="pnamecancel">Cancel</button></form>`
-      : `<div class="pname"><h2>${esc(p.name)}</h2><button class="btn small" data-act="pnameedit" ${S.silver < cost ? `disabled title="Changing your name costs ${cost.toLocaleString('en-US')} silver"` : ''}>Change name · ${costTxt}</button></div>`;
+      : `<div class="pname"><h2>${esc(p.name)}</h2><button class="btn small" data-act="pnameedit" ${S.silver < cost ? `disabled title="Changing your name costs ${cost.toLocaleString('en-US')} Sigils"` : ''}>Change name · ${costTxt}</button></div>`;
     const road = Object.keys(PLAYER_UNLOCK).sort((a, b) => PLAYER_UNLOCK[a] - PLAYER_UNLOCK[b]).map(t => {
       const ok = unlocked(t);
       return `<li class="${ok ? 'on' : ''}"><span class="lvtag">Lv ${PLAYER_UNLOCK[t]}</span><b>${UNLOCK_NAME[t]}</b><span class="empty-note">${ok ? 'Unlocked' : `${PLAYER_UNLOCK[t] - p.lvl} ${PLAYER_UNLOCK[t] - p.lvl === 1 ? 'level' : 'levels'} to go`}</span></li>`;
@@ -539,7 +543,7 @@
           <div class="xpbar"><i style="width:${Math.round(p.xp / need * 100)}%"></i></div>
           <small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP</small></div></div>
       <div class="prof-cols">
-        <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out silver. Every fifth level also gives a Greater Fate Shard.</p></section>
+        <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out Sigils. Every fifth level also gives a Greater Fate Shard.</p></section>
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${S.clearedHard >= 0 ? stat('Brutal stages cleared', `${S.clearedHard + 1} / ${K.STAGES.length}`) : ''}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
@@ -555,9 +559,9 @@
     if (name.length < 2) { toast('Pick a name of at least 2 characters.', true); return; }
     if (name === S.p.name) { editName = false; render(); return; }
     const cost = renameCost();
-    if (S.silver < cost) { toast(`Changing your name costs ${cost.toLocaleString('en-US')} silver.`, true); return; }
+    if (S.silver < cost) { toast(`Changing your name costs ${cost.toLocaleString('en-US')} Sigils.`, true); return; }
     S.silver -= cost; S.p.renames++;
-    S.p.name = name; editName = false; save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} silver.` : 'Name saved.');
+    S.p.name = name; editName = false; save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} Sigils.` : 'Name saved.');
   });
   document.addEventListener('click', e => {
     SFX.unlock();
@@ -600,17 +604,17 @@
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = selChamp; invSlot = null; save(); render(); toast(`${itemName(item)} equipped.`);
     } else if (act === 'unequip' && item) { item.owner = null; save(); render(); }
-    else if (act === 'sell' && item) { const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); save(); render(); toast(`Sold for ${v} silver.`); }
+    else if (act === 'sell' && item) { const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); save(); render(); toast(`Sold for ${v} Sigils.`); }
     else if (act === 'sellbad') {
       const bad = S.inv.filter(x => !x.owner && x.rar <= 1 && x.lvl === 0);
       if (!bad.length) { toast('No spare common or uncommon gear to sell.'); return; }
-      const v = bad.reduce((s, x) => s + K.sellValue(x), 0); S.silver += v; S.inv = S.inv.filter(x => !bad.includes(x)); save(); render(); toast(`Sold ${bad.length} items for ${v} silver.`);
+      const v = bad.reduce((s, x) => s + K.sellValue(x), 0); S.silver += v; S.inv = S.inv.filter(x => !bad.includes(x)); save(); render(); toast(`Sold ${bad.length} items for ${v} Sigils.`);
     } else if (act === 'up' && item) {
       const cost = K.upgradeCost(item);
       if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return;
       S.silver -= cost;
       if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
-      else { SFX.fail(); toast('Failed. The silver is spent, the item stays intact.', true); }
+      else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
       save(); render();
     } else if (act === 'bestgear') {
       const h = S.roster[selChamp]; let changed = 0;
@@ -1354,10 +1358,10 @@
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
-    items.push(`<li ${d()}><img class="spr ic" src="${SPR.iconUrl('coin', 2)}" alt="">+${silver.toLocaleString('en-US')} silver</li>`);
+    items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
-    pups.forEach(([l, sv, sh, t]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${sv.toLocaleString('en-US')} silver${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
+    pups.forEach(([l, sv, sh, t]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     if (stones) items.push(`<li ${d()}>${ic('stone')}+${stones} ${stones === 1 ? 'Ascension Stone' : 'Ascension Stones'}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
@@ -1426,12 +1430,12 @@
       summary: s => {
         const p = s.p || {}, heroes = Object.keys(s.roster || {}).filter(id => C[id]).length;
         const top = Object.entries(s.roster || {}).filter(([id]) => C[id]).sort((a, b) => b[1].lvl - a[1].lvl)[0];
-        return `<b>${esc(p.name || 'Adventurer')}</b> · player level ${p.lvl || 1}<br>${(s.cleared ?? -1) + 1} / ${K.STAGES.length} stages · ${heroes} heroes${top ? ` · best: ${esc(C[top[0]].short)} lv ${top[1].lvl}` : ''}<br>${(s.silver || 0).toLocaleString('en-US')} silver`;
+        return `<b>${esc(p.name || 'Adventurer')}</b> · player level ${p.lvl || 1}<br>${(s.cleared ?? -1) + 1} / ${K.STAGES.length} stages · ${heroes} heroes${top ? ` · best: ${esc(C[top[0]].short)} lv ${top[1].lvl}` : ''}<br>${(s.silver || 0).toLocaleString('en-US')} Sigils`;
       },
     });
     save();
     $('#logo').src = LOGO_URL;
-    $('#ic-coin').src = SPR.iconUrl('coin', 2); $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
+    $('#ic-coin').src = SIGIL_ART; $('#ic-coin').className = 'sigil-ic'; $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
     render();
     if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;

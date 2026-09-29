@@ -411,6 +411,12 @@ img.spr[src^="data:image/jpeg"] { image-rendering: auto; object-fit: cover; }
 .fs-t0 { border-color: #6a6570; } .fs-t1 { border-color: #3e7a3a; } .fs-t2 { border-color: #3a62a8; } .fs-t3 { border-color: #7a4ab0; } .fs-t4 { border-color: #c8a040; box-shadow: 0 0 14px rgba(217,180,90,.3); }
 .fs-t0 h3 { color: #e8e4ec; } .fs-t1 h3 { color: #8fe07a; } .fs-t2 h3 { color: #7ab8ff; } .fs-t3 h3 { color: #c49aff; } .fs-t4 h3 { color: #f2c860; }
 img.shard-ic { object-fit: contain; image-rendering: auto; }
+/* Sigils (currency): a wide coin pile, so the icon is wider than tall */
+img.sigil-ic { object-fit: contain; image-rendering: auto; vertical-align: middle; }
+img.sigil-ic.ic { width: 24px; height: 16px; vertical-align: -3px; }
+#ic-coin.sigil-ic { width: 30px; height: 20px; }
+.btn img.sigil-ic { width: 22px; height: 14px; vertical-align: -2px; }
+.rewards li img.sigil-ic { width: 30px; height: 20px; }
 img.shard-ic.ic { width: 22px; height: 22px; vertical-align: middle; }
 #ic-shard.shard-ic, #ic-stone.shard-ic { width: 22px; height: 22px; }
 .rewards li img.shard-ic { width: 33px; height: 33px; }
@@ -610,6 +616,7 @@ button, a, input { touch-action: manipulation; }
   .wallet { flex-wrap: nowrap; gap: 4px; justify-content: flex-end; min-width: 0; }
   .res { gap: 4px; padding: 2px 6px; }
   .res img, #ic-shard.shard-ic, #ic-stone.shard-ic { width: 16px; height: 16px; }
+  #ic-coin.sigil-ic { width: 24px; height: 16px; }
   .res b { font-size: .95rem; }
   .iconbtn { min-height: 32px; padding: 2px 8px; gap: 4px; }
   .iconbtn .lbl, #account .acc-name { display: none; }
@@ -736,7 +743,7 @@ button, a, input { touch-action: manipulation; }
   <header class="top">
     <div class="brand"><h1 class="logo-img"><img id="logo" alt="Fate Forged Heroes"></h1></div>
     <div class="wallet">
-      <div class="res" title="Silver: for upgrading gear and ascending"><img id="ic-coin" class="spr" alt=""><b id="silver">0</b></div>
+      <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b></div>
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b></div>
       <button class="iconbtn" id="sound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">Sound</button>
