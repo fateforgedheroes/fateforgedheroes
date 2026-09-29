@@ -520,7 +520,9 @@ const K = (function () {
   const CAPTURE_CHANCE = 0.05;
   const isCaptured = id => !!(CHAMPS[id] && CHAMPS[id].captured);
   // XP a hero gets from eating one fodder unit: a share of the hero's next level, more for rarer fodder
-  const feedXp = (fodderId, heroLvl) => Math.round(xpNeed(heroLvl) * [0.25, 0.4, 0.6][CHAMPS[fodderId].rar]);
+  // XP from feeding a hero (a spare copy at level 1, or any hero from the roster at its level) to another hero
+  const FEED_RATE = [0.25, 0.4, 0.6, 0.9, 1.3];
+  const feedXp = (foodId, heroLvl, foodLvl) => Math.round(xpNeed(heroLvl) * FEED_RATE[CHAMPS[foodId].rar] * (1 + ((foodLvl || 1) - 1) / 20));
   const breakStones = fodderId => CHAMPS[fodderId].rar + 1;
 
   // ---------- Bosses ----------
@@ -806,7 +808,9 @@ const K = (function () {
   function maxLvl(stars, id) { const cap = id && CHAMPS[id] ? RAR_CAP[CHAMPS[id].rar] : 60; return Math.min(cap, stars * 10); }
   function maxStars(id) { return Math.min(MAX_STARS, Math.ceil(RAR_CAP[CHAMPS[id].rar] / 10)); }
   const rankCost = stars => ({ stones: stars * 4, silver: 400 * stars * stars });
-  const SKILL_MAX = 3;
+  // every skill can be levelled SKILL_MAX times (by feeding a duplicate of the same hero): +SKILL_STEP power per level,
+  // and at the maximum level a skill with a cooldown gets 1 turn shorter
+  const SKILL_MAX = 5, SKILL_STEP = 0.08;
 
   // ---------- Summon ----------
   // Fate Shards: each tier has its own rarity table (index = rarity) and a drop chance per victory.
@@ -832,15 +836,17 @@ const K = (function () {
     let pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === rar);
     if (!pool.length) pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === 2);
     const id = pick(pool);
-    const res = { id, rar: CHAMPS[id].rar, isNew: !st.roster[id], upgrade: null };
+    const res = { id, rar: CHAMPS[id].rar, isNew: !st.roster[id] };
     if (res.isNew) st.roster[id] = { lvl: 1, xp: 0, stars: baseStars(id), sk: CHAMPS[id].skills.map(() => 0) };
-    else {
-      const h = st.roster[id];
-      const opts = h.sk.map((v, i) => i).filter(i => h.sk[i] < SKILL_MAX);
-      if (opts.length) { const i = pick(opts); h.sk[i]++; res.upgrade = { skill: CHAMPS[id].skills[i].name, lv: h.sk[i] }; }
-      else { st.stones += 10; res.upgrade = { stones: 10 }; }
-    }
+    else { st.fodder = st.fodder || {}; st.fodder[id] = (st.fodder[id] || 0) + 1; res.spare = true; } // a duplicate becomes a spare copy
     return res;
+  }
+  // feeding a spare copy of the same hero: +1 level on its lowest skill; returns the skill index or -1 when all are maxed
+  function skillUp(h, id) {
+    let best = -1;
+    h.sk.forEach((v, i) => { if (v < SKILL_MAX && (best < 0 || v < h.sk[best])) best = i; });
+    if (best >= 0) h.sk[best]++;
+    return best;
   }
 
   // ---------- Stats & units ----------
@@ -1079,7 +1085,7 @@ const K = (function () {
       await this.h.before(u, skill, targets, this);
       let killed = 0;
       const hitMap = new Map(), counters = [];
-      const lvMult = 1 + 0.1 * (skill.lv || 0);
+      const lvMult = 1 + SKILL_STEP * (skill.lv || 0);
       for (const fx of skill.fx) {
         if (fx.t === 'dmg') {
           const hits = skill.hits || 1;
@@ -1326,7 +1332,7 @@ const K = (function () {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, HARD_BONUS, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC,
+    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

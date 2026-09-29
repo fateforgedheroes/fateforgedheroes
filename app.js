@@ -42,13 +42,13 @@
     return s;
   }
   // Progress reset for everyone: raise RESET and every older save (local or cloud) starts over on load.
-  // Kept: player name (and how often it was changed) and settings.
+  // Kept: player name (and how often it was changed), sound and speed.
   const RESET = 1;
   function resetSave(o) {
     const s = fresh(), p = o.p || {};
     if (p.name) s.p.name = p.name;
     s.p.renames = p.renames || 0;
-    s.sound = o.sound ?? true; s.speed = o.speed || 1; s.auto = !!o.auto;
+    s.sound = o.sound ?? true; s.speed = o.speed || 1;
     s.wasReset = true;
     return s;
   }
@@ -439,7 +439,7 @@
     const cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap;
     const statRow = (k, pct) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k]}${pct ? '%' : ''}${st[k] > base[k] ? `<small>+${st[k] - base[k]}</small>` : ''}</dd>`;
     const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
-    const skills = c.skills.map((s, i) => { const lv = r.sk[i] || 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${pips(lv)}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${lv * 10}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
+    const skills = c.skills.map((s, i) => { const lv = r.sk[i] || 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${pips(lv)}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${Math.round(lv * K.SKILL_STEP * 100)}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
       + (c.passive ? `<div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>` : '');
     let rank = '', canRank = false;
     if (r.stars < mxs) {
@@ -483,14 +483,43 @@
       </div></div>`;
   }
 
+  // Feed: spare copies (captured enemies and summoned duplicates) and any other hero outside the team can be fed for XP;
+  // a copy of the selected hero itself levels one of its skills instead
   function fodderHtml(id) {
-    const list = K.CAPTURE_ORDER.filter(f => S.fodder[f] > 0);
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
-    const release = C[id].captured && !S.team.includes(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into fodder</button>` : '';
-    if (!list.length && !release) return `<div class="fodder"><h3>Fodder</h3><p class="empty-note">Winning a stage has a ${Math.round(K.CAPTURE_CHANCE * 100)}% chance to capture one of its enemies (never a boss). The first of each kind joins your roster; the rest become fodder to feed your heroes.</p></div>`;
-    return `<div class="fodder"><div class="section-head" style="margin-bottom:6px"><h3 style="margin:0">Fodder</h3>${release}</div>
-      <div class="fodder-list">${list.map(f => `<div class="fd rar-${C[f].rar}">${por(f)}<div><b>${esc(C[f].name)}</b> <span class="tag">×${S.fodder[f]}</span><small class="empty-note">${K.RARITIES[C[f].rar]}</small></div>
-        <div class="row"><button class="btn small primary" data-act="feed" data-f="${f}" ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${K.feedXp(f, h.lvl).toLocaleString('en-US')} XP</button><button class="btn small" data-act="breakdown" data-f="${f}">Break down · +${K.breakStones(f)} ${ic('stone')}</button></div></div>`).join('')}</div></div>`;
+    const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
+    const copies = Object.keys(S.fodder).filter(f => S.fodder[f] > 0 && C[f]).sort((a, b) => (b === id) - (a === id) || C[a].rar - C[b].rar);
+    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !S.team.includes(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
+    const release = C[id].captured && !S.team.includes(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
+    const xpBtn = (xp, attrs) => `<button class="btn small primary" ${attrs} ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${xp.toLocaleString('en-US')} XP</button>`;
+    const copyRow = f => `<div class="fd rar-${C[f].rar} ${f === id ? 'self' : ''}">${por(f)}<div><b>${esc(C[f].name)}</b> <span class="tag">×${S.fodder[f]}</span><small class="empty-note">${K.RARITIES[C[f].rar]} · spare copy</small></div>
+        <div class="row">${f === id
+          ? `<button class="btn small violet" data-act="skillup" data-f="${f}" ${skillsMaxed ? 'disabled title="All skills are at the maximum level"' : ''}>Skill up · +1 skill level</button>`
+          : xpBtn(K.feedXp(f, h.lvl), `data-act="feed" data-f="${f}"`)}<button class="btn small" data-act="breakdown" data-f="${f}">Break down · +${K.breakStones(f)} ${ic('stone')}</button></div></div>`;
+    const heroRow = x => `<div class="fd rar-${C[x].rar}">${por(x)}<div><b>${esc(C[x].short)}</b> <span class="tag">Lv ${S.roster[x].lvl}</span><small class="empty-note">${K.RARITIES[C[x].rar]} · ${roleStr(C[x])}</small></div>
+        <div class="row">${xpBtn(K.feedXp(x, h.lvl, S.roster[x].lvl), `data-act="feedhero" data-id="${x}"`)}</div></div>`;
+    return `<div class="fodder"><div class="section-head" style="margin-bottom:6px"><h3 style="margin:0">Feed</h3>${release}</div>
+      <p class="empty-note">Feed spare copies or other heroes to give ${esc(C[id].short)} XP. A copy of ${esc(C[id].short)} itself raises one skill level instead (max ${K.SKILL_MAX} per skill). Duplicates from the Fate Altar and captured enemies become spare copies.</p>
+      ${copies.length ? `<h4 class="fd-h">Spare copies</h4><div class="fodder-list">${copies.map(copyRow).join('')}</div>` : ''}
+      ${others.length ? `<h4 class="fd-h">Heroes outside your team</h4><div class="fodder-list">${others.map(heroRow).join('')}</div>` : ''}
+      ${!copies.length && !others.length ? '<p class="empty-note">Nothing to feed yet. Summon at the Fate Altar or capture enemies in the campaign.</p>' : ''}</div>`;
+  }
+  // "Are you sure?" before feeding away a Rare or better hero
+  let confirmYes = null;
+  function confirmBox(title, text, yes, onYes) {
+    confirmYes = onYes;
+    const m = $('#modal');
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cf-q"><h2 id="cf-q">${title}</h2><p class="lede">${text}</p>
+      <div class="modal-actions"><button class="btn primary" data-act="cfyes">${yes}</button><button class="btn" data-act="cfno">Cancel</button></div></div>`;
+    m.hidden = false; m.querySelector('.btn').focus();
+  }
+  // gives XP to the selected hero; returns the levels gained
+  function giveXp(gain) {
+    const h = S.roster[selChamp], cap = K.maxLvl(h.stars, selChamp), l0 = h.lvl;
+    h.xp += gain;
+    while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; }
+    if (h.lvl >= cap) h.xp = 0;
+    return h.lvl - l0;
   }
 
   // ----- starter choice (new players) -----
@@ -662,21 +691,41 @@
       worn.forEach(x => (x.owner = null));
       invSlot = null; save(); render(); toast(`Removed ${worn.length} ${worn.length === 1 ? 'piece' : 'pieces'} of gear.`);
     } else if (act === 'feed') {
-      const f = a.dataset.f, h = S.roster[selChamp], cap = K.maxLvl(h.stars, selChamp);
-      if (!(S.fodder[f] > 0) || h.lvl >= cap) return;
-      const gain = K.feedXp(f, h.lvl), l0 = h.lvl;
-      S.fodder[f]--; h.xp += gain;
-      while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; }
-      if (h.lvl >= cap) h.xp = 0;
-      SFX.up(); save(); render(); toast(`${C[selChamp].short} ate a ${C[f].name}: +${gain.toLocaleString('en-US')} XP${h.lvl > l0 ? `, now level ${h.lvl}` : ''}.`);
-    } else if (act === 'breakdown') {
+      const f = a.dataset.f, h = S.roster[selChamp], to = selChamp;
+      if (!(S.fodder[f] > 0) || h.lvl >= K.maxLvl(h.stars, selChamp)) return;
+      const go = () => {
+        if (!(S.fodder[f] > 0) || selChamp !== to) return;
+        const gain = K.feedXp(f, h.lvl); S.fodder[f]--; const up = giveXp(gain);
+        SFX.up(); save(); render(); toast(`${C[to].short} was fed a copy of ${C[f].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.`);
+      };
+      if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
+    } else if (act === 'feedhero') {
+      const x = id, h = S.roster[selChamp], to = selChamp;
+      if (!S.roster[x] || x === to || S.team.includes(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
+      const go = () => {
+        if (!S.roster[x] || selChamp !== to) return;
+        const gain = K.feedXp(x, h.lvl, S.roster[x].lvl), worn = itemsOf(x);
+        delete S.roster[x]; worn.forEach(it => (it.owner = null)); if (S.p.avatar === x) S.p.avatar = null;
+        const up = giveXp(gain);
+        SFX.up(); save(); render(); toast(`${C[to].short} absorbed ${C[x].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.${worn.length ? ' Their gear went back to your inventory.' : ''}`);
+      };
+      if (C[x].rar >= 2) confirmBox('Are you sure?', `Feed <b>${esc(C[x].name)}</b> (${K.RARITIES[C[x].rar]}, level ${S.roster[x].lvl}) to ${esc(C[to].short)}? ${esc(C[x].short)} is gone for good; their gear goes back to your inventory.`, `Yes, feed ${esc(C[x].short)}`, go); else go();
+    } else if (act === 'skillup') {
+      const f = a.dataset.f, h = S.roster[selChamp];
+      if (f !== selChamp || !(S.fodder[f] > 0)) return;
+      const i = K.skillUp(h, f); if (i < 0) return;
+      S.fodder[f]--; SFX.summon(3); save(); render();
+      toast(`${C[f].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}${h.sk[i] >= K.SKILL_MAX && C[f].skills[i].cd ? ' (cooldown −1)' : ''}.`);
+    } else if (act === 'cfyes') { $('#modal').hidden = true; const f = confirmYes; confirmYes = null; if (f) f(); }
+    else if (act === 'cfno') { $('#modal').hidden = true; confirmYes = null; }
+    else if (act === 'breakdown') {
       const f = a.dataset.f; if (!(S.fodder[f] > 0)) return;
       S.fodder[f]--; S.stones += K.breakStones(f); save(); render(); toast(`${C[f].name} broken down into ${K.breakStones(f)} Ascension ${K.breakStones(f) === 1 ? 'Stone' : 'Stones'}.`);
     } else if (act === 'release') {
       if (!C[id] || !C[id].captured || S.team.includes(id)) return;
       delete S.roster[id]; S.fodder[id] = (S.fodder[id] || 0) + 1;
       S.inv.forEach(x => { if (x.owner === id) x.owner = null; });
-      selChamp = S.team[0]; save(); render(); toast(`${C[id].name} is now fodder. Capture another to use it as a hero again.`);
+      selChamp = S.team[0]; save(); render(); toast(`${C[id].name} is now a spare copy. Capture another to use it as a hero again.`);
     } else if (act === 'rank') {
       const h = S.roster[selChamp], rc = K.rankCost(h.stars);
       if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || S.stones < rc.stones || S.silver < rc.silver) return;
@@ -695,7 +744,7 @@
     save(); render();
     const best = Math.max(...res.map(r => r.rar));
     SFX.summon(best);
-    const cards = res.map((r, i) => `<div class="sum-card rar-${r.rar}" style="animation-delay:${i * 0.12}s">${por(r.id)}<span class="nm">${esc(C[r.id].short)}</span><small class="rartxt">${K.RARITIES[r.rar]}</small>${r.isNew ? '<span class="new">NEW</span>' : r.upgrade && r.upgrade.skill ? `<small>${esc(r.upgrade.skill)} → lv ${r.upgrade.lv}</small>` : '<small>+10 Ascension Stones</small>'}</div>`).join('');
+    const cards = res.map((r, i) => `<div class="sum-card rar-${r.rar}" style="animation-delay:${i * 0.12}s">${por(r.id)}<span class="nm">${esc(C[r.id].short)}</span><small class="rartxt">${K.RARITIES[r.rar]}</small>${r.isNew ? '<span class="new">NEW</span>' : '<small>Spare copy: feed it to level a skill</small>'}</div>`).join('');
     const m = $('#modal');
     m.innerHTML = `<div class="modal-box violet ${n > 1 ? 'wide' : ''}" role="dialog" aria-modal="true"><h2>${best >= 4 ? 'Legendary!' : best >= 3 ? 'Epic!' : 'Summoned'}</h2><p class="tag">${esc(K.SHARD[type].name)} · ${S.fs[type]} left</p><div class="summon-grid">${cards}</div>
       <div class="modal-actions"><button class="btn violet" data-act="modal" data-go="summon1" ${S.fs[type] < 1 ? 'disabled' : ''}>1 more · ${shardIc(type)}</button>${S.fs[type] >= 10 ? '<button class="btn violet" data-act="modal" data-go="summon10">10 more</button>' : ''}<button class="btn" data-act="modal" data-go="close">Close</button></div></div>`;
@@ -1271,6 +1320,8 @@
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
+    // auto battle starts off for every stage; switched on, it lasts for all phases of this stage only
+    S.auto = false;
     let b = new K.Battle(heroes, enemies, hooks);
     b.auto = S.auto;
     B = { b, cfg, ph: 0, nPh: K.PHASES };

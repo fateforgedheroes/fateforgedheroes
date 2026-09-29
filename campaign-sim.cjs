@@ -31,6 +31,8 @@ function reward(st, S, first) {
   if (first) st.fs[S.n === 6 ? 'greater' : 'fate']++;
   for (const t of K.rollShards()) st.fs[t]++;
   for (const t in st.fs) while (st.fs[t] > 0) { st.fs[t]--; const had = new Set(Object.keys(st.roster)); const r = K.summonOne(st, t); if (!had.has(r.id)) { const lv = st.roster[r.id]; delete st.roster[r.id]; addHero(st, r.id); st.roster[r.id].sk = lv.sk; } }
+  // duplicates become spare copies: feed them to the same hero for skill levels
+  for (const id in st.fodder || {}) while (st.fodder[id] > 0 && st.roster[id] && K.skillUp(st.roster[id], id) >= 0) st.fodder[id]--;
   st.silver += K.winSilver(S.lvl); st.stones += first ? 3 : Math.random() < 0.35 ? 1 : 0;
   if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: S.lvl, slot: S.slot || K.pick(K.SLOTS), sets: [S.set] }, st.nid++));
   // strongest four heroes for the next stage form the team (essence matters: avoid heroes the enemies are strong against),
