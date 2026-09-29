@@ -428,7 +428,7 @@
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
         <div class="dpanel" data-p="skills">${skills}</div>
-        <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><button class="btn small" data-act="bestgear">Equip best gear</button></div>${setInfo ? `<div class="setbonus" style="margin-bottom:10px">${setInfo}</div>` : ''}<div class="gear-slots">${gear}</div>${inv}</div>
+        <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><div class="gear-acts"><button class="btn small" data-act="bestgear">Equip best gear</button><button class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all gear</button></div></div>${setInfo ? `<div class="setbonus" style="margin-bottom:10px">${setInfo}</div>` : ''}<div class="gear-slots">${gear}</div>${inv}</div>
         <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
       </div></div>`;
   }
@@ -551,6 +551,10 @@
         if (best && best !== cur) { if (cur) cur.owner = null; best.owner = selChamp; changed++; }
       }
       save(); render(); toast(changed ? `Swapped ${changed} ${changed === 1 ? 'piece' : 'pieces'} of gear.` : 'Already wearing the best available gear.');
+    } else if (act === 'unequipall') {
+      const worn = itemsOf(selChamp);
+      worn.forEach(x => (x.owner = null));
+      invSlot = null; save(); render(); toast(`Removed ${worn.length} ${worn.length === 1 ? 'piece' : 'pieces'} of gear.`);
     } else if (act === 'feed') {
       const f = a.dataset.f, h = S.roster[selChamp], cap = K.maxLvl(h.stars, selChamp);
       if (!(S.fodder[f] > 0) || h.lvl >= cap) return;

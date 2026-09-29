@@ -547,6 +547,7 @@ button, a, input { touch-action: manipulation; }
 .dpanel .ascend { margin-bottom: 18px; }
 .dpanel .ascend .rank { margin-top: 0; }
 .dpanel .inv { margin-top: 12px; }
+.gear-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .team-tag { display: inline-block; vertical-align: middle; background: var(--gold); color: #1a130a; font-family: var(--font-tag); font-size: 10px; letter-spacing: .06em; padding: 2px 6px; text-transform: uppercase; }
 
 /* phones: sticky compact header, app-style tab bar at the bottom, full-width battlefield */
@@ -642,6 +643,8 @@ button, a, input { touch-action: manipulation; }
   .dtabs button { font-size: .8rem; letter-spacing: .03em; }
   .dtabs button small { font-size: 9px; }
   .dtabs .dot { right: 8px; }
+  .gear-acts { flex: 1 1 100%; flex-wrap: nowrap; }
+  .gear-acts .btn { flex: 1 1 0; }
   .dpanel[data-p="upgrade"] .rank { margin-top: 0; }
   .detail { padding: 12px; gap: 14px; }
   .d-head { gap: 10px; flex-wrap: nowrap; align-items: flex-start; }
