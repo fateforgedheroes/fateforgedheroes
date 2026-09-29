@@ -588,11 +588,25 @@
   const BOSS_POS = [374, 244], ADD_POS = [[296, 198], [300, 262], [270, 232]];
   const R = { running: false, units: [], projs: [], parts: [], fx: [], ash: [], shake: 0, area: 0, hl: new Set(), hlKind: 'bad', active: null, dim: 0 };
   let B = null, pending = null, selSkill = 0, quitArm = 0;
+  // battle speed: S.speed is the player's preferred speed, spd the speed this battle actually runs at.
+  // Speeds unlock with campaign progress (stage index that must be reached); 5× only when replaying something already beaten.
+  const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
+  let spd = 1, speeds = [1];
+  const beatenBefore = cfg => cfg.type === 'stage' ? cfg.i <= (cfg.hard ? S.clearedHard : S.cleared) : cfg.n <= (S.bh[cfg.id] || 0);
+  function speedsFor(cfg) {
+    const reached = S.cleared + 1, replay = beatenBefore(cfg);
+    return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
+  }
+  function speedHint() {
+    const next = SPEED_UNLOCK.filter(([sp]) => !speeds.includes(sp)).sort((a, b) => a[1] - b[1])[0];
+    if (!next) return '';
+    return S.cleared + 1 >= next[1] ? `${next[0]}× works on stages you have already cleared.` : `${next[0]}× unlocks at ${stageName(next[1])}.`;
+  }
   const cvs = $('#bc'), g = cvs.getContext('2d');
   g.imageSmoothingEnabled = false;
-  const sleep = ms => new Promise(r => setTimeout(r, ms / S.speed));
+  const sleep = ms => new Promise(r => setTimeout(r, ms / spd));
   function tween(ms, fn) {
-    ms /= S.speed;
+    ms /= spd;
     return new Promise(res => {
       const t0 = performance.now();
       const step = now => { const k = Math.min(1, (now - t0) / ms); fn(k); if (k < 1) requestAnimationFrame(step); else res(); };
@@ -702,11 +716,11 @@
   function part(x, y, vx, vy, col, life, size, grav) { R.parts.push({ x, y, vx, vy, col, life, max: life, size: size || 1, grav: grav ?? 0.06 }); }
   function burst(x, y, col, n, spd, size, grav) { for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = (0.4 + Math.random()) * (spd || 1.4); part(x, y, Math.cos(a) * s, Math.sin(a) * s - 0.4, Array.isArray(col) ? col[i % col.length] : col, 18 + Math.random() * 16, size || 1, grav); } }
   function rise(x, y, col, n, spread) { for (let i = 0; i < n; i++) part(x + (Math.random() - 0.5) * (spread || 24), y + Math.random() * 10, (Math.random() - 0.5) * 0.2, -0.5 - Math.random() * 0.7, Array.isArray(col) ? col[i % col.length] : col, 30 + Math.random() * 20, Math.random() < 0.3 ? 2 : 1, -0.005); }
-  function addFx(o) { o.t0 = performance.now(); o.dur = (o.dur || 300) / S.speed; R.fx.push(o); return new Promise(r => setTimeout(r, o.dur)); }
+  function addFx(o) { o.t0 = performance.now(); o.dur = (o.dur || 300) / spd; R.fx.push(o); return new Promise(r => setTimeout(r, o.dur)); }
   function projectile(u, t, kind, col) {
     const [sx, sy] = center(u), [tx, ty] = center(t);
     const dir = u.side === 'hero' ? 1 : -1;
-    const dur = (kind === 'cannon' ? 380 : kind === 'arrow' || kind === 'knife' ? 230 : 300) / S.speed;
+    const dur = (kind === 'cannon' ? 380 : kind === 'arrow' || kind === 'knife' ? 230 : 300) / spd;
     const p = { sx: sx + dir * 12, sy: sy - 6, tx, ty, t0: performance.now(), dur, kind, col };
     R.projs.push(p);
     return new Promise(res => setTimeout(() => { R.projs = R.projs.filter(x => x !== p); res(); }, dur));
@@ -716,11 +730,11 @@
     for (let i = 0; i < n; i++) {
       const dx = (Math.random() - 0.5) * 30, delay = i * 60;
       ps.push(new Promise(res => setTimeout(() => {
-        const dur = (kind === 'rock' ? 320 : 200) / S.speed;
+        const dur = (kind === 'rock' ? 320 : 200) / spd;
         const p = { sx: tx + dx + 40, sy: -20, tx: tx + dx * 0.4, ty: ty + (Math.random() - 0.5) * 12, t0: performance.now(), dur, kind, col, straight: true };
         R.projs.push(p);
         setTimeout(() => { R.projs = R.projs.filter(x => x !== p); if (kind === 'rock') { burst(p.tx, p.ty, ['#ff8a2a', '#ffd060', '#5a3a2a'], 12, 1.8, 2); R.shake = Math.max(R.shake, 3); } res(); }, dur);
-      }, delay / S.speed)));
+      }, delay / spd)));
     }
     return Promise.all(ps);
   }
@@ -829,7 +843,7 @@
     if (u.effects.some(e => e.k === 'burrow')) return 'burrow';
     return (Math.floor(now / (rs.walking ? 140 : 520) + rs.phase) % 2) ? 'idle1' : 'idle0';
   }
-  function setPose(u, pose, ms) { u._rs.pose = pose; u._rs.poseUntil = performance.now() + ms / S.speed; }
+  function setPose(u, pose, ms) { u._rs.pose = pose; u._rs.poseUntil = performance.now() + ms / spd; }
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 ? Math.round((Math.random() - 0.5) * R.shake) : 0;
@@ -1075,13 +1089,17 @@
     }
   });
   function setAutoBtn() { const b = $('#b-auto'); b.textContent = 'Auto: ' + (S.auto ? 'on' : 'off'); b.classList.toggle('on', S.auto); }
-  function setSpeedBtn() { const b = $('#b-speed'); b.textContent = 'Speed ' + S.speed + '×'; b.classList.toggle('on', S.speed > 1); }
+  function setSpeedBtn() { const b = $('#b-speed'); b.textContent = 'Speed ' + spd + '×'; b.classList.toggle('on', spd > 1); b.title = speedHint() || 'Battle speed'; }
   $('#b-auto').addEventListener('click', () => {
     S.auto = !S.auto; save(); setAutoBtn();
     if (B) B.b.auto = S.auto;
     if (S.auto && pending) { const { u, res, b } = pending; pending = null; R.hl = new Set(); updateOverlay(); $('#b-hint').textContent = 'Auto is playing this turn.'; res(b.ai(u)); }
   });
-  $('#b-speed').addEventListener('click', () => { S.speed = S.speed === 1 ? 2 : S.speed === 2 ? 3 : 1; save(); setSpeedBtn(); });
+  $('#b-speed').addEventListener('click', () => {
+    if (speeds.length === 1) { toast(speedHint()); return; }
+    spd = speeds[(speeds.indexOf(spd) + 1) % speeds.length]; S.speed = spd; save(); setSpeedBtn();
+    if (spd === 1 && speedHint()) toast(speedHint());
+  });
   $('#b-quit').addEventListener('click', () => {
     const btn = $('#b-quit');
     if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.textContent = 'Sure? Click again'; setTimeout(() => { btn.textContent = 'Give up'; }, 3000); return; }
@@ -1113,6 +1131,8 @@
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
     cvs.width = VIEW.w; g.imageSmoothingEnabled = false;
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
+    speeds = speedsFor(cfg);
+    spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     const b = new K.Battle(heroes, enemies, hooks);
     b.auto = S.auto;
     B = { b, cfg };
