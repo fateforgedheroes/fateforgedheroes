@@ -26,7 +26,8 @@
   const PLAYER_UNLOCK = { altaar: 5, kerkers: 10 };
   const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall' };
   const pxNeed = l => 80 + 40 * (l - 1);
-  const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
+  // per cleared stage / Boss Hall level (3 phases, hence the ×2)
+  const playerWinXp = (lvl, first, boss) => Math.round(2 * (40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
   const RENAME_COST = 2500; // the first name change is free
   const renameCost = () => (S.p.renames ? RENAME_COST : 0);
@@ -247,7 +248,7 @@
       return `<button class="stage ${state} ${st.boss ? 'bossst' : ''}" data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}>
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span><span class="st-state tag">${label}</span></div>
         <div class="st-foes">${st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('')}</div>
-        <div class="st-meta">${[...new Set(st.foes.map(f => E[f].aff))].map(affChip).join('')} ${st.foes.length} ${st.foes.length === 1 ? 'enemy' : 'enemies'} · level ${lvl}${st.boss ? ` · <span class="boss">Boss: ${esc(st.boss)}</span>` : ''}</div>
+        <div class="st-meta">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')} ${K.PHASES} phases · ${st.phases.map(p => p.length).join('+')} enemies · level ${lvl}${st.boss ? ` · <span class="boss">Boss: ${esc(st.boss)}</span>` : ''}</div>
         <div class="st-drop"><span class="aff" style="--c:var(--gold)">${st.slot ? K.SLOT_NAMES[st.slot][0] : '?'}</span>Drops: ${dropName(st)} · ${K.SETS[st.set].name}</div>
         ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}</button>`;
     };
@@ -258,7 +259,7 @@
     }).join('');
     const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
     const cdone = idx.filter(i => i <= cleared).length;
-    return `<div class="${hard ? 'hardmode' : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages. Every stage drops its own gear slot; the chapter boss in stage 7 drops a random piece. Replay cleared stages to farm the slot you need.</p>
+    return `<div class="${hard ? 'hardmode' : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need.</p>
         <div style="margin-top:10px" class="seg" role="group" aria-label="Difficulty"><button type="button" data-act="mode" data-hard="0" aria-pressed="${!hard}">Normal</button><button type="button" data-act="mode" data-hard="1" aria-pressed="${hard}" ${hardOk ? '' : 'disabled title="Beat Chapter X on Normal first"'}>Brutal${hardOk ? '' : ' (after Chapter X)'}</button></div></div>
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
@@ -296,7 +297,8 @@
     const detail = open ? `<div class="dg">
         <div class="dg-art bh-art"><canvas data-bg="${AREA_OF[B0.aff]}" width="480" height="270"></canvas><img class="spr" src="${SPR.url(cur, 2)}" alt="${esc(B0.name)}"></div>
         <div class="dg-body"><div class="section-head" style="margin:0"><h3 style="margin:0">${esc(B0.name)}</h3><span class="tag">${best}/${K.BOSS_LEVELS} cleared</span></div>
-          <div class="tags">${affChip(B0.aff)} ${B0.aff} · ${esc(B0.arch)} · ${B0.nPhases} phases · Break ${B0.breakMax}</div>
+          <div class="tags">${affChip(B0.aff)} ${B0.aff} · ${esc(B0.arch)} · ${B0.nPhases} boss phases · Break ${B0.breakMax}</div>
+          <p>${K.PHASES - 1} phases of ${K.bossPhases(cur, 1)[0].length} minions first, then the boss.</p>
           <p><b>${esc(B0.passiveName)}</b>: ${esc(B0.passiveDesc)}</p>
           <p>${B0.aff === 'Aether' ? 'No essence has the advantage here.' : `Strong against it: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
           <div class="setlist">${sets}</div>
@@ -879,6 +881,7 @@
     }
     for (const u of sorted) {
       const rs = u._rs, m = rs.m;
+      if (!u.alive && rs.gone && !R.hl.has(u)) continue; // fell in an earlier phase: stays behind unless it can be revived
       const fr = frameName(u, now), flip = u.side === 'enemy';
       const img = SPR.frame(u.id, fr, flip ? 'flip' : '');
       const x = Math.round(rs.x + rs.ox - m.w / 2) + sh, y = Math.round(rs.y + rs.oy - m.fy - rs.jump) + shy;
@@ -991,7 +994,7 @@
     before: animBefore,
     after: animAfter,
     pause: ms => sleep(ms),
-    round: r => { $('#b-round').textContent = 'Turn ' + r; },
+    round: r => { $('#b-round').textContent = (B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r; },
     impact: (u, skill, t) => impactFx(u, skill, t),
     banner: async (u, skill) => {
       await bannerQ;
@@ -1132,14 +1135,30 @@
   }
   function startDungeon(id, n) {
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
-    runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
+    runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
+  }
+  // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
+  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p) : cfg.phases[p].map(f => K.enemyUnit(f, cfg.lvl));
+  // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
+  async function nextPhase(heroes, enemies, p) {
+    const alive = heroes.filter(u => u.alive);
+    await showBanner(`Phase ${p} cleared`, 'Onward!', '', 700);
+    alive.forEach(u => (u._rs.walking = true));
+    await tween(1100, k => { const e = k * k; alive.forEach(u => { u._rs.ox = e * 420; }); updateOverlay(); });
+    K.phaseRest(heroes);
+    setupRender(heroes, enemies);
+    heroes.filter(u => !u.alive).forEach(u => (u._rs.gone = true));
+    R.units.forEach(u => (u._rs.walking = true));
+    await tween(900, k => { const e = ease(k); R.units.forEach(u => { u._rs.ox = (u.side === 'hero' ? -220 : 220) * (1 - e); }); updateOverlay(); });
+    R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
+    updateOverlay();
   }
   async function runBattle(cfg) {
     SFX.unlock();
     const heroes = S.team.map(id => K.heroUnit(id, S.roster[id], itemsOf(id)));
-    const enemies = cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl) : cfg.foes.map(f => K.enemyUnit(f, cfg.lvl));
+    let enemies = phaseUnits(cfg, 0);
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false;
-    $('#b-title').textContent = cfg.title; $('#b-round').textContent = 'Turn 1';
+    $('#b-title').textContent = cfg.title; $('#b-round').textContent = `Phase 1/${K.PHASES} · Turn 1`;
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
     R.area = cfg.area;
     const narrow = window.innerWidth < 640;
@@ -1148,9 +1167,9 @@
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
-    const b = new K.Battle(heroes, enemies, hooks);
+    let b = new K.Battle(heroes, enemies, hooks);
     b.auto = S.auto;
-    B = { b, cfg };
+    B = { b, cfg, ph: 0, nPh: K.PHASES };
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -1160,13 +1179,30 @@
     await tween(800, k => { const e = ease(k); R.units.forEach(u => { u._rs.ox = (u.side === 'hero' ? -220 : 220) * (1 - e); }); updateOverlay(); });
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
-    const boss = enemies.find(u => u.isBoss);
     bannerQ = Promise.resolve();
-    await showBanner(boss ? boss.name : cfg.title, boss ? `Boss fight · ${boss.aff} · ${boss.nPhases} phases` : 'The battle begins', 'big', 800);
-    log(`The battle begins: ${heroes.length} versus ${enemies.length}. Speed decides the turn order.`);
-    if (boss) log(`${boss.name} · ${E[boss.id].passiveName}: ${E[boss.id].passiveDesc}`, 'enemy');
-    const res = await b.run();
-    R.active = null; R.hl = new Set(); updateOverlay();
+    await showBanner(cfg.title, `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    log(`The battle begins: ${K.PHASES} phases. Speed decides the turn order.`);
+    // phases: the same hero units fight on; damage stats add up over the phases
+    const tot = { dmg: {}, crits: 0, maxHit: 0, turns: 0 };
+    const addStats = x => { for (const k in x.stats.dmg) tot.dmg[k] = (tot.dmg[k] || 0) + x.stats.dmg[k]; tot.crits += x.stats.crits; tot.maxHit = Math.max(tot.maxHit, x.stats.maxHit); tot.turns += x.turns; };
+    let res;
+    for (let p = 0; p < K.PHASES; p++) {
+      if (p) {
+        enemies = phaseUnits(cfg, p);
+        await nextPhase(heroes, enemies, p);
+        b = new K.Battle(heroes, enemies, hooks); b.auto = S.auto;
+        B.b = b; B.ph = p;
+        const boss = enemies.find(u => u.isBoss);
+        await showBanner(boss ? boss.name : `Phase ${p + 1} / ${K.PHASES}`, boss ? `Boss fight · ${boss.aff} · ${boss.nPhases} boss phases` : `${enemies.length} enemies`, 'big', 800);
+        log(`Phase ${p + 1} of ${K.PHASES}: ${enemies.length} ${enemies.length === 1 ? 'enemy' : 'enemies'}.`);
+        if (boss) log(`${boss.name} · ${E[boss.id].passiveName}: ${E[boss.id].passiveDesc}`, 'enemy');
+      }
+      res = await b.run();
+      addStats(b);
+      R.active = null; R.hl = new Set(); updateOverlay();
+      if (res !== 'win' || b.aborted) break;
+    }
+    b.stats = tot; b.turns = tot.turns;
     const win = res === 'win' && !b.aborted;
     if (win) {
       SFX.win();

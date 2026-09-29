@@ -631,28 +631,42 @@ const K = (function () {
   const STAGE_SLOTS = ['wapen', 'helm', 'schild', 'handschoenen', 'borstpantser', 'laarzen', null];
   // how many foes and how many of them from the elite pool, per stage 1-6
   const STAGE_SHAPE = [[2, 0], [3, 0], [3, 1], [4, 1], [3, 2], [4, 2]];
+  // Every stage is fought in 3 phases of equal size and level. `foes` is the last phase (shown on the stage tile).
+  const PHASES = 3;
+  // shape = index into STAGE_SHAPE, k = variant (k 0 is the original line-up, 1 and 2 shuffle the chapter pool)
+  function stageGroup(ch, c, shape, k) {
+    const [n, elite] = STAGE_SHAPE[shape], base = ch.pool[0], hi = ch.pool[1], foes = [];
+    for (let j = 0; j < n; j++) foes.push(j >= n - elite ? hi[(j + shape + c + k) % hi.length] : base[(j + shape * 2 + c + k * 2) % base.length]);
+    return foes;
+  }
   const STAGES = [];
   CHAPTERS.forEach((ch, c) => {
     for (let s = 0; s < 7; s++) {
       const lvl = 1 + c * 6 + s;
-      let foes;
-      if (s === 6) foes = [ch.boss, ...ch.adds];
-      else {
-        const [n, elite] = STAGE_SHAPE[s], base = ch.pool[0], hi = ch.pool[1];
-        foes = [];
-        for (let k = 0; k < n; k++) foes.push(k >= n - elite ? hi[(k + s + c) % hi.length] : base[(k + s * 2 + c) % base.length]);
-      }
-      STAGES.push({ chapter: c, n: s, lvl, foes, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
+      const foes = s === 6 ? [ch.boss, ...ch.adds] : stageGroup(ch, c, s, 0);
+      const shape = Math.min(s, STAGE_SHAPE.length - 1);
+      const phases = [stageGroup(ch, c, shape, 1), stageGroup(ch, c, shape, 2), foes];
+      STAGES.push({ chapter: c, n: s, lvl, foes, phases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
     }
   });
   const HARD_BONUS = 14;
-  // chapter bosses fight a few levels below the stage level (they bring adds)
-  const stageUnits = (st, lvl) => st.foes.map(f => enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl));
+  // chapter bosses fight a few levels below the stage level (they bring adds); p = phase index, default the last phase
+  const stageUnits = (st, lvl, p) => (p == null ? st.foes : st.phases[p]).map(f => enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl));
+  // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
+  function phaseRest(heroes) {
+    for (const u of heroes) {
+      if (!u.alive) continue;
+      u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * 0.15));
+      u.effects = []; u.tm = Math.random() * 20;
+      for (const s of u.skills) s.cdLeft = 0;
+    }
+  }
   const START_ROSTER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar'];
   const START_TEAM = ['bromir', 'grythor', 'skavren', 'draelyn'];
   const xpNeed = lvl => 60 * lvl + 6 * lvl * lvl;
-  const winXp = lvl => 40 + lvl * 28;
-  const winSilver = lvl => 120 + lvl * 60;
+  // rewards per cleared stage or Boss Hall level (3 phases, so twice the old single-fight amounts)
+  const winXp = lvl => 2 * (40 + lvl * 28);
+  const winSilver = lvl => 2 * (120 + lvl * 60);
 
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
@@ -660,6 +674,14 @@ const K = (function () {
   const SET_GROUPS = [['vlammenhart', 'scherpte', 'nachtscherf'], ['woede', 'asvloek', 'vampierbloed'], ['wilgenbast', 'levensbron', 'wraak'], ['windloper', 'scherpte', 'vlammenhart']];
   const bossSets = i => SET_GROUPS[i % SET_GROUPS.length];
   function bossFoes(id, n) { return [id]; }
+  // Boss Hall: two phases of three minions sharing the boss's essence, then the boss
+  function bossPhases(id, n) {
+    const i = BOSS_ORDER.indexOf(id);
+    let pool = Object.keys(ENEMIES).filter(e => ENEMIES[e].aff === BOSSES[id].aff);
+    if (pool.length < 2) pool = Object.keys(ENEMIES);
+    const grp = k => [0, 1, 2].map(j => pool[(i + j * 2 + k * 3) % pool.length]);
+    return [grp(0), grp(1), bossFoes(id, n)];
+  }
 
   // ---------- Gear ----------
   const SLOTS = ['wapen', 'helm', 'schild', 'handschoenen', 'borstpantser', 'laarzen'];
@@ -1252,7 +1274,7 @@ const K = (function () {
 
   return {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, HARD_BONUS, stageUnits,
-    START_ROSTER, START_TEAM, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes,
+    START_ROSTER, START_TEAM, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,

@@ -5,7 +5,15 @@ const K = new Function(fs.readFileSync(path.join(__dirname, '../src/engine.js'),
 const W = { atk: 3, hp: 0.12, def: 1, crit: 3, cdmg: 1.5, atkP: 4, hpP: 3, defP: 2, acc: 0.3, res: 0.3, spd: 4 };
 const score = it => K.gearStats(it).reduce((s, [k, v]) => s + (W[k] || 0) * v, 0);
 function newState() { const st = { roster: {}, team: K.START_TEAM.slice(), inv: [], cleared: -1, silver: 300, stones: 0, nid: 1 }; K.START_ROSTER.forEach(id => (st.roster[id] = { lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id].skills.map(() => 0) })); return st; }
-async function fight(st, S) { const heroes = st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id))); const b = new K.Battle(heroes, K.stageUnits(S, S.lvl), {}); return b.run(); }
+// a stage is 3 phases in a row; survivors carry their HP over (with the small rest in between)
+async function fight(st, S) {
+  const heroes = st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
+  for (let p = 0; p < K.PHASES; p++) {
+    if (p) K.phaseRest(heroes);
+    if ((await new K.Battle(heroes, K.stageUnits(S, S.lvl, p), {}).run()) !== 'win') return 'lose';
+  }
+  return 'win';
+}
 function reward(st, S, first) {
   for (const id of st.team) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); if (h.lvl >= cap) continue; h.xp += K.winXp(S.lvl); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
   st.silver += K.winSilver(S.lvl); st.stones += first ? 3 : Math.random() < 0.35 ? 1 : 0;
