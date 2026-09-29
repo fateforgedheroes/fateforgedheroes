@@ -401,10 +401,34 @@
       if (!id) return `<div class="slot"><small>Empty</small></div>`;
       return `<button class="slot filled rar-${C[id].rar}" data-act="toggle" data-id="${id}" title="Click to remove from your team">${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>Lv ${S.roster[id].lvl} · ${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
     }).join('');
+    const list = filteredIds(), owned = list.filter(id => S.roster[id]).length;
     return `<div class="section-head"><div><h2>Team</h2><p class="lede">Choose up to four champions. Speed decides who acts first. A mix of damage, protection and healing beats four attackers, and bringing several essences means you always have a Strong Hit.</p></div><div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div></div>
       <div class="slots">${slots}</div>
-      <h3>Your champions</h3>
-      <div class="grid-cards">${sortedIds().map(id => cardHtml(id, { act: 'toggle', inteam: S.team.includes(id) })).join('')}</div>`;
+      <div class="section-head"><h3 style="margin:0">Your champions</h3><span class="tag">${owned} of ${Object.keys(S.roster).length} heroes</span></div>
+      ${filterBar()}
+      ${list.length ? `<div class="grid-cards">${list.map(id => cardHtml(id, { act: 'toggle', inteam: S.team.includes(id) })).join('')}</div>` : '<p class="empty-note">No champions match these filters.</p>'}`;
+  }
+  // ----- team filters: essence, rarity and class filter the list; power, level, rarity or name sort it -----
+  const CLASSES = ['Tank', 'Warrior', 'Assassin', 'Ranger', 'Mage', 'Support', 'Controller'];
+  const TF = { aff: 'all', rar: 'all', role: 'all', sort: 'power', unowned: false };
+  function filteredIds() {
+    const keep = id => (TF.aff === 'all' || C[id].aff === TF.aff) && (TF.rar === 'all' || C[id].rar === +TF.rar)
+      && (TF.role === 'all' || C[id].role === TF.role || C[id].role2 === TF.role) && (TF.unowned || S.roster[id]);
+    const val = id => !S.roster[id] ? -1 : TF.sort === 'level' ? S.roster[id].lvl : TF.sort === 'rarity' ? C[id].rar : power(statsOf(id));
+    const ids = [...new Set([...K.CHAMP_ORDER, ...K.CAPTURE_ORDER.filter(id => S.roster[id])])].filter(keep);
+    return ids.sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || (TF.sort === 'name' ? C[a].name.localeCompare(C[b].name) : val(b) - val(a) || C[b].rar - C[a].rar));
+  }
+  function filterBar() {
+    const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
+    const essences = ['all', ...K.ESSENCES].map(a => `<button type="button" class="ess-f ${TF.aff === a ? 'on' : ''}" data-act="tfaff" data-aff="${a}" aria-pressed="${TF.aff === a}" title="${a === 'all' ? 'All essences' : a}">${a === 'all' ? 'All' : affChip(a)}</button>`).join('');
+    return `<div class="tfilter">
+      <div class="tf-ess" role="group" aria-label="Essence">${essences}</div>
+      <label>Rarity<select data-filter="rar">${opt('all', 'All', TF.rar)}${K.RARITIES.map((r, i) => opt(i, r, TF.rar)).join('')}</select></label>
+      <label>Class<select data-filter="role">${opt('all', 'All', TF.role)}${CLASSES.map(r => opt(r, r, TF.role)).join('')}</select></label>
+      <label>Sort by<select data-filter="sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select></label>
+      <label class="tf-check"><input type="checkbox" data-filter="unowned" ${TF.unowned ? 'checked' : ''}> Show unowned</label>
+      ${TF.aff !== 'all' || TF.rar !== 'all' || TF.role !== 'all' ? '<button type="button" class="linkbtn" data-act="tfreset">Clear filters</button>' : ''}
+    </div>`;
   }
 
   // ----- champions -----
@@ -552,6 +576,10 @@
   }
 
   // ---------- screen events ----------
+  document.addEventListener('change', e => {
+    const f = e.target.closest('[data-filter]'); if (!f) return;
+    TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
+  });
   document.addEventListener('submit', e => {
     const f = e.target.closest('[data-form="pname"]'); if (!f) return;
     e.preventDefault();
@@ -573,7 +601,9 @@
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
-    if (act === 'starterpick') { starterSel = id; render(); }
+    if (act === 'tfaff') { TF.aff = a.dataset.aff; render(); }
+    else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all' }); render(); }
+    else if (act === 'starterpick') { starterSel = id; render(); }
     else if (act === 'starterchoose') { if (starterSel) confirmStarter(); }
     else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
     else if (act === 'startercancel') $('#modal').hidden = true;
