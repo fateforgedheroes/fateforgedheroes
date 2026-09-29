@@ -1,0 +1,12 @@
+{
+  "name": "fate-forged-heroes",
+  "version": "0.9.0",
+  "private": true,
+  "description": "Fate Forged Heroes - turn-based fantasy RPG for the browser",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node tests/campaign-sim.cjs"
+  },
+  "engines": { "node": ">=18" }
+}
