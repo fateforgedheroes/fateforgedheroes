@@ -522,28 +522,51 @@ button, a, input { touch-action: manipulation; }
 .prof-acc p { margin: 0 0 8px; }
 .prof-acc .row { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* starter choice */
-.starters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
-.starter { display: flex; flex-direction: column; gap: 10px; background: var(--panel); border: 2px solid var(--line); border-bottom: 4px solid var(--rc); padding: 12px; min-width: 0; }
-.starter:hover { border-color: var(--gold-dim); border-bottom-color: var(--rc); }
+/* starter choice: four heroes in a dungeon hall, details below */
+.st-title { text-align: center; font-size: 1.8rem; margin: 6px 0 14px; color: var(--gold); text-shadow: 0 2px 0 #000; }
+.st-scene { position: relative; aspect-ratio: 16 / 9; border: 2px solid var(--line); overflow: hidden; background: #000; box-shadow: 0 0 0 2px #000, 0 12px 30px rgba(0,0,0,.5); }
+.st-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+.st-scene::after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 70%, transparent 40%, rgba(0,0,0,.55)); pointer-events: none; }
+.st-fig { position: absolute; top: 16%; bottom: 5%; width: 23%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; background: none; border: 0; padding: 0; cursor: pointer; z-index: 1; color: var(--fg); }
+.st-fig img { flex: 1 1 auto; min-height: 0; width: 100%; object-fit: contain; object-position: 50% 100%; image-rendering: pixelated; filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)); transition: transform .2s, filter .2s; position: relative; z-index: 1; }
+.st-fig .st-ring { width: 64%; height: 10px; margin-top: -7px; border-radius: 50%; background: rgba(0,0,0,.5); transition: box-shadow .2s, background .2s; }
+.st-fig .st-nm { margin-top: 4px; font-family: var(--font-display); font-weight: 700; font-size: clamp(.7rem, 1.6vw, 1rem); letter-spacing: .04em; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000; white-space: nowrap; }
+.st-fig:hover img, .st-fig:focus-visible img { filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)) brightness(1.15); }
+.st-scene.has-sel .st-fig:not(.sel) img { filter: drop-shadow(0 3px 0 rgba(0,0,0,.6)) brightness(.5) saturate(.6); }
+.st-fig.sel img { transform: translateY(-5px); filter: drop-shadow(0 0 10px rgba(217,180,90,.75)) drop-shadow(0 3px 0 rgba(0,0,0,.6)); animation: stbob 1.6s ease-in-out infinite; }
+.st-fig.sel .st-ring { background: rgba(217,180,90,.35); box-shadow: 0 0 0 2px var(--gold), 0 0 16px rgba(217,180,90,.8); }
+.st-fig.sel .st-nm { color: var(--gold); }
+@keyframes stbob { 50% { transform: translateY(-9px); } }
+@media (prefers-reduced-motion: reduce) { .st-fig.sel img { animation: none; } }
+.st-info { margin-top: 14px; }
+.st-hint { text-align: center; margin: 18px 0; }
+.st-card { background: var(--panel); border: 2px solid var(--line); border-bottom: 4px solid var(--rc); padding: 14px; display: flex; flex-direction: column; gap: 10px; animation: pop .2s ease-out; }
+.st-pitch { margin: 0; color: var(--muted); }
+.st-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 16px; align-items: start; }
+.starter-sk span { display: block; font-size: .85rem; margin: 0 0 6px; }
+.st-go { display: flex; justify-content: center; margin-top: 14px; }
+.st-go .btn { min-width: 220px; font-size: 1.1rem; padding: 10px 20px; }
+@media (max-width: 760px) {
+  .st-title { font-size: 1.35rem; margin-bottom: 10px; }
+  .st-scene { aspect-ratio: 4 / 3; margin-inline: -12px; border-inline: 0; }
+  .st-fig { width: 25%; top: 22%; }
+  .st-cols { grid-template-columns: minmax(0, 1fr); }
+  .st-go .btn { width: 100%; }
+}
 .starter-top { display: flex; gap: 10px; align-items: center; }
 .starter-top img { width: 72px; height: 72px; flex: none; border: 2px solid var(--gold-dim); }
-.starter h3 { margin: 0 0 2px; font-size: 1.15rem; color: var(--fg); }
-.starter .tags { margin: 0 0 2px; font-size: .9rem; }
-.starter > p { margin: 0; color: var(--muted); font-size: .95rem; }
+.st-card h3 { margin: 0 0 2px; font-size: 1.25rem; color: var(--fg); }
+.st-card .tags { margin: 0 0 2px; font-size: .9rem; }
 .sbars { display: flex; flex-direction: column; gap: 4px; }
 .sbar { display: grid; grid-template-columns: 58px 1fr 42px; gap: 6px; align-items: center; font-size: .85rem; color: var(--muted); }
 .sbar i { height: 8px; background: var(--bg); border: 1px solid var(--line); }
 .sbar b { display: block; height: 100%; background: var(--gold); }
 .sbar em { font-style: normal; text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
-.starter .skill { margin: 0; }
+.st-card .skill { margin: 0 0 10px; }
 .starter-sk { list-style: none; margin: 0; padding: 0; font-size: .9rem; color: var(--muted); }
 .starter-sk b { font-family: var(--font-tag); font-size: 10px; letter-spacing: .06em; color: var(--gold); text-transform: uppercase; margin-right: 4px; }
-.starter .btn { margin-top: auto; }
 .starter-acc { margin-top: 14px; }
 #account .acc-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
-@media (max-width: 1000px) { .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .starters { grid-template-columns: minmax(0, 1fr); } }
 
 /* champions screen: team members first and clearly marked; hero detail in tabs */
 .champ-layout { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }

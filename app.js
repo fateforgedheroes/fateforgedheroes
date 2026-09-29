@@ -239,7 +239,7 @@
     hud();
     const el = $('#screen');
     $('#tabs').hidden = !!S.needStarter;
-    if (S.needStarter) { el.innerHTML = starterHtml(); return; }
+    if (S.needStarter) { el.innerHTML = starterHtml(); paintDungeonArt(); return; }
     el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml();
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
@@ -472,28 +472,41 @@
     zephara: 'The glass cannon. The fastest starter, with big single-target damage and stuns, but less HP and Defense.',
     thalnir: 'The unbreakable. Regenerates every turn, taunts the enemy team and poisons everything it touches.',
   };
-  let starterArm = null;
+  // the four starters stand side by side in a dungeon hall; tapping one shows its details below, "Choose" asks to confirm
+  const STARTER_BG = 4; // chapter background: the brick-and-lava dungeon hall
+  let starterSel = null;
   function starterHtml() {
     const st = id => K.heroStats(id, newHero(id), []);
     const top = { hp: 0, atk: 0, def: 0, spd: 0 };
     for (const id of K.STARTERS) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
     const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
-    const cards = K.STARTERS.map(id => { const c = C[id]; return `<div class="starter rar-${c.rar}">
-        <div class="starter-top">${por(id)}<div><h3>${esc(c.name)}</h3><div class="tags">${affChip(c.aff)} ${c.aff} · ${roleStr(c)}</div><span class="rartxt tag">${K.RARITIES[c.rar]}</span></div></div>
-        <p>${STARTER_PITCH[id]}</p>
-        <div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(id, k)).join('')}</div>
-        <div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>
-        <ul class="starter-sk">${c.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)}</li>`).join('')}</ul>
-        <button class="btn primary" data-act="starter" data-id="${id}">${starterArm === id ? 'Tap again to confirm' : `Choose ${esc(c.short)}`}</button>
-      </div>`; }).join('');
+    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig ${id === starterSel ? 'sel' : ''}" style="left:${12.5 + i * 25}%" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
+        <img class="spr" src="${SPR.url(id, 2)}" alt=""><span class="st-ring"></span><span class="st-nm">${esc(C[id].short)}</span></button>`).join('');
+    const c = starterSel && C[starterSel];
+    const info = c ? `<div class="st-card rar-${c.rar}">
+        <div class="starter-top">${por(starterSel)}<div><h3>${esc(c.name)}</h3><div class="tags">${affChip(c.aff)} ${c.aff} · ${roleStr(c)}</div><span class="rartxt tag">${K.RARITIES[c.rar]}</span></div></div>
+        <p class="st-pitch">${STARTER_PITCH[starterSel]}</p>
+        <div class="st-cols"><div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(starterSel, k)).join('')}</div>
+        <div><div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>
+        <ul class="starter-sk">${c.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)} <span>${esc(s.desc)}</span></li>`).join('')}</ul></div></div>
+      </div>` : '<p class="empty-note st-hint">Tap a hero to see what they can do.</p>';
     // returning players on a new device should load their account before picking
     const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const signin = cl && cl.enabled && !cl.email ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
-    return `<div class="section-head"><div><h2>Choose your hero</h2><p class="lede">Your first champion fights alone in the first stage of Chapter I. Every early stage you clear adds a companion to your team. Pick the style you like: all four are Epic heroes that stay strong for the whole game.</p></div></div>
-      <div class="starters">${cards}</div>${signin}`;
+    return `<h2 class="st-title">Choose your starter hero</h2>
+      <div class="st-scene ${starterSel ? 'has-sel' : ''}"><canvas data-bg="${STARTER_BG}" width="480" height="270"></canvas>${figs}</div>
+      <div class="st-info">${info}</div>
+      <div class="st-go"><button class="btn primary" data-act="starterchoose" ${starterSel ? '' : 'disabled'}>${c ? `Choose ${esc(c.short)}` : 'Choose'}</button></div>${signin}`;
+  }
+  function confirmStarter() {
+    const c = C[starterSel], m = $('#modal');
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="st-q"><h2 id="st-q">Are you sure?</h2>
+      <p class="lede">Begin your adventure with <b>${esc(c.name)}</b>? Your starter hero can't be changed later.</p>
+      <div class="modal-actions"><button class="btn primary" data-act="starterok">Yes, choose ${esc(c.short)}</button><button class="btn" data-act="startercancel">Cancel</button></div></div>`;
+    m.hidden = false; m.querySelector('.btn').focus();
   }
   function pickStarter(id) {
-    S.roster[id] = newHero(id); S.team = [id]; delete S.needStarter; starterArm = null;
+    S.roster[id] = newHero(id); S.team = [id]; delete S.needStarter; starterSel = null;
     tab = 'campagne'; save(); render();
     toast(`${C[id].name} joins you. Clear Chapter I to gather your team.`, false, 4000);
   }
@@ -556,7 +569,10 @@
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
-    if (act === 'starter') { if (starterArm === id) pickStarter(id); else { starterArm = id; render(); } }
+    if (act === 'starterpick') { starterSel = id; render(); }
+    else if (act === 'starterchoose') { if (starterSel) confirmStarter(); }
+    else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
+    else if (act === 'startercancel') $('#modal').hidden = true;
     else if (act === 'tab') setTab(a.dataset.tab);
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
     else if (act === 'pnamecancel') { editName = false; render(); }
