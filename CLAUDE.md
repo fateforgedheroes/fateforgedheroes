@@ -17,7 +17,7 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 | `cloud.js` | Supabase auth (email/password, Google if enabled) and cloud save via plain `fetch` to the REST API. |
 | `sprites.js`, `bgs.js` | Sprite frames (`SPR`), backgrounds. |
 | `shell.html` | Layout + all CSS (tokens on `:root`, fonts Cinzel / Crimson Pro). Placeholders `/*ASSETS*/ /*ENGINE*/ /*SPRITES*/ /*APP*/`. |
-| `heroes.js enemies.js bosses.js` | Battle sprites as data URLs (`HERO_ART`, `ENEMY_ART`, `BOSS_ART`). |
+| `heroes.js enemies.js bosses.js` | Battle sprites as data URLs (`HERO_ART`, `ENEMY_ART`, `BOSS_ART`). Per hero: `body` (battle sprite, ~75 px tall, transparent), `full` (2×, detail/summon), `face` (64 px, used until `HERO_POR` has a portrait). |
 | `portraits.js` | `HERO_POR` painted portraits for heroes, enemies and bosses (128 px JPEG). |
 | `shards.js logo.js stone.js` | Fate Shard art (`SHARD_ART.<type><0-2>`), `LOGO_URL`, `STONE_ART`. |
 | `privacy.html favicon.png` | Copied into `dist/`. |
@@ -31,7 +31,7 @@ Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…)
 - **Essences:** Ember → Verdant → Storm → Frost → Radiant → Umbral → Ember; Aether neutral. Strong Hit ×1.2 (crit ok, debuff ×1.15, 2 break), Normal ×1.0 (1 break), Weak ×0.75 (no crit, debuff ×0.5, 0 break).
 - **Turn meter:** units fill by Speed to 100. `Battle.predict(n)` shows turn order.
 - **Damage:** ATK × mult → crit (1 + cdmg%) → hit type → × 100/(100+DEF) → modifiers. Debuff chance: base × hitmod × (1 + (acc − res)/100), clamped.
-- **Heroes:** 25 in `CHAMPS` (8 Uncommon, 7 Rare, 6 Epic, 4 Legendary). Legendaries only from the Fate Altar, stat mult ×1.4. Level cap = min(rarity cap, stars × 10). Captured enemies become weak heroes (`captured: true`).
+- **Heroes:** 50 in `CHAMPS` (8 Uncommon, 14 Rare, 17 Epic, 11 Legendary). Heroes 26-50 (`kaelira` … `celesthyr`) are Fate Altar only and reuse existing passive ids (incl. boss passives); `harmony` (Liora) is theirs alone. Legendaries only from the Fate Altar, stat mult ×1.4. Level cap = min(rarity cap, stars × 10). Captured enemies become weak heroes (`captured: true`).
 - **Bosses:** 25 in `BOSSES`, 2–3 phases, passive, Break Meter (Affinity Break = 2-turn stun, +15% damage taken). Per-boss power `BOSS_PW` was calibrated by simulation.
 - **Campaign:** `CHAPTERS` (10 × 7 stages, names/desc/set per chapter). Stage 1–6 drop weapon/helmet/shield/gloves/chest/boots, stage 7 = chapter boss, random slot. Each chapter drops its own gear set.
 - **Boss Hall:** 25 bosses × 10 levels, `bossLvl(i, n)`.

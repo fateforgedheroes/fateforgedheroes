@@ -248,9 +248,186 @@ const K = (function () {
         SK('Hammer Blow', 'enemy', 'melee', 'smash', 0, 'Strike of 95%. 20% chance to Stun for 1 turn.', [D(0.95), DB('stun', 1, 0.2)]),
         SK('Anvil Wall', 'allies', 'buff', 'shield', 3, 'All allies gain Defense Up for 2 turns.', [BF('defUp', 2)]),
       ] },
+    // ----- heroes 26-50 (Fate Altar only) -----
+    kaelira: { name: 'Kaelira', faction: 'Grey Flame', role: 'Mage', role2: 'Support', rar: 3, aff: 'Radiant',
+      passive: 'bloom', passiveName: 'Dawn Grace', passiveDesc: 'Her heals are 20% stronger.',
+      skills: [
+        SK('Sunbolt', 'enemy', 'magic', 'holy', 0, 'Attack of 100%. 30% chance of Accuracy Down for 2 turns.', [D(1.0), DB('accDown', 2, 0.3)]),
+        SK('Radiant Hymn', 'allies', 'buff', 'heal', 3, 'Heals all allies for 20% and grants Crit Rate Up for 2 turns.', [HEAL(0.2), BF('critUp', 2)]),
+        SK('Solar Flare', 'enemies', 'magic', 'sunfall', 4, 'Hits all enemies for 85%. 50% chance of Accuracy Down for 2 turns.', [D(0.85), DB('accDown', 2, 0.5)]),
+      ] },
+    vorak: { name: 'Vorak', faction: 'Beast Horde', role: 'Tank', rar: 3, aff: 'Ember',
+      passive: 'retribution', passiveName: 'Hellforged Hide', passiveDesc: '30% chance to counterattack when hit.',
+      skills: [
+        SK('Brutal Chop', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
+        SK('War Bellow', 'enemies', 'buff', 'fire', 4, '75% chance to Taunt all enemies for 2 turns. Gains Defense Up and Counterattack for 2 turns.', [DB('taunt', 2, 0.75), BF('defUp', 2, 'self'), BF('counter', 2, 'self')]),
+        SK('Magma Cleave', 'enemies', 'slam', 'quake', 4, 'Hits all enemies for 80%. 50% chance of Burn for 2 turns.', [D(0.8), DB('burn', 2, 0.5)]),
+      ] },
+    elyndra: { name: 'Elyndra', faction: 'Willow Children', role: 'Ranger', rar: 2, aff: 'Verdant',
+      passive: 'scavenger', passiveName: 'Hunter’s Instinct', passiveDesc: '+20% damage against targets below 50% HP.',
+      skills: [
+        SK('Thorn Arrow', 'enemy', 'ranged', 'arrow', 0, 'Arrow of 100%. 40% chance of Poison for 2 turns.', [D(1.0), DB('poison', 2, 0.4)]),
+        SK('Barbed Volley', 'enemies', 'ranged', 'arrowrain', 3, 'Hits all enemies for 60%. 40% chance of Poison for 2 turns.', [D(0.6), DB('poison', 2, 0.4)]),
+        SK('Heartseeker', 'lowestEnemy', 'ranged', 'arrow', 4, 'Shoots the weakest enemy for 200%. +50% damage below 35% HP.', [D(2.0, { execute: [0.35, 0.5] })]),
+      ] },
+    morveth: { name: 'Morveth', faction: 'Silvertongues', role: 'Assassin', role2: 'Mage', rar: 4, aff: 'Umbral',
+      passive: 'soulharvest', passiveName: 'Soul Reaper', passiveDesc: '+10% Attack for every unit that has fallen in this battle (max. 5).',
+      skills: [
+        SK('Void Scythe', 'enemy', 'melee', 'slash', 0, 'Two strikes of 60%. 30% chance of Bleed for 2 turns.', [D(0.6), DB('bleed', 2, 0.3)], { hits: 2 }),
+        SK('Umbral Rift', 'enemies', 'magic', 'dark', 3, 'Hits all enemies for 80%. 60% chance of Defense Down for 2 turns.', [D(0.8), DB('defDown', 2, 0.6)]),
+        SK('Eclipse Reap', 'lowestEnemy', 'melee', 'dark', 4, 'Gains Stealth for 1 turn, then strikes the weakest enemy for 280%. +70% damage below 40% HP.', [BF('stealth', 1, 'self'), D(2.8, { execute: [0.4, 0.7] })]),
+      ] },
+    theryn: { name: 'Theryn', faction: 'Mistspawn', role: 'Support', rar: 2, aff: 'Frost',
+      passive: 'beacon', passiveName: 'Frost Blessing', passiveDesc: 'Heals the weakest ally for 5% at the start of each of her turns.',
+      skills: [
+        SK('Frost Shard', 'enemy', 'magic', 'water', 0, 'Attack of 90%. 30% chance of Speed Down for 1 turn.', [D(0.9), DB('spdDown', 1, 0.3)]),
+        SK('Glacial Ward', 'allies', 'buff', 'shield', 3, 'All allies gain a shield of 15% of Theryn’s max HP for 2 turns and are cleansed.', [SH(0.15, 2), { t: 'cleanse' }]),
+        SK('Winter’s Mercy', 'allies', 'buff', 'heal', 4, 'Heals all allies for 20% and grants Regeneration for 2 turns.', [HEAL(0.2), BF('regen', 2)]),
+      ] },
+    arkanis: { name: 'Arkanis', faction: 'Ashborn', role: 'Controller', rar: 3, aff: 'Storm',
+      passive: 'staticcharge', passiveName: 'Static Charge', passiveDesc: 'Every fourth hit he lands deals 50% more damage.',
+      skills: [
+        SK('Arc Bolt', 'enemy', 'magic', 'rune', 0, 'Attack of 95%. 20% chance to Stun for 1 turn.', [D(0.95), DB('stun', 1, 0.2)]),
+        SK('Chain Storm', 'random', 'magic', 'rune', 3, 'Four bolts of 45% on random enemies.', [D(0.45)], { hits: 4 }),
+        SK('Tempest Lock', 'enemies', 'magic', 'meteor', 5, 'Hits all enemies for 70%, drains 20% Turn Meter and has a 40% chance to Stun for 1 turn.', [D(0.7), TMD(0.2), DB('stun', 1, 0.4)]),
+      ] },
+    liora: { name: 'Liora', faction: 'Grey Flame', role: 'Support', role2: 'Mage', rar: 4, aff: 'Aether',
+      passive: 'harmony', passiveName: 'Aether Harmony', passiveDesc: 'Heals all allies for 4% at the start of each of her turns.',
+      skills: [
+        SK('Prism Orb', 'enemy', 'magic', 'holy', 0, 'Attack of 100%. Heals the weakest ally for 10%.', [D(1.0), HEAL(0.1, 'lowestAlly')]),
+        SK('Starlight Veil', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 18% of Liora’s max HP for 2 turns and Immunity for 1 turn.', [SH(0.18, 2), BF('immune', 1)]),
+        SK('Aether Nova', 'allies', 'buff', 'heal', 5, 'Heals all allies for 30%, removes all debuffs and fills their Turn Meter by 20%.', [HEAL(0.3), { t: 'cleanse' }, TMF(0.2)]),
+      ] },
+    gorvann: { name: 'Gorvann', faction: 'Beast Horde', role: 'Warrior', rar: 2, aff: 'Ember',
+      passive: 'bloodlust', passiveName: 'Rage of the Pit', passiveDesc: '+30% Attack while his HP is below 50%.',
+      skills: [
+        SK('Flame Axe', 'enemy', 'melee', 'smash', 0, 'Strike of 105%. 30% chance of Burn for 2 turns.', [D(1.05), DB('burn', 2, 0.3)]),
+        SK('Molten Swing', 'enemies', 'slam', 'fire', 3, 'Hits all enemies for 70%. 40% chance of Burn for 2 turns.', [D(0.7), DB('burn', 2, 0.4)]),
+        SK('Pit Fury', 'enemy', 'melee', 'smash', 4, 'Gains Attack Up for 2 turns, then strikes for 150%.', [BF('atkUp', 2, 'self'), D(1.5)]),
+      ] },
+    sylvara: { name: 'Sylvara', faction: 'Willow Children', role: 'Mage', role2: 'Controller', rar: 3, aff: 'Verdant',
+      passive: 'toxicpresence', passiveName: 'Spore Bloom', passiveDesc: 'At the end of each of her turns, every enemy has a 15% chance to be Poisoned.',
+      skills: [
+        SK('Wild Orb', 'enemy', 'magic', 'thorns', 0, 'Attack of 95%. 40% chance of Poison for 2 turns.', [D(0.95), DB('poison', 2, 0.4)]),
+        SK('Strangling Roots', 'enemies', 'magic', 'thorns', 3, 'Hits all enemies for 60%, drains 15% Turn Meter. 50% chance of Speed Down for 2 turns.', [D(0.6), TMD(0.15), DB('spdDown', 2, 0.5)]),
+        SK('Nature’s Wrath', 'enemies', 'magic', 'poison', 5, 'Hits all enemies for 90%. 60% chance of Poison for 3 turns.', [D(0.9), DB('poison', 3, 0.6)]),
+      ] },
+    veyrith: { name: 'Veyrith', faction: 'Hellwardens', role: 'Tank', role2: 'Controller', rar: 3, aff: 'Umbral',
+      passive: 'scalearmor', passiveName: 'Shadowplate', passiveDesc: 'Takes 25% less damage from melee attacks.',
+      skills: [
+        SK('Night Edge', 'enemy', 'melee', 'slash', 0, 'Strike of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
+        SK('Dread Aura', 'enemies', 'magic', 'dark', 3, 'Hits all enemies for 50%. 60% chance of Attack Down for 2 turns.', [D(0.5), DB('atkDown', 2, 0.6)]),
+        SK('Umbral Aegis', 'enemies', 'buff', 'dark', 4, '70% chance to Taunt all enemies for 2 turns. All allies gain Defense Up for 2 turns.', [DB('taunt', 2, 0.7), BF('defUp', 2, 'allAllies')]),
+      ] },
+    astraea: { name: 'Astraea', faction: 'Grey Flame', role: 'Ranger', role2: 'Support', rar: 4, aff: 'Radiant',
+      passive: 'eagleeye', passiveName: 'Seraph’s Eye', passiveDesc: '+15% Crit Rate. Critical hits drain 10% of the target’s Turn Meter.',
+      skills: [
+        SK('Sunlit Arrow', 'enemy', 'ranged', 'arrow', 0, 'Arrow of 110%. Heals the weakest ally for 6%.', [D(1.1), HEAL(0.06, 'lowestAlly')]),
+        SK('Wings of Dawn', 'allies', 'buff', 'holy', 4, 'All allies gain Attack Up and Speed Up for 2 turns.', [BF('atkUp', 2), BF('spdUp', 2)]),
+        SK('Heaven’s Barrage', 'random', 'ranged', 'arrowrain', 4, 'Five arrows of 50% on random enemies.', [D(0.5)], { hits: 5 }),
+      ] },
+    korran: { name: 'Korran', faction: 'Mistspawn', role: 'Warrior', rar: 2, aff: 'Frost',
+      passive: 'frostbite', passiveName: 'Winter’s Bite', passiveDesc: '+30% damage against Frozen or slowed targets.',
+      skills: [
+        SK('Glacier Axe', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 40% chance of Speed Down for 1 turn.', [D(1.0), DB('spdDown', 1, 0.4)]),
+        SK('Frost Cleave', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 70%. 25% chance to Freeze for 1 turn.', [D(0.7), DB('freeze', 1, 0.25)]),
+        SK('Shatter', 'enemy', 'melee', 'smash', 4, 'Heavy strike of 170%.', [D(1.7)]),
+      ] },
+    zephara: { name: 'Zephara', faction: 'Silvertongues', role: 'Assassin', rar: 3, aff: 'Storm',
+      passive: 'crimsonwings', passiveName: 'Tailwind', passiveDesc: '+15 Speed.',
+      skills: [
+        SK('Lightning Claws', 'enemy', 'melee', 'slash', 0, 'Two strikes of 55%.', [D(0.55)], { hits: 2 }),
+        SK('Storm Dash', 'lowestEnemy', 'melee', 'stab', 3, 'Gains Stealth for 2 turns and strikes the weakest enemy for 150%.', [BF('stealth', 2, 'self'), D(1.5)]),
+        SK('Thunderstrike', 'enemy', 'melee', 'rune', 4, 'Strike of 220%. 40% chance to Stun for 1 turn.', [D(2.2), DB('stun', 1, 0.4)]),
+      ] },
+    malreth: { name: 'Malreth', faction: 'Hellwardens', role: 'Mage', rar: 3, aff: 'Umbral',
+      passive: 'deathmark', passiveName: 'Grave Mark', passiveDesc: 'Every second turn he places a Death Mark on a random enemy for 2 turns.',
+      skills: [
+        SK('Soul Bolt', 'enemy', 'magic', 'dark', 0, 'Attack of 110%.', [D(1.1)]),
+        SK('Skull Swarm', 'random', 'magic', 'curse', 3, 'Four skulls of 45% on random enemies.', [D(0.45)], { hits: 4 }),
+        SK('Necrotic Blast', 'enemies', 'magic', 'dark', 5, 'Hits all enemies for 90% and heals for 20% of the damage. 60% chance of Heal Reduction for 2 turns.', [D(0.9, { steal: 0.2 }), DB('healRed', 2, 0.6)]),
+      ] },
+    eryndor: { name: 'Eryndor', faction: 'Willow Children', role: 'Tank', rar: 4, aff: 'Verdant',
+      passive: 'ancientroots', passiveName: 'Ancient Roots', passiveDesc: 'Attackers have a 20% chance to be Rooted (Speed Down for 2 turns).',
+      skills: [
+        SK('Oakfist', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
+        SK('Bark Fortress', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 20% of Eryndor’s max HP and Defense Up for 2 turns.', [SH(0.2, 2), BF('defUp', 2)]),
+        SK('World Tree', 'enemies', 'buff', 'thorns', 5, '80% chance to Taunt all enemies for 2 turns. Eryndor gains Counterattack, all allies gain Regeneration for 2 turns.', [DB('taunt', 2, 0.8), BF('counter', 2, 'self'), BF('regen', 2, 'allAllies')]),
+      ] },
+    ignara: { name: 'Ignara', faction: 'Hellwardens', role: 'Mage', rar: 3, aff: 'Ember',
+      passive: 'kindling', passiveName: 'Wildfire', passiveDesc: 'Burn applied by Ignara deals 50% more damage.',
+      skills: [
+        SK('Fire Lash', 'enemy', 'magic', 'fire', 0, 'Attack of 100%. 50% chance of Burn for 2 turns.', [D(1.0), DB('burn', 2, 0.5)]),
+        SK('Twin Flames', 'random', 'magic', 'fire', 3, 'Three fireballs of 60% on random enemies.', [D(0.6)], { hits: 3 }),
+        SK('Inferno', 'enemies', 'magic', 'meteor', 4, 'Hits all enemies for 90%. 60% chance of Burn for 2 turns.', [D(0.9), DB('burn', 2, 0.6)]),
+      ] },
+    thalessa: { name: 'Thalessa', faction: 'Mistspawn', role: 'Controller', rar: 3, aff: 'Frost',
+      passive: 'frozencurse', passiveName: 'Frozen Touch', passiveDesc: 'Her hits have a 30% chance to inflict Speed Down for 2 turns.',
+      skills: [
+        SK('Rime Bolt', 'enemy', 'magic', 'water', 0, 'Attack of 95%.', [D(0.95)]),
+        SK('Frost Prison', 'enemy', 'magic', 'water', 3, 'Attack of 70%. 65% chance to Freeze for 1 turn.', [D(0.7), DB('freeze', 1, 0.65)]),
+        SK('Glacial Tide', 'enemies', 'magic', 'water', 5, 'Hits all enemies for 70% and drains 25% Turn Meter. 35% chance to Freeze for 1 turn.', [D(0.7), TMD(0.25), DB('freeze', 1, 0.35)]),
+      ] },
+    ravok: { name: 'Ravok', faction: 'Ironbeard Clans', role: 'Warrior', role2: 'Tank', rar: 2, aff: 'Storm',
+      passive: 'thickhide', passiveName: 'Iron Plating', passiveDesc: 'Takes 10% less damage.',
+      skills: [
+        SK('Thunder Fist', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 20% chance to Stun for 1 turn.', [D(1.0), DB('stun', 1, 0.2)]),
+        SK('Storm Slam', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 75%. 30% chance of Speed Down for 2 turns.', [D(0.75), DB('spdDown', 2, 0.3)]),
+        SK('Overload', 'enemies', 'buff', 'rune', 4, '70% chance to Taunt all enemies for 2 turns. Gains Defense Up and Counterattack for 2 turns.', [DB('taunt', 2, 0.7), BF('defUp', 2, 'self'), BF('counter', 2, 'self')]),
+      ] },
+    seraphine: { name: 'Seraphine', faction: 'Grey Flame', role: 'Support', rar: 3, aff: 'Radiant',
+      passive: 'divineward', passiveName: 'Guardian Wings', passiveDesc: 'At the start of battle, all allies gain a shield of 12% of Seraphine’s max HP for 3 turns.',
+      skills: [
+        SK('Halo Strike', 'enemy', 'magic', 'holy', 0, 'Attack of 90%. Heals the weakest ally for 8%.', [D(0.9), HEAL(0.08, 'lowestAlly')]),
+        SK('Blessing of Light', 'allies', 'buff', 'heal', 3, 'Heals all allies for 25%.', [HEAL(0.25)]),
+        SK('Seraph’s Grace', 'deadAlly', 'buff', 'revive', 5, 'Revives a fallen ally with 40% HP.', [{ t: 'revive', pct: 0.4 }]),
+      ] },
+    draevan: { name: 'Draevan', faction: 'Hellwardens', role: 'Warrior', rar: 4, aff: 'Umbral',
+      passive: 'infernalfury', passiveName: 'Dark Resolve', passiveDesc: 'Deals up to 50% more damage the lower his HP is.',
+      skills: [
+        SK('Void Cleaver', 'enemy', 'melee', 'slash', 0, 'Strike of 115%. Heals self for 20% of the damage.', [D(1.15, { steal: 0.2 })]),
+        SK('Shadow Rend', 'enemies', 'melee', 'slash', 3, 'Hits all enemies for 80%. 50% chance of Bleed for 2 turns.', [D(0.8), DB('bleed', 2, 0.5)]),
+        SK('Oblivion Edge', 'enemy', 'melee', 'dark', 5, '80% chance of Defense Down for 2 turns, then a strike of 260%.', [DB('defDown', 2, 0.8), D(2.6)]),
+      ] },
+    mirella: { name: 'Mirella', faction: 'Willow Children', role: 'Support', role2: 'Controller', rar: 2, aff: 'Verdant',
+      passive: 'bloom', passiveName: 'Wildbloom', passiveDesc: 'Her heals are 20% stronger.',
+      skills: [
+        SK('Vine Whip', 'enemy', 'magic', 'thorns', 0, 'Attack of 90%. 30% chance of Speed Down for 1 turn.', [D(0.9), DB('spdDown', 1, 0.3)]),
+        SK('Sap of Life', 'allies', 'buff', 'heal', 3, 'Heals all allies for 18% and grants Regeneration for 2 turns.', [HEAL(0.18), BF('regen', 2)]),
+        SK('Thorn Snare', 'enemies', 'magic', 'thorns', 4, 'Hits all enemies for 50%. 50% chance of Attack Down for 2 turns.', [D(0.5), DB('atkDown', 2, 0.5)]),
+      ] },
+    volkaris: { name: 'Volkaris', faction: 'Hellwardens', role: 'Warrior', role2: 'Controller', rar: 4, aff: 'Ember',
+      passive: 'warlord', passiveName: 'Warlord of Cinders', passiveDesc: 'Gains Attack Up for 2 turns whenever he defeats an enemy.',
+      skills: [
+        SK('Hellblade', 'enemy', 'melee', 'slash', 0, 'Strike of 110%. 40% chance of Burn for 2 turns.', [D(1.1), DB('burn', 2, 0.4)]),
+        SK('Chains of Ruin', 'enemies', 'magic', 'fire', 3, 'Hits all enemies for 70%. 50% chance of Burn and 35% chance to Stun for 1 turn.', [D(0.7), DB('burn', 2, 0.5), DB('stun', 1, 0.35)]),
+        SK('Apocalypse', 'enemies', 'slam', 'meteor', 5, '60% chance of Defense Down for 2 turns on all enemies, then hits them for 120%.', [DB('defDown', 2, 0.6), D(1.2)]),
+      ] },
+    nyxara: { name: 'Nyxara', faction: 'Silvertongues', role: 'Assassin', rar: 3, aff: 'Aether',
+      passive: 'shadowhunter', passiveName: 'Aether Hunter', passiveDesc: '+25% Crit Rate against targets with a debuff.',
+      skills: [
+        SK('Phase Strike', 'enemy', 'melee', 'stab', 0, 'Thrust of 105%. 25% chance of Death Mark for 2 turns.', [D(1.05), DB('mark', 2, 0.25)]),
+        SK('Void Step', 'lowestEnemy', 'melee', 'stab', 3, 'Gains Stealth for 2 turns and strikes the weakest enemy for 150%.', [BF('stealth', 2, 'self'), D(1.5)]),
+        SK('Aether Rend', 'enemy', 'melee', 'dark', 4, 'Strike of 230%. +60% damage below 35% HP.', [D(2.3, { execute: [0.35, 0.6] })]),
+      ] },
+    orvyn: { name: 'Orvyn', faction: 'Silvertongues', role: 'Ranger', rar: 2, aff: 'Storm',
+      passive: 'overcharge', passiveName: 'Charged Arrows', passiveDesc: '+30% Crit Damage.',
+      skills: [
+        SK('Spark Shot', 'enemy', 'ranged', 'arrow', 0, 'Arrow of 100%.', [D(1.0)]),
+        SK('Lightning Volley', 'random', 'ranged', 'arrow', 3, 'Four arrows of 50% on random enemies.', [D(0.5)], { hits: 4 }),
+        SK('Thunder Arrow', 'enemy', 'ranged', 'arrow', 4, 'Arrow of 180% that drains 30% Turn Meter. 40% chance of Speed Down for 2 turns.', [D(1.8), TMD(0.3), DB('spdDown', 2, 0.4)]),
+      ] },
+    celesthyr: { name: 'Celesthyr', faction: 'Grey Flame', role: 'Mage', role2: 'Controller', rar: 4, aff: 'Radiant',
+      passive: 'seduction', passiveName: 'Celestial Will', passiveDesc: '+15% chance for his debuffs to land.',
+      skills: [
+        SK('Starfire', 'enemy', 'magic', 'holy', 0, 'Attack of 110%. 30% chance of Accuracy Down for 2 turns.', [D(1.1), DB('accDown', 2, 0.3)]),
+        SK('Judgement', 'enemy', 'magic', 'sunfall', 3, 'Attack of 140%. 60% chance of Silence for 2 turns.', [D(1.4), DB('silence', 2, 0.6)]),
+        SK('Sunfall', 'enemies', 'magic', 'sunfall', 5, 'Hits all enemies for 90%. 45% chance to Stun for 1 turn.', [D(0.9), DB('stun', 1, 0.45)]),
+      ] },
   };
   for (const id in CHAMPS) CHAMPS[id].short = CHAMPS[id].name;
-  const CHAMP_ORDER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'morgrim', 'vorlund', 'valkessa', 'faedrin', 'krothar', 'ithyra', 'nyressa', 'selenia', 'drakulen', 'keldrax', 'oraneth', 'zarvion', 'sylreth', 'thalnir', 'aurelion', 'zyrael', 'velmira', 'nithara'];
+  const CHAMP_ORDER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'morgrim', 'vorlund', 'valkessa', 'faedrin', 'krothar', 'ithyra', 'nyressa', 'selenia', 'drakulen', 'keldrax', 'oraneth', 'zarvion', 'sylreth', 'thalnir', 'aurelion', 'zyrael', 'velmira', 'nithara',
+    'kaelira', 'vorak', 'elyndra', 'morveth', 'theryn', 'arkanis', 'liora', 'gorvann', 'sylvara', 'veyrith', 'astraea', 'korran', 'zephara', 'malreth', 'eryndor', 'ignara', 'thalessa', 'ravok', 'seraphine', 'draevan', 'mirella', 'volkaris', 'nyxara', 'orvyn', 'celesthyr'];
 
   // ---------- Enemies (fodder) ----------
   let FOE_ATK = +(typeof process!=='undefined'&&process.env.FA||2.0), BOSS_ATK = +(typeof process!=='undefined'&&process.env.BA||5), BOSS_HP = +(typeof process!=='undefined'&&process.env.BH||1);
@@ -732,6 +909,7 @@ const K = (function () {
       if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1); ticked = true; }
       if (u.alive && u.passive === 'deeproots') { this.heal(u, u.maxHp * 0.05); ticked = true; }
       if (u.alive && u.passive === 'beacon') { const l = lowest(this.living(this.allies(u))); if (l.hp < l.maxHp) { this.heal(l, l.maxHp * 0.05); ticked = true; } }
+      if (u.alive && u.passive === 'harmony') for (const a of this.living(this.allies(u))) if (a.hp < a.maxHp) { this.heal(a, a.maxHp * 0.04); ticked = true; }
       if (ticked) await this.h.pause(360);
       if (!u.alive || this.check()) { this.endTurn(u, null); return; }
       let used = null;
