@@ -94,6 +94,7 @@
   const $ = s => document.querySelector(s);
   let status = { k: 'off', msg: '' };
   function setStatus(k, msg) { status = { k, msg: msg || '' }; paintAccount(); }
+  const ACC_IC = '<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg>';
   function paintAccount() {
     const b = $('#account'); if (!b) return;
     if (!enabled) { b.hidden = true; return; }
@@ -101,9 +102,9 @@
     if (session && session.user) {
       const who = session.user.email || 'Account';
       const dot = status.k === 'error' ? 'err' : status.k === 'syncing' ? 'sync' : 'ok';
-      b.innerHTML = `<i class="acc-dot ${dot}"></i><span class="acc-name">${who.replace(/[&<>"]/g, '')}</span>`;
+      b.innerHTML = `${ACC_IC}<i class="acc-dot ${dot}"></i><span class="acc-name">${who.replace(/[&<>"]/g, '')}</span>`;
       b.title = status.k === 'error' ? 'Cloud save failed: ' + status.msg : status.k === 'syncing' ? 'Syncing…' : 'Progress saved to your account';
-    } else { b.innerHTML = 'Sign in'; b.title = 'Sign in to save your progress in the cloud'; }
+    } else { b.innerHTML = `${ACC_IC}<span class="acc-name">Sign in</span>`; b.title = 'Sign in to save your progress in the cloud'; }
   }
   function overlay(html) {
     let o = $('#auth');

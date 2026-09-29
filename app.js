@@ -162,9 +162,9 @@
     $('#silver').textContent = S.silver.toLocaleString('en-US');
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones;
-    const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false'); sb.textContent = S.sound ? 'Sound on' : 'Sound off';
-    const altar = document.querySelector('#tabs [data-tab="altaar"]');
-    altar.innerHTML = 'Fate Altar' + (totalFs > 0 ? '<span class="dot"></span>' : '');
+    const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
+    sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${S.sound ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${S.sound ? 'Sound on' : 'Sound off'}</span>`;
+    document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0);
   }
 
   // ---------- tabs ----------
@@ -180,6 +180,9 @@
     el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : champsHtml();
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
+    // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
+    const sel = tab === 'champions' && el.querySelector('.champ-layout .card.sel');
+    if (sel) { const strip = sel.parentElement; strip.scrollLeft += sel.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - sel.offsetWidth) / 2; }
   }
 
   // ----- campaign -----

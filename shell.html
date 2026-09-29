@@ -464,6 +464,131 @@ img.shard-ic.ic { width: 22px; height: 22px; vertical-align: middle; }
 .auth-guest { color: var(--muted); }
 .auth-danger { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
 .btn.danger { border-color: var(--bad); color: #ffb0a0; }
+
+/* icons: header buttons and the tab bar */
+html { -webkit-text-size-adjust: 100%; }
+button, a, input { touch-action: manipulation; }
+.iconbtn { display: inline-flex; align-items: center; gap: 6px; }
+.iconbtn svg, .tabs .ti { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.acc-ic { display: none; }
+.tabs .ti, .tabs .tl-s { display: none; }
+@media (hover: none) { .stage:hover:not(:disabled) { transform: none; } }
+
+/* phones: sticky compact header, app-style tab bar at the bottom, full-width battlefield */
+@media (max-width: 760px) {
+  body { font-size: 16px; -webkit-tap-highlight-color: transparent; }
+  #app { padding-inline: 12px; padding-block: 0 calc(76px + env(safe-area-inset-bottom, 0px)); }
+  h2 { font-size: 1.35rem; }
+  .lede { font-size: .95rem; }
+
+  .top { position: sticky; top: 0; z-index: 8; flex-wrap: nowrap; gap: 8px; margin-inline: -12px; padding: calc(6px + env(safe-area-inset-top, 0px)) 12px 6px; background: var(--bg); }
+  .brand { flex: none; }
+  .logo-img img { height: 32px; }
+  .wallet { flex-wrap: nowrap; gap: 4px; justify-content: flex-end; min-width: 0; }
+  .res { gap: 4px; padding: 2px 6px; }
+  .res img, #ic-shard.shard-ic, #ic-stone.shard-ic { width: 16px; height: 16px; }
+  .res b { font-size: .95rem; }
+  .iconbtn { min-height: 32px; padding: 2px 8px; gap: 4px; }
+  .iconbtn .lbl, #account .acc-name { display: none; }
+  .acc-ic { display: block; }
+  #account { max-width: none; }
+
+  .tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 9; margin: 0; gap: 0; flex-wrap: nowrap; background: var(--panel); border-top: 2px solid var(--line); padding: 2px 2px env(safe-area-inset-bottom, 0px); }
+  .tabs button { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 7px 2px 6px; border: 0; font-size: .66rem; letter-spacing: .02em; }
+  .tabs .ti { display: block; width: 22px; height: 22px; }
+  .tabs .tl-l { display: none; }
+  .tabs .tl-s { display: inline; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { background: transparent; color: var(--gold); box-shadow: inset 0 3px 0 var(--gold); }
+  .tabs .dot { top: 6px; right: calc(50% - 17px); }
+  #screen { padding-top: 12px; }
+  .toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+
+  .btn { min-height: 40px; }
+  .btn.small { min-height: 36px; }
+  .seg button { min-height: 40px; }
+
+  /* campaign */
+  .camp-head { gap: 12px; margin-bottom: 10px; }
+  .mini { width: 58px; }
+  .mini img { width: 54px; height: 54px; }
+  .chapters { flex-wrap: nowrap; overflow-x: auto; margin-inline: -12px; padding: 0 12px 4px; scrollbar-width: none; }
+  .chapters button { flex: none; min-width: 44px; min-height: 40px; }
+  .stages { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .boss-row { grid-template-columns: minmax(0, 1fr); }
+  .stage { padding: 8px 9px 10px; gap: 5px; }
+  .st-n { font-size: 1.05rem; }
+  .st-foes { min-height: 0; }
+  .st-foes img { width: 36px; height: 36px; }
+  .stage.bossst .st-foes img.bossimg { width: 56px; height: 56px; }
+  .st-meta, .st-drop, .st-reward { font-size: .82rem; }
+  .st-reward img.spr { width: 28px; height: 28px; }
+  .help { grid-template-columns: minmax(0, 1fr); }
+
+  /* boss hall */
+  .bh-list { max-height: 216px; }
+  .bh-row { min-height: 44px; }
+  .bh-art { height: 180px; }
+  .lvls { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+  .lvls button { min-height: 40px; }
+
+  /* altar */
+  .altar-stage { min-height: 0; padding: 14px; }
+  .fs-anim.big { width: 110px; height: 110px; }
+  .fs-grid { grid-template-columns: minmax(0, 1fr); }
+  .summon-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  /* team */
+  .slots { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .slot { min-height: 0; padding: 4px 3px 6px; }
+  .slot b { font-size: .8rem; overflow-wrap: anywhere; }
+  .slot small { font-size: .7rem; line-height: 1.2; }
+  .slot .stars { font-size: .7rem; letter-spacing: 0; }
+  .grid-cards { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
+  .grid-cards .card .sub { font-size: .7rem; line-height: 1.2; }
+
+  /* champions: roster becomes a swipeable strip so the detail sits right under it */
+  .champ-layout { gap: 10px; }
+  .champ-layout .grid-cards { display: flex; overflow-x: auto; scroll-snap-type: x proximity; margin-inline: -12px; padding: 0 12px 6px; scrollbar-width: none; }
+  .champ-layout .card { flex: 0 0 84px; scroll-snap-align: center; }
+  .champ-layout .card.lockedc, .champ-layout .card .sub { display: none; }
+  .card.inteam::after { white-space: nowrap; }
+  .detail { padding: 12px; gap: 14px; }
+  .d-head { gap: 10px; flex-wrap: nowrap; align-items: flex-start; }
+  .d-head .bigspr { max-height: 110px; max-width: 34%; }
+  .d-head h2 { font-size: 1.25rem; }
+  .gear-slots, .inv-list, .fodder-list { grid-template-columns: minmax(0, 1fr); }
+
+  /* battle: header goes away, battlefield runs edge to edge */
+  #app:has(#battle:not([hidden])) { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  #app:has(#battle:not([hidden])) .top { display: none; }
+  #battle { gap: 6px; padding-top: calc(8px + env(safe-area-inset-top, 0px)); }
+  .b-top h2 { font-size: 1rem; }
+  .order .ord-l { display: none; }
+  .stage-wrap { width: auto; max-width: none; margin-inline: -12px; border-inline: 0; }
+  .b-bar { padding: 8px; gap: 8px; }
+  #b-por { width: 44px; height: 44px; }
+  .b-who b { font-size: 1rem; }
+  .b-skills { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .sk { min-width: 0; min-height: 60px; padding: 6px 7px; }
+  .sk .k { font-size: 8px; }
+  .sk b { font-size: .8rem; line-height: 1.15; overflow-wrap: anywhere; }
+  .sk small { font-size: .72rem; line-height: 1.2; }
+  .b-desc { grid-column: 1 / -1; font-size: .85rem; }
+  .b-ctl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .b-ctl .btn { min-height: 40px; white-space: normal; line-height: 1.1; }
+  #b-log { max-height: 60px; padding: 6px 10px; font-size: .8rem; }
+
+  /* dialogs */
+  .modal { padding: 10px; }
+  .modal-box { padding: 16px; max-height: calc(100% - 20px); }
+  .modal-box h2 { font-size: 1.5rem; }
+  .modal-actions .btn { flex: 1 1 auto; }
+}
+@media (max-width: 380px) {
+  .logo-img img { height: 26px; }
+  .res { padding-inline: 4px; }
+  .iconbtn { padding-inline: 6px; }
+}
 </style>
 
 <div id="app">
@@ -473,16 +598,16 @@ img.shard-ic.ic { width: 22px; height: 22px; vertical-align: middle; }
       <div class="res" title="Silver: for upgrading gear and ascending"><img id="ic-coin" class="spr" alt=""><b id="silver">0</b></div>
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b></div>
-      <button class="iconbtn" id="sound" type="button" aria-pressed="true" title="Sound on or off">Sound</button>
-      <button class="iconbtn acc" id="account" type="button" hidden>Sign in</button>
+      <button class="iconbtn" id="sound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">Sound</button>
+      <button class="iconbtn acc" id="account" type="button" aria-label="Account" hidden>Sign in</button>
     </div>
   </header>
-  <nav class="tabs" id="tabs" role="tablist">
-    <button role="tab" data-tab="campagne" aria-selected="true">Campaign</button>
-    <button role="tab" data-tab="kerkers" aria-selected="false">Boss Hall</button>
-    <button role="tab" data-tab="altaar" aria-selected="false">Fate Altar</button>
-    <button role="tab" data-tab="team" aria-selected="false">Team</button>
-    <button role="tab" data-tab="champions" aria-selected="false">Champions &amp; gear</button>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Main">
+    <button role="tab" data-tab="campagne" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 14.5v-13M3.5 2h9l-2 3 2 3h-9"/></svg><span class="tl-l">Campaign</span><span class="tl-s">Campaign</span></button>
+    <button role="tab" data-tab="kerkers" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5a5.5 5.5 0 0 1 11 0v3h-2v3h-7v-3h-2z"/><path d="M5.5 7.5h1.5v1.5h-1.5zM9 7.5h1.5v1.5h-1.5z" fill="currentColor"/><path d="M7 13.5v-2M9 13.5v-2"/></svg><span class="tl-l">Boss Hall</span><span class="tl-s">Bosses</span></button>
+    <button role="tab" data-tab="altaar" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l4.5 5L8 15 3.5 6zM3.5 6h9M8 1v14"/></svg><span class="tl-l">Fate Altar</span><span class="tl-s">Altar</span><span class="dot" hidden></span></button>
+    <button role="tab" data-tab="team" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><circle cx="5" cy="5" r="2.2"/><circle cx="11" cy="5" r="2.2"/><path d="M1.5 14c0-3 1.5-4.6 3.5-4.6S8.5 11 8.5 14M8.5 11c.5-1 1.3-1.6 2.5-1.6 2 0 3.5 1.6 3.5 4.6"/></svg><span class="tl-l">Team</span><span class="tl-s">Team</span></button>
+    <button role="tab" data-tab="champions" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l5.5 2v4c0 3.5-2.5 6-5.5 7-3-1-5.5-3.5-5.5-7v-4z"/><path d="M8 4.5v7M5.5 7h5"/></svg><span class="tl-l">Champions &amp; gear</span><span class="tl-s">Heroes</span></button>
   </nav>
   <main id="screen"></main>
   <section id="battle" hidden>
