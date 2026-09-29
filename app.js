@@ -211,7 +211,7 @@
   }
 
   // ---------- tabs ----------
-  let tab = 'campagne', selChamp = 'draelyn', invSlot = null;
+  let tab = 'campagne', selChamp = 'draelyn', invSlot = null, champTab = 'stats';
   function setTab(t) {
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
@@ -365,7 +365,8 @@
       return `<div class="card lockedc rar-${c.rar}" title="${st >= 0 ? 'Earn in ' + stageName(st) + ' or at the Fate Altar' : 'Fate Altar only'}">${por(id)}<span class="nm">???</span><span class="sub">${where ? where + ' / Fate Altar' : 'Fate Altar'}</span></div>`;
     }
     const cls = [opts.sel ? 'sel' : '', opts.inteam ? 'inteam' : ''].join(' ');
-    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}">${affChip(c.aff)}<span class="lv">Lv ${S.roster[id].lvl}</span>${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
+    const slot = S.team.indexOf(id) + 1; // --tord: team members first in the phone strip (see CSS)
+    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}"${slot ? ` data-slot="${slot}" style="--tord:${slot - 5}"` : ''}>${affChip(c.aff)}<span class="lv">Lv ${S.roster[id].lvl}</span>${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
   }
   const sortedIds = () => [...K.CHAMP_ORDER, ...K.CAPTURE_ORDER.filter(id => S.roster[id])].sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || C[b].rar - C[a].rar || ((S.roster[b]?.lvl || 0) - (S.roster[a]?.lvl || 0)));
   function teamHtml() {
@@ -390,9 +391,10 @@
     const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
     const skills = c.skills.map((s, i) => { const lv = r.sk[i] || 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${pips(lv)}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${lv * 10}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
       + (c.passive ? `<div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>` : '');
-    let rank = '';
+    let rank = '', canRank = false;
     if (r.stars < mxs) {
       const rc = K.rankCost(r.stars), ok = atCap && S.stones >= rc.stones && S.silver >= rc.silver;
+      canRank = ok;
       rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${ic('stone')} ${rc.stones} Ascension Stones · ${rc.silver.toLocaleString('en-US')} silver${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
     }
     const items = itemsOf(id), counts = K.setCounts(items);
@@ -415,20 +417,19 @@
     }
     return `<div class="champ-layout">
       <div><div class="section-head"><h2>Champions</h2><span class="tag">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes${K.CAPTURE_ORDER.some(x => S.roster[x]) ? ` · ${K.CAPTURE_ORDER.filter(x => S.roster[x]).length} captured` : ''}</span></div><div class="grid-cards">${sortedIds().map(x => cardHtml(x, { act: 'sel', sel: x === id, inteam: S.team.includes(x) })).join('')}</div></div>
-      <div class="detail rar-${c.rar}">
+      <div class="detail rar-${c.rar}" data-dtab="${champTab}">
         <div class="d-head"><img class="spr bigspr" src="${SPR.url(id, 2)}" alt=""><div>
-          <h2>${esc(c.name)}</h2>
+          <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">Team ${S.team.indexOf(id) + 1}</span>` : ''}</h2>
           <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          ${rank}
         </div></div>
-        <div class="d-cols"><div><h3>Stats</h3><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
-        <div><h3>Skills</h3>${skills}</div></div>
-        <div><div class="section-head" style="margin-bottom:6px"><h3 style="margin:0">Gear</h3><button class="btn small" data-act="bestgear">Equip best gear</button></div>${setInfo ? `<div class="setbonus" style="margin-bottom:10px">${setInfo}</div>` : ''}<div class="gear-slots">${gear}</div></div>
-        ${fodderHtml(id)}
-        ${inv}
+        <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
+        <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
+        <div class="dpanel" data-p="skills">${skills}</div>
+        <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><button class="btn small" data-act="bestgear">Equip best gear</button></div>${setInfo ? `<div class="setbonus" style="margin-bottom:10px">${setInfo}</div>` : ''}<div class="gear-slots">${gear}</div>${inv}</div>
+        <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
       </div></div>`;
   }
 
@@ -520,7 +521,8 @@
       else toast('Your team is full. Remove someone first.', true);
       save(); render();
     } else if (act === 'sel') { selChamp = id; invSlot = null; render(); }
-    else if (act === 'inv') { invSlot = a.dataset.slot; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
+    else if (act === 'inv') { invSlot = a.dataset.slot; champTab = 'gear'; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     else if (act === 'invclose') { invSlot = null; render(); }
     else if (act === 'equip' && item) {
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
