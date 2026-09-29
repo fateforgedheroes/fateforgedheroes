@@ -44,6 +44,8 @@ Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…)
 
 `S` in localStorage key `ffh-save` (old key `kronen-van-as-v1` still read). Current version `v: 7`; `migrate()` upgrades older saves. When changing the save shape: bump `v`, add a migration step, keep old saves working. Small optional fields added within a version get a default in `fixup()`. `save()` also queues a cloud upload.
 
+Cloud sync (cloud.js): one row per account in `saves`. Each device stores in localStorage `ffh-cloud-base` which cloud version (`updated_at` string as returned by the server) its save is based on, plus a hash of the save at that moment. Uploads are a `PATCH … &updated_at=eq.<base>`; 0 rows updated means another device saved in between, so `sync()` runs: local unchanged → take the cloud silently; cloud unchanged → upload; both changed → the player picks a save in a dialog. Never upload without a base, and never decide by `savedAt` (it changes on every boot).
+
 ## Working rules
 
 - After changing balance or engine: run `node campaign-sim.cjs` (or `npm test`) and keep it passing.

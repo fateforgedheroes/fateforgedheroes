@@ -58,36 +58,75 @@
   }
 
   // ---------- saves ----------
-  const progress = s => (s && s.roster ? (s.cleared || 0) * 10 + Object.values(s.roster).reduce((t, h) => t + (h.lvl || 0), 0) : -1);
+  // One save row per account. Every device remembers which cloud version its local save is based on
+  // (BASE_KEY: user id, the row's updated_at, and a hash of the save at that moment). An upload only
+  // succeeds while the cloud row still has that updated_at, so two devices can never silently overwrite
+  // each other. When both sides changed, the player chooses which save to keep.
+  const BASE_KEY = 'ffh-cloud-base';
   const isFresh = s => !s || ((s.cleared ?? -1) < 0 && Object.keys(s.bh || {}).length === 0);
+  const content = s => JSON.stringify(Object.assign({}, s, { savedAt: 0 }));
+  const hash = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0; return str.length + ':' + h; };
+  let conflictOpen = false;
+  function getBase() { const b = store.get(BASE_KEY); return b && session && session.user && b.uid === session.user.id ? b : null; }
+  function setBase(at, s) { store.set(BASE_KEY, { uid: session.user.id, at, hash: hash(content(s)) }); lastPushed = JSON.stringify(s); }
   async function pull() {
     const rows = await req('/rest/v1/saves?select=data,updated_at&user_id=eq.' + encodeURIComponent(session.user.id));
     return rows && rows[0] ? rows[0] : null;
   }
+  function takeCloud(row, msg) {
+    api.set(row.data);
+    setBase(row.updated_at, api.get());
+    setStatus('saved');
+    if (msg) api.toast(msg);
+  }
   async function push(force) {
-    if (!enabled || !(await valid()) || !api) return;
-    const S = api.get(); const body = JSON.stringify(S);
+    if (!enabled || !api || conflictOpen || busy || !(await valid())) return;
+    const S = api.get(), body = JSON.stringify(S), base = getBase();
     if (!force && body === lastPushed) return;
+    if (!base) return; // not synced with this account yet: sync() decides first
     try {
-      await req('/rest/v1/saves?on_conflict=user_id', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: { user_id: session.user.id, data: S, version: S.v || 0, updated_at: new Date().toISOString() } });
-      lastPushed = body; setStatus('saved');
+      const payload = { data: S, version: S.v || 0, updated_at: new Date().toISOString() };
+      const rows = await req('/rest/v1/saves?user_id=eq.' + encodeURIComponent(session.user.id) + '&updated_at=eq.' + encodeURIComponent(base.at),
+        { method: 'PATCH', headers: { Prefer: 'return=representation' }, body: payload });
+      if (rows && rows[0]) { setBase(rows[0].updated_at, S); setStatus('saved'); }
+      else await sync(); // the cloud changed on another device since we last synced
     } catch (e) { setStatus('error', e.message); }
   }
   async function sync() {
-    if (busy) return; busy = true;
+    if (busy || conflictOpen || !session) return; busy = true;
     try {
       setStatus('syncing');
       const row = await pull();
-      const local = api.get();
-      if (!row) { await push(true); api.toast('Your progress is now saved to your account.'); }
-      else {
-        const cloud = row.data, cloudT = Date.parse(row.updated_at) || 0, localT = local.savedAt || 0;
-        const takeCloud = isFresh(local) || (cloudT > localT && progress(cloud) >= progress(local) - 5);
-        if (takeCloud) { api.set(cloud); lastPushed = JSON.stringify(api.get()); setStatus('saved'); api.toast('Cloud save loaded.'); }
-        else { await push(true); }
-      }
+      const local = api.get(), base = getBase();
+      if (!row) {
+        const rows = await req('/rest/v1/saves', { method: 'POST', headers: { Prefer: 'return=representation' }, body: { user_id: session.user.id, data: local, version: local.v || 0, updated_at: new Date().toISOString() } });
+        setBase(rows[0].updated_at, local); setStatus('saved'); api.toast('Your progress is now saved to your account.');
+      } else if (content(local) === content(row.data)) { setBase(row.updated_at, local); setStatus('saved'); }
+      else if (isFresh(local)) takeCloud(row, 'Cloud save loaded.');
+      else if (base && base.at === row.updated_at) {
+        // nobody else saved since our last sync: our local changes win
+        busy = false; await push(true); return;
+      } else if (base && base.hash === hash(content(local))) takeCloud(row, 'Loaded your newer progress from another device.');
+      else { busy = false; setStatus('saved'); chooseSave(row, local); return; }
     } catch (e) { setStatus('error', e.message); }
     busy = false;
+  }
+  // both this device and the cloud have progress the other lacks: the player picks one
+  function chooseSave(row, local) {
+    conflictOpen = true;
+    const when = t => t ? new Date(t).toLocaleString() : 'unknown';
+    const card = (title, s, t, k) => `<div class="save-pick"><h3>${title}</h3><div class="save-sum">${api.summary(s)}</div><small class="auth-sub">Last saved ${when(t)}</small><button class="btn ${k === 'cloud' ? 'primary' : ''}" type="button" data-pick="${k}">Keep this save</button></div>`;
+    const o = overlay(`
+      <h2 id="auth-h">Two different saves</h2>
+      <p class="auth-sub">This device has different progress than your account. Pick the save you want to keep. The other one is replaced for good.</p>
+      <div class="save-picks">${card('Saved in your account', row.data, Date.parse(row.updated_at), 'cloud')}${card('On this device', local, local.savedAt, 'local')}</div>`);
+    o.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', async () => {
+      const k = b.dataset.pick;
+      if (b.dataset.armed !== '1') { o.querySelectorAll('[data-pick]').forEach(x => { x.dataset.armed = ''; x.textContent = 'Keep this save'; }); b.dataset.armed = '1'; b.textContent = 'Click again to confirm'; return; }
+      conflictOpen = false; closeOverlay();
+      if (k === 'cloud') takeCloud(row, 'Your account save is loaded on this device.');
+      else { store.set(BASE_KEY, { uid: session.user.id, at: row.updated_at, hash: '' }); await push(true); api.toast('This device’s save is now stored in your account.'); }
+    }));
   }
 
   // ---------- UI ----------
@@ -128,13 +167,16 @@
       try {
         if (mode === 'up') {
           const r = await req('/auth/v1/signup', { method: 'POST', auth: false, body: { email, password } });
-          if (r && r.access_token) { keep(r); await afterLogin(); }
+          // Supabase answers a sign-up for an existing email with a user that has no identities (and no session)
+          const u = r && (r.user || r);
+          if (r && !r.access_token && u && Array.isArray(u.identities) && u.identities.length === 0) loginScreen('There is already an account with this email. Sign in instead, or use "Forgot password?".', true);
+          else if (r && r.access_token) { keep(r); await afterLogin(); }
           else loginScreen('Check your inbox and click the link in the email to confirm your account. Then sign in here.');
         } else {
           keep(await req('/auth/v1/token?grant_type=password', { method: 'POST', auth: false, body: { email, password } }));
           await afterLogin();
         }
-      } catch (err) { loginScreen(err.message === 'Invalid login credentials' ? 'Wrong email or password.' : err.message, true); }
+      } catch (err) { loginScreen(err.message === 'Invalid login credentials' ? 'Wrong email or password.' : /already registered/i.test(err.message) ? 'There is already an account with this email. Sign in instead, or use "Forgot password?".' : err.message, true); }
     });
     o.addEventListener('click', async e => {
       const a = e.target.closest('[data-auth]'); if (!a) return;
@@ -164,7 +206,7 @@
       else if (k === 'out') { await push(true); try { await req('/auth/v1/logout', { method: 'POST' }); } catch (err) { /* ignore */ } session = null; store.set(SESSION_KEY, null); lastPushed = ''; closeOverlay(); paintAccount(); loginScreen('You are signed out. Your progress stays in this browser too.'); }
       else if (k === 'del') {
         if (a.dataset.armed !== '1') { a.dataset.armed = '1'; a.textContent = 'Click again to delete for good'; return; }
-        try { await valid(); await req('/rest/v1/rpc/delete_my_account', { method: 'POST', body: {} }); session = null; store.set(SESSION_KEY, null); closeOverlay(); paintAccount(); api.toast('Your account and cloud save were deleted.'); }
+        try { await valid(); await req('/rest/v1/rpc/delete_my_account', { method: 'POST', body: {} }); store.set(BASE_KEY, null); session = null; store.set(SESSION_KEY, null); closeOverlay(); paintAccount(); api.toast('Your account and cloud save were deleted.'); }
         catch (err) { a.textContent = 'Delete failed: ' + err.message; }
       }
     });
@@ -193,7 +235,8 @@
       else if (!store.get(GUEST_KEY)) loginScreen();
       paintAccount();
       setInterval(() => { if (session) push(); }, 30000);
-      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && session) push(); });
+      // leaving the tab: upload; coming back: pick up progress made on another device in the meantime
+      document.addEventListener('visibilitychange', () => { if (!session) return; if (document.visibilityState === 'hidden') push(); else sync(); });
     },
     // account state for the profile screen: { enabled, email, status: 'off' | 'syncing' | 'saved' | 'error' }
     info() { return { enabled, email: session && session.user ? session.user.email || 'your account' : null, status: status.k }; },

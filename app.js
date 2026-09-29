@@ -1304,6 +1304,12 @@
       set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
+      // short description of any save (also an older version), for the "which save to keep" dialog
+      summary: s => {
+        const p = s.p || {}, heroes = Object.keys(s.roster || {}).filter(id => C[id]).length;
+        const top = Object.entries(s.roster || {}).filter(([id]) => C[id]).sort((a, b) => b[1].lvl - a[1].lvl)[0];
+        return `<b>${esc(p.name || 'Adventurer')}</b> · player level ${p.lvl || 1}<br>${(s.cleared ?? -1) + 1} / ${K.STAGES.length} stages · ${heroes} heroes${top ? ` · best: ${esc(C[top[0]].short)} lv ${top[1].lvl}` : ''}<br>${(s.silver || 0).toLocaleString('en-US')} silver`;
+      },
     });
     save();
     $('#logo').src = LOGO_URL;
