@@ -649,10 +649,11 @@ const K = (function () {
   // Chapter names/settings are placeholders.
   const CHAPTERS = [
     // pool[0] = regular foes, pool[1] = elites; stages mix them per phase (see stageGroup), so bigger pools mean more variety
-    { name: 'The Fallen Kingdom', set: 'krijger', desc: 'The heroes begin in a fallen realm, overrun by monsters and darkness.', area: 0, pool: [['botkrijger', 'gravestalker', 'cryptschutter', 'ashgoblin', 'zombie'], ['hellehond', 'cultist', 'cryptguard']], boss: 'grakk', adds: ['ashgoblin', 'cultist'], unlock: { 2: 'karnok', 6: 'morgrim' } },
-    { name: 'Whispers of the Dead', set: 'levensbron', desc: 'Ancient ruins, the undead and secrets of the past come to light.', area: 0, pool: [['cryptguard', 'botkrijger', 'gravestalker', 'cryptschutter', 'schim'], ['skeletridder', 'soulreaver', 'doodsmagier', 'dreadarcher', 'banshee']], boss: 'boneking', adds: ['cryptguard', 'dreadarcher'], unlock: { 6: 'vorlund' } },
-    { name: 'The Blighted Wilds', set: 'precisie', desc: 'A cursed forest where nature itself has been corrupted.', area: 3, pool: [['mosscrawler', 'hagedisstrijder', 'thornbeast', 'hagedissjamaan', 'wouddruide'], ['rotvineshambler', 'hagedisbruut', 'moerasheks', 'pestbrenger']], boss: 'treant', adds: ['mosscrawler', 'rotvineshambler'], unlock: { 6: 'valkessa' } },
-    { name: 'Embers of War', set: 'vlammenhart', desc: 'War rages across the land as demonic forces rise.', area: 4, pool: [['ashgoblin', 'cinderhound', 'hellehond', 'flameberserker', 'cultist'], ['hellfireshaman', 'helsebruut', 'magmabrute', 'succubus', 'gevallenridder']], boss: 'overlord', adds: ['flameberserker'] },
+    // Chapter I builds the team: the starter fights alone in stage 1, the first clears of stages 1-3 add Draelyn, Bromir and Skavren
+    { name: 'The Fallen Kingdom', set: 'krijger', desc: 'The heroes begin in a fallen realm, overrun by monsters and darkness.', area: 0, pool: [['botkrijger', 'gravestalker', 'cryptschutter', 'ashgoblin', 'zombie'], ['hellehond', 'cultist', 'cryptguard']], boss: 'grakk', adds: ['ashgoblin', 'cultist'], unlock: { 0: 'draelyn', 1: 'bromir', 2: 'skavren', 3: 'karnok', 6: 'morgrim' }, shapes: { 0: [1, 0], 1: [2, 0], 2: [2, 0] } },
+    { name: 'Whispers of the Dead', set: 'levensbron', desc: 'Ancient ruins, the undead and secrets of the past come to light.', area: 0, pool: [['cryptguard', 'botkrijger', 'gravestalker', 'cryptschutter', 'schim'], ['skeletridder', 'soulreaver', 'doodsmagier', 'dreadarcher', 'banshee']], boss: 'boneking', adds: ['cryptguard', 'dreadarcher'], unlock: { 2: 'grythor', 6: 'vorlund' } },
+    { name: 'The Blighted Wilds', set: 'precisie', desc: 'A cursed forest where nature itself has been corrupted.', area: 3, pool: [['mosscrawler', 'hagedisstrijder', 'thornbeast', 'hagedissjamaan', 'wouddruide'], ['rotvineshambler', 'hagedisbruut', 'moerasheks', 'pestbrenger']], boss: 'treant', adds: ['mosscrawler', 'rotvineshambler'], unlock: { 2: 'vaessa', 6: 'valkessa' } },
+    { name: 'Embers of War', set: 'vlammenhart', desc: 'War rages across the land as demonic forces rise.', area: 4, pool: [['ashgoblin', 'cinderhound', 'hellehond', 'flameberserker', 'cultist'], ['hellfireshaman', 'helsebruut', 'magmabrute', 'succubus', 'gevallenridder']], boss: 'overlord', adds: ['flameberserker'], unlock: { 2: 'brukkar' } },
     { name: 'The Frozen Wastes', set: 'wilgenbast', desc: 'A desolate northern land, ravaged by eternal frost.', area: 1, pool: [['frostfangwolf', 'iceboundknight', 'schim', 'skeletridder'], ['frostbornwitch', 'ijselementaal', 'glacierbrute', 'steengolem']], boss: 'frostcolossus', adds: ['frostfangwolf'], unlock: { 6: 'faedrin' } },
     { name: 'Kingdom of Shadows', set: 'vampierbloed', desc: 'The heroes enter a realm ruled entirely by Umbral forces.', area: 2, pool: [['vampier', 'soulreaver', 'gevallenridder', 'dreadarcher', 'cultist'], ['gravewarden', 'banshee', 'bloedpriesteres', 'doodsmagier']], boss: 'netherqueen', adds: ['vampier'] },
     { name: 'The Stormbound Realm', set: 'windloper', desc: 'A ruined land where endless storms and elemental beings reign.', area: 1, pool: [['stormimp', 'thunderraider', 'tempestharpy', 'steengolem'], ['stormcaller', 'thundergolem', 'frozenhorror', 'ijselementaal']], boss: 'stormbehemoth', adds: ['thunderraider'] },
@@ -665,10 +666,11 @@ const K = (function () {
   const STAGE_SHAPE = [[2, 0], [3, 0], [3, 1], [4, 1], [3, 2], [4, 2]];
   // Every stage is fought in 3 phases of equal size and level. `foes` is the last phase (shown on the stage tile).
   const PHASES = 3;
-  // shape = index into STAGE_SHAPE, k = variant (k 0 is the original line-up, 1 and 2 shuffle the chapter pool)
-  function stageGroup(ch, c, shape, k) {
-    const [n, elite] = STAGE_SHAPE[shape], base = ch.pool[0], hi = ch.pool[1], foes = [];
-    for (let j = 0; j < n; j++) foes.push(j >= n - elite ? hi[(j + shape + c + k) % hi.length] : base[(j + shape * 2 + c + k * 2) % base.length]);
+  // s = stage (0-5) for the pool offsets, [n, elite] = group size and elites (chapter `shapes` override STAGE_SHAPE),
+  // k = variant (k 0 is the original line-up, 1 and 2 shuffle the chapter pool)
+  function stageGroup(ch, c, s, k) {
+    const [n, elite] = (ch.shapes && ch.shapes[s]) || STAGE_SHAPE[s], base = ch.pool[0], hi = ch.pool[1], foes = [];
+    for (let j = 0; j < n; j++) foes.push(j >= n - elite ? hi[(j + s + c + k) % hi.length] : base[(j + s * 2 + c + k * 2) % base.length]);
     return foes;
   }
   const STAGES = [];
@@ -682,8 +684,17 @@ const K = (function () {
     }
   });
   const HARD_BONUS = 14;
+  // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter),
+  // and the chapter boss stage is an extra wall. Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs.
+  // chDiff 0.26: a new player who farms, upgrades, ascends and summons needs roughly 1,200-4,000 battles
+  // (median ~2,300) to finish the campaign, most of them in Chapters VII-X (campaign-sim.cjs, 12/12 runs pass).
+  // Late chapters need summoned Epic/Legendary heroes and upgraded gear; levels alone are not enough.
+  const TUNE = { chDiff: 0.26, bossWall: 1.15, xp: 1, silver: 1 };
+  // Chapters I-II play at the base level; from Chapter III on every chapter adds chDiff
+  const stageDiff = st => (1 + TUNE.chDiff * Math.max(0, st.chapter - 1)) * (st.n === 6 ? TUNE.bossWall : 1);
+  function toughen(u, f) { u.maxHp = u.hp = Math.round(u.maxHp * f); u.atk = Math.round(u.atk * f); return u; }
   // chapter bosses fight a few levels below the stage level (they bring adds); p = phase index, default the last phase
-  const stageUnits = (st, lvl, p) => (p == null ? st.foes : st.phases[p]).map(f => enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl));
+  const stageUnits = (st, lvl, p) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st)));
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -693,12 +704,15 @@ const K = (function () {
       for (const s of u.skills) s.cdLeft = 0;
     }
   }
+  // a new player picks one starter; the rest of the team is earned in Chapter I (see CHAPTERS[0].unlock)
+  const STARTERS = ['krothar', 'drakulen', 'zephara', 'thalnir'];
+  // legacy starting roster, only used to migrate very old saves
   const START_ROSTER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar'];
   const START_TEAM = ['bromir', 'grythor', 'skavren', 'draelyn'];
   const xpNeed = lvl => 60 * lvl + 6 * lvl * lvl;
-  // rewards per cleared stage or Boss Hall level (3 phases, so twice the old single-fight amounts)
-  const winXp = lvl => 2 * (40 + lvl * 28);
-  const winSilver = lvl => 2 * (120 + lvl * 60);
+  // rewards per cleared stage or Boss Hall level; kept low on purpose so progress needs replays (see TUNE)
+  const winXp = lvl => Math.round(TUNE.xp * (40 + lvl * 28));
+  const winSilver = lvl => Math.round(TUNE.silver * (120 + lvl * 60));
 
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
@@ -806,11 +820,15 @@ const K = (function () {
   const SHARD = Object.fromEntries(FATE_SHARDS.map(f => [f.id, f]));
   const SHARD_PRICE = 1200;
   function rollShards() { return FATE_SHARDS.filter(f => Math.random() < f.drop).map(f => f.id); }
+  // pity: after PITY_EPIC summons in a row without an Epic or better, the next one is at least Epic (st.pity counts)
+  const PITY_EPIC = 40;
   function summonOne(st, type) {
     const T = SHARD[type || 'fate'];
     const r = Math.random() * 100; let acc = 0, rar = 1;
     for (let i = 4; i >= 0; i--) { if (!T.rates[i]) continue; acc += T.rates[i]; if (r < acc) { rar = i; break; } }
     if (acc < 100 && r >= acc) rar = T.rates.findIndex(x => x > 0);
+    if (rar < 3 && (st.pity || 0) + 1 >= PITY_EPIC) rar = 3;
+    st.pity = rar >= 3 ? 0 : (st.pity || 0) + 1;
     let pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === rar);
     if (!pool.length) pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === 2);
     const id = pick(pool);
@@ -1306,9 +1324,9 @@ const K = (function () {
 
   return {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, HARD_BONUS, stageUnits,
-    START_ROSTER, START_TEAM, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne,
+    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

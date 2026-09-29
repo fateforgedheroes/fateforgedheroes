@@ -26,8 +26,8 @@
   const PLAYER_UNLOCK = { altaar: 5, kerkers: 10 };
   const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall' };
   const pxNeed = l => 80 + 40 * (l - 1);
-  // per cleared stage / Boss Hall level (3 phases, hence the ×2)
-  const playerWinXp = (lvl, first, boss) => Math.round(2 * (40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
+  // per cleared stage / Boss Hall level
+  const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
   const RENAME_COST = 2500; // the first name change is free
   const renameCost = () => (S.p.renames ? RENAME_COST : 0);
@@ -35,11 +35,21 @@
   // fields added to v7 after release: fill them in on load (a player who already changed their name used the free change)
   function fixup(s) { if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {}; return s; }
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
+  // A new save has no heroes yet: the player first picks one of K.STARTERS (needStarter), the rest is earned in Chapter I.
   function fresh() {
-    const roster = {};
-    K.START_ROSTER.forEach(id => (roster[id] = newHero(id)));
-    const s = { v: 7, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster, team: K.START_TEAM.slice(), inv: [], nid: 1, cleared: -1, clearedHard: -1, hard: false, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
+    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, clearedHard: -1, hard: false, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
     for (let i = 0; i < 4; i++) s.inv.push(K.genGear({ il: 1 }, s.nid++));
+    return s;
+  }
+  // Progress reset for everyone: raise RESET and every older save (local or cloud) starts over on load.
+  // Kept: player name (and how often it was changed) and settings.
+  const RESET = 1;
+  function resetSave(o) {
+    const s = fresh(), p = o.p || {};
+    if (p.name) s.p.name = p.name;
+    s.p.renames = p.renames || 0;
+    s.sound = o.sound ?? true; s.speed = o.speed || 1; s.auto = !!o.auto;
+    s.wasReset = true;
     return s;
   }
   const IDMAP = { aldric: 'draelyn', lyra: 'valkessa', grolm: 'brukkar', maren: 'faedrin', wachter: 'bromir', urgha: 'krothar', drenk: 'skavren', nixa: 'ithyra', vex: 'thalnir', kira: 'vaessa', baelzor: 'morgrim', thessa: 'aurelion', sera: 'selenia', bram: 'karnok', elwin: 'oraneth', mira: 'zyrael', morvin: 'drakulen', zhar: 'nyressa', kaalvoet: 'vorlund', rogh: 'grythor' };
@@ -71,7 +81,7 @@
     o.v = 7; o.migrated7 = true;
     return o;
   }
-  function migrate(o) {
+  function migrateVersion(o) {
     if (!o || !o.roster) return null;
     if (o.v === 7) return o;
     if (o.v === 6) return to7(o);
@@ -79,6 +89,11 @@
     if (o.v === 4) return to7(to6(to5(o)));
     const m = migrate3(o);
     return m ? to7(to6(to5(to4(m)))) : null;
+  }
+  // every load goes through here (local saves and cloud saves alike), so a reset reaches every player
+  function migrate(o) {
+    const m = migrateVersion(o);
+    return m && (m.reset || 0) < RESET ? resetSave(m) : m;
   }
   function migrate3(o) {
     if (o.v === 3) return o;
@@ -190,6 +205,8 @@
   const unlocked = t => !PLAYER_UNLOCK[t] || S.p.lvl >= PLAYER_UNLOCK[t];
   const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.team[0]);
   function paintAccount() {
+    // no hero yet (starter choice): a plain person icon instead of an avatar
+    if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
     b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
@@ -221,6 +238,8 @@
   function render() {
     hud();
     const el = $('#screen');
+    $('#tabs').hidden = !!S.needStarter;
+    if (S.needStarter) { el.innerHTML = starterHtml(); return; }
     el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml();
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
@@ -333,6 +352,7 @@
         <div class="altar-stage">${shardAnim('legendary').replace('class="fs-anim"', 'class="fs-anim big"')}
           <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${K.SHARD_PRICE.toLocaleString('en-US')} silver</button></div>
           <span class="empty-note">Fate Shards drop from every victory in the campaign and the Boss Hall. First clears give a guaranteed shard.</span>
+          <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div></div>
         </div>
         <div class="fs-grid">${cards}</div>
       </div>`;
@@ -445,6 +465,39 @@
         <div class="row"><button class="btn small primary" data-act="feed" data-f="${f}" ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${K.feedXp(f, h.lvl).toLocaleString('en-US')} XP</button><button class="btn small" data-act="breakdown" data-f="${f}">Break down · +${K.breakStones(f)} ${ic('stone')}</button></div></div>`).join('')}</div></div>`;
   }
 
+  // ----- starter choice (new players) -----
+  const STARTER_PITCH = {
+    krothar: 'The balanced bruiser. Hits harder when wounded and cleaves the whole enemy line with bleeding wounds.',
+    drakulen: 'The survivor. Heals himself with every hit and lands huge critical hits once he has good gear.',
+    zephara: 'The glass cannon. The fastest starter, with big single-target damage and stuns, but less HP and Defense.',
+    thalnir: 'The unbreakable. Regenerates every turn, taunts the enemy team and poisons everything it touches.',
+  };
+  let starterArm = null;
+  function starterHtml() {
+    const st = id => K.heroStats(id, newHero(id), []);
+    const top = { hp: 0, atk: 0, def: 0, spd: 0 };
+    for (const id of K.STARTERS) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
+    const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
+    const cards = K.STARTERS.map(id => { const c = C[id]; return `<div class="starter rar-${c.rar}">
+        <div class="starter-top">${por(id)}<div><h3>${esc(c.name)}</h3><div class="tags">${affChip(c.aff)} ${c.aff} · ${roleStr(c)}</div><span class="rartxt tag">${K.RARITIES[c.rar]}</span></div></div>
+        <p>${STARTER_PITCH[id]}</p>
+        <div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(id, k)).join('')}</div>
+        <div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>
+        <ul class="starter-sk">${c.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)}</li>`).join('')}</ul>
+        <button class="btn primary" data-act="starter" data-id="${id}">${starterArm === id ? 'Tap again to confirm' : `Choose ${esc(c.short)}`}</button>
+      </div>`; }).join('');
+    // returning players on a new device should load their account before picking
+    const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
+    const signin = cl && cl.enabled && !cl.email ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
+    return `<div class="section-head"><div><h2>Choose your hero</h2><p class="lede">Your first champion fights alone in the first stage of Chapter I. Every early stage you clear adds a companion to your team. Pick the style you like: all four are Epic heroes that stay strong for the whole game.</p></div></div>
+      <div class="starters">${cards}</div>${signin}`;
+  }
+  function pickStarter(id) {
+    S.roster[id] = newHero(id); S.team = [id]; delete S.needStarter; starterArm = null;
+    tab = 'campagne'; save(); render();
+    toast(`${C[id].name} joins you. Clear Chapter I to gather your team.`, false, 4000);
+  }
+
   // ----- player profile -----
   let editName = false;
   function profileHtml() {
@@ -503,7 +556,8 @@
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
-    if (act === 'tab') setTab(a.dataset.tab);
+    if (act === 'starter') { if (starterArm === id) pickStarter(id); else { starterArm = id; render(); } }
+    else if (act === 'tab') setTab(a.dataset.tab);
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
@@ -1261,7 +1315,7 @@
           if (!S.roster[cid]) { S.roster[cid] = newHero(cid); captured = { id: cid, isNew: true }; }
           else { S.fodder[cid] = (S.fodder[cid] || 0) + 1; captured = { id: cid, isNew: false }; }
         }
-        if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; }
+        if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
       } else {
         if (cfg.n > (S.bh[cfg.id] || 0)) { S.bh[cfg.id] = cfg.n; first = true; S.bhSel[cfg.id] = Math.min(K.BOSS_LEVELS, cfg.n + 1); }
         stones = 1 + Math.floor(cfg.n / 3);
@@ -1294,7 +1348,7 @@
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
     loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}><span class="aff" style="--c:var(--rc)">${K.SLOT_NAMES[it.slot][0]}</span><span><span class="item-name">${itemName(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
     if (captured) items.push(`<li class="loot rar-${C[captured.id].rar}" ${d()}>${por(captured.id)}<span>${captured.isNew ? `Captured: <b class="rartxt">${esc(C[captured.id].name)}</b> joins your roster as a hero.` : `Captured another <b class="rartxt">${esc(C[captured.id].name)}</b> as fodder.`}</span></li>`);
-    if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})</span></li>`);
+    if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})${S.team.includes(unlock) ? ' joins your team' : ''}</span></li>`);
     // MVP
     let mvp = '';
     if (win) {
@@ -1338,12 +1392,18 @@
   }
 
   // ---------- boot ----------
+  function announceReset() {
+    if (!S.wasReset) return false;
+    delete S.wasReset; save();
+    toast('A new season has begun: everyone starts fresh. Choose your hero!', false, 7000);
+    return true;
+  }
   function start(data) {
     S = load(data && data.S);
     fixup(S);
     if (window.FFH_CLOUD) window.FFH_CLOUD.attach({
       get: () => S,
-      set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); },
+      set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); announceReset(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
       // short description of any save (also an older version), for the "which save to keep" dialog
@@ -1357,6 +1417,7 @@
     $('#logo').src = LOGO_URL;
     $('#ic-coin').src = SPR.iconUrl('coin', 2); $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
     render();
+    if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;
     if (S.migrated) { delete S.migrated; delete S.migrated4; delete S.migrated5; delete S.migrated6; save(); toast('Your progress was carried over. Your champions were replaced by the new heroes.'); }
     else if (S.migrated4) { delete S.migrated4; delete S.migrated5; save(); toast('New combat system: Essences, Speed and the Boss Hall. Your progress was kept.'); }

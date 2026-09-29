@@ -74,10 +74,10 @@
     return rows && rows[0] ? rows[0] : null;
   }
   function takeCloud(row, msg) {
+    if (msg) api.toast(msg); // first, so a message raised while loading (e.g. a season reset) stays visible
     api.set(row.data);
     setBase(row.updated_at, api.get());
     setStatus('saved');
-    if (msg) api.toast(msg);
   }
   async function push(force) {
     if (!enabled || !api || conflictOpen || busy || !(await valid())) return;

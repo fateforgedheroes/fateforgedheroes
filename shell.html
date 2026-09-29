@@ -141,6 +141,7 @@ h3 { font-size: 1.05rem; color: var(--gold); margin-bottom: 8px; }
 .rates td { padding: 5px 0; border-bottom: 1px solid var(--line); }
 .rates td:last-child { text-align: right; }
 .pity { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.altar-stage .pity { width: 100%; max-width: 320px; margin-top: 0; gap: 4px; text-align: center; }
 .bar { height: 8px; background: var(--bg); border: 2px solid var(--line); }
 .bar i { display: block; height: 100%; background: var(--violet); }
 .summon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
@@ -520,6 +521,29 @@ button, a, input { touch-action: manipulation; }
 .prof-acc { background: var(--panel); border: 2px solid var(--line); padding: 12px 14px; }
 .prof-acc p { margin: 0 0 8px; }
 .prof-acc .row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* starter choice */
+.starters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.starter { display: flex; flex-direction: column; gap: 10px; background: var(--panel); border: 2px solid var(--line); border-bottom: 4px solid var(--rc); padding: 12px; min-width: 0; }
+.starter:hover { border-color: var(--gold-dim); border-bottom-color: var(--rc); }
+.starter-top { display: flex; gap: 10px; align-items: center; }
+.starter-top img { width: 72px; height: 72px; flex: none; border: 2px solid var(--gold-dim); }
+.starter h3 { margin: 0 0 2px; font-size: 1.15rem; color: var(--fg); }
+.starter .tags { margin: 0 0 2px; font-size: .9rem; }
+.starter > p { margin: 0; color: var(--muted); font-size: .95rem; }
+.sbars { display: flex; flex-direction: column; gap: 4px; }
+.sbar { display: grid; grid-template-columns: 58px 1fr 42px; gap: 6px; align-items: center; font-size: .85rem; color: var(--muted); }
+.sbar i { height: 8px; background: var(--bg); border: 1px solid var(--line); }
+.sbar b { display: block; height: 100%; background: var(--gold); }
+.sbar em { font-style: normal; text-align: right; color: var(--fg); font-variant-numeric: tabular-nums; }
+.starter .skill { margin: 0; }
+.starter-sk { list-style: none; margin: 0; padding: 0; font-size: .9rem; color: var(--muted); }
+.starter-sk b { font-family: var(--font-tag); font-size: 10px; letter-spacing: .06em; color: var(--gold); text-transform: uppercase; margin-right: 4px; }
+.starter .btn { margin-top: auto; }
+.starter-acc { margin-top: 14px; }
+#account .acc-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+@media (max-width: 1000px) { .starters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .starters { grid-template-columns: minmax(0, 1fr); } }
 
 /* champions screen: team members first and clearly marked; hero detail in tabs */
 .champ-layout { grid-template-columns: minmax(0, 400px) minmax(0, 1fr); }
