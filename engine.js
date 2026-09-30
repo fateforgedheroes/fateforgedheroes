@@ -432,8 +432,20 @@ const K = (function () {
         SK('Judgement', 'enemy', 'magic', 'sunfall', 3, 'Attack of 140%. 60% chance of Silence for 2 turns.', [D(1.4), DB('silence', 2, 0.6)]),
         SK('Sunfall', 'enemies', 'magic', 'sunfall', 5, 'Hits all enemies for 90%. 45% chance to Stun for 1 turn.', [D(0.9), DB('stun', 1, 0.45)]),
       ] },
+    // Developer hero: the owner's own avatar. A normal Legendary in every way, but never in CHAMP_ORDER, so no summon,
+    // unlock, capture or bot can ever give him; he only arrives as a mail gift ({"hero": "j3duin"}) and the arena
+    // server accepts him only in the owner's team (DEV_HERO_OWNERS in supabase/functions/arena/logic.js).
+    j3duin: { name: 'J3DUIN', faction: 'Fateforgers', role: 'Warrior', role2: 'Mage', rar: 4, aff: 'Ember', dev: true,
+      passive: 'dragonblood', passiveName: 'Forged by Fate', passiveDesc: '+20% Crit Rate and +20% Crit Damage.',
+      skills: [
+        SK('Forged Edge', 'enemy', 'melee', 'slash', 0, 'Strike of 115%. 35% chance of Burn for 2 turns.', [D(1.15), DB('burn', 2, 0.35)]),
+        SK('Fate Spark', 'enemies', 'magic', 'fire', 3, 'Hits all enemies for 75% and gains Attack Up for 2 turns.', [D(0.75), BF('atkUp', 2, 'self')]),
+        SK('Shard Eruption', 'enemies', 'magic', 'meteor', 5, 'A Fate Shard erupts: 50% chance of Defense Down for 2 turns on all enemies, then hits them for 125%.', [DB('defDown', 2, 0.5), D(1.25)]),
+      ] },
   };
   for (const id in CHAMPS) CHAMPS[id].short = CHAMPS[id].name;
+  // heroes outside every pool (see j3duin); they only come from a mail gift
+  const DEV_HEROES = Object.keys(CHAMPS).filter(id => CHAMPS[id].dev);
   const CHAMP_ORDER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'morgrim', 'vorlund', 'valkessa', 'faedrin', 'krothar', 'ithyra', 'nyressa', 'selenia', 'drakulen', 'keldrax', 'oraneth', 'zarvion', 'sylreth', 'thalnir', 'aurelion', 'zyrael', 'velmira', 'nithara',
     'kaelira', 'vorak', 'elyndra', 'morveth', 'theryn', 'arkanis', 'liora', 'gorvann', 'sylvara', 'veyrith', 'astraea', 'korran', 'zephara', 'malreth', 'eryndor', 'ignara', 'thalessa', 'ravok', 'seraphine', 'draevan', 'mirella', 'volkaris', 'nyxara', 'orvyn', 'celesthyr'];
 
@@ -1374,11 +1386,13 @@ const K = (function () {
         skill = s; break;
       }
       let target = null;
-      if (skill.target === 'enemy') target = this.tauntTarget(u) || this.pickFoe(u, this.validTargets(u, skill));
+      // focus: on auto the player can tap an enemy and every hero aims single-target skills at it (taunt still wins)
+      if (skill.target === 'enemy') target = this.tauntTarget(u) || this.focusTarget(u, skill) || this.pickFoe(u, this.validTargets(u, skill));
       else if (skill.target === 'ally') target = lowest(allies);
       else if (skill.target === 'deadAlly') target = dead[0];
       return { skill, target };
     }
+    focusTarget(u, skill) { const f = this.focus; return f && u.side === 'hero' && f.alive && this.validTargets(u, skill).includes(f) ? f : null; }
     pickFoe(u, foes) {
       foes = this.targetable(foes.filter(f => f.alive));
       if (!foes.length) return null;
@@ -1491,7 +1505,7 @@ const K = (function () {
 
   return {
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
