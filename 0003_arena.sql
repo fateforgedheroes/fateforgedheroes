@@ -170,7 +170,7 @@ stable
 security definer
 set search_path = ''
 as $$
-  with rows as (
+  with board as (
     select a.user_id, a.name, a.avatar, null::int as lvl, a.rating as score,
            jsonb_build_object('wins', a.wins, 'losses', a.losses) as detail
       from public.arena_players a
@@ -197,7 +197,7 @@ as $$
      where kind = 'bosses'
   ), ranked as (
     select rank() over (order by score desc) as rank, name, avatar, lvl, score, detail, user_id = auth.uid() as me
-      from rows where score > 0
+      from board where score > 0
   )
   select * from ranked where rank <= 100 or me order by rank limit 150;
 $$;
