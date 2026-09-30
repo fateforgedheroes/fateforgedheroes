@@ -23,6 +23,7 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 | `home.js` | `HOME_ART`: the homebase map (1536×1024 WebP) used as the main menu. |
 | `privacy.html favicon.png` | Copied into `dist/`. |
 | `0001_saves.sql` | Supabase table `saves` (one row per user, RLS own-row only) + `delete_my_account()`. |
+| `0002_save_history.sql` | Safety net: trigger `saves_keep_history` copies the old save into `save_history` before every overwrite (max one per 15 min, always when heroes or progress shrink; newest 40 per player). `restore_save(id)` puts one back (SQL Editor only). Run once after 0001. |
 | `campaign-sim.cjs` | Test: for each of the 4 starters, a simulated new player (farms lower stages after a loss, upgrades gear, ascends, buys and summons shards, picks the best team per essence) must finish the campaign within 8,000 battles. Must print PASS 4×; the battle count shows how long the grind is. |
 
 The currency is called **Sigils** in the game but stored as `S.silver` (and `winSilver`, `rankCost().silver`, `TUNE.silver` in the engine); keep those names, saves depend on them. Show it with `ic('coin')` / `sigils(n)` in app.js.
@@ -60,7 +61,7 @@ There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab 
 
 ## Save format (app.js)
 
-`S` in localStorage key `ffh-save` (old key `kronen-van-as-v1` still read). Current version `v: 7`; `migrate()` upgrades older saves. When changing the save shape: bump `v`, add a migration step, keep old saves working. Small optional fields added within a version get a default in `fixup()`. Progress reset for everyone: `RESET` in app.js; any save (local or cloud) with a lower `reset` is replaced by `resetSave()` on load (keeps name and settings). Raising `RESET` wipes every player's progress once they open the game, so only do it on purpose. `save()` also queues a cloud upload.
+`S` in localStorage key `ffh-save` (old key `kronen-van-as-v1` still read). On start the stored save (before migration) is copied into `ffh-save-backup` (every 12 h, newest 3); the profile screen lists them with a Restore button (`backupsHtml`, `restoreBackup`). Current version `v: 7`; `migrate()` upgrades older saves. When changing the save shape: bump `v`, add a migration step, keep old saves working. Small optional fields added within a version get a default in `fixup()`. Progress reset for everyone: `RESET` in app.js; any save (local or cloud) with a lower `reset` is replaced by `resetSave()` on load (keeps name and settings). Raising `RESET` wipes every player's progress once they open the game, so only do it on purpose. `save()` also queues a cloud upload.
 
 Cloud sync (cloud.js): one row per account in `saves`. Each device stores in localStorage `ffh-cloud-base` which cloud version (`updated_at` string as returned by the server) its save is based on, plus a hash of the save at that moment. Uploads are a `PATCH … &updated_at=eq.<base>`; 0 rows updated means another device saved in between, so `sync()` runs: local unchanged → take the cloud silently; cloud unchanged → upload; both changed → the player picks a save in a dialog. Never upload without a base, and never decide by `savedAt` (it changes on every boot).
 

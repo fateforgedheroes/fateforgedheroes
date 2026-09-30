@@ -131,9 +131,22 @@
     }
     return null;
   }
+  // Local safety net (the cloud one is the save_history table, see 0002_save_history.sql): on start the save as it is
+  // stored, before any migration, is copied into BACKUP_KEY, at most once per 12 hours, keeping the newest 3 copies.
+  // The profile screen can put one back.
+  const BACKUP_KEY = 'ffh-save-backup', BACKUP_EVERY = 12 * 3600e3, BACKUPS = 3;
+  function readBackups() { try { const l = JSON.parse(localStorage.getItem(BACKUP_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; } }
+  function backupRaw(raw, force) {
+    try {
+      const list = readBackups();
+      if (list[0] && (list[0].raw === raw || (!force && Date.now() - list[0].at < BACKUP_EVERY))) return;
+      list.unshift({ at: Date.now(), raw });
+      localStorage.setItem(BACKUP_KEY, JSON.stringify(list.slice(0, BACKUPS)));
+    } catch (e) { try { localStorage.removeItem(BACKUP_KEY); } catch (e2) { /* no storage */ } }
+  }
   function load(snap) {
     if (snap && snap.v === 7) return snap;
-    try { const raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem(OLD_SAVE_KEY); if (raw) { const m = migrate(JSON.parse(raw)); if (m) return m; } } catch (e) { /* no storage */ }
+    try { const raw = localStorage.getItem(SAVE_KEY) || localStorage.getItem(OLD_SAVE_KEY); if (raw) { backupRaw(raw); const m = migrate(JSON.parse(raw)); if (m) return m; } } catch (e) { /* no storage */ }
     return fresh();
   }
   let S;
@@ -697,6 +710,23 @@
 
   // ----- player profile -----
   let editName = false;
+  function backupsHtml() {
+    const rows = readBackups().map((b, i) => {
+      let o = {}; try { o = JSON.parse(b.raw) || {}; } catch (e) { /* unreadable copy */ }
+      const when = new Date(b.at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      const what = [o.p && o.p.lvl ? `player level ${o.p.lvl}` : '', o.cleared != null ? `${o.cleared + 1} stages cleared` : '', o.roster ? `${Object.keys(o.roster).length} ${Object.keys(o.roster).length === 1 ? "hero" : "heroes"}` : ''].filter(Boolean).join(' · ');
+      return `<li><span><b>${when}</b><small class="empty-note">${what || 'saved game'}</small></span><button class="btn small" data-act="restorebk" data-n="${i}">Restore</button></li>`;
+    }).join('');
+    return rows ? `<section class="prof-bk"><h3>Backups on this device</h3><p class="empty-note">A copy of your save is kept every 12 hours. Restore one if something went wrong; your current progress is kept as a backup too.</p><ul class="bk-list">${rows}</ul></section>` : '';
+  }
+  function restoreBackup(n) {
+    const b = readBackups()[n];
+    let m = null; try { m = migrate(JSON.parse(b.raw)); } catch (e) { /* unreadable copy */ }
+    if (!m) { toast('This backup cannot be read.', true); return; }
+    backupRaw(JSON.stringify(S), true);
+    S = fixup(m); save(); hud(); render();
+    toast('Backup restored.');
+  }
   function profileHtml() {
     const p = S.p, need = pxNeed(p.lvl), av = avatarId(), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const bossesBeaten = Object.values(S.bh).filter(n => n > 0).length;
@@ -728,6 +758,7 @@
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
+      ${backupsHtml()}
     </div>`;
   }
 
@@ -771,6 +802,7 @@
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
     else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
+    else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'play') startCampaign(+a.dataset.stage);
