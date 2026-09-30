@@ -638,7 +638,7 @@
     return `<div class="champ-layout">
       <div><div class="section-head"><h2>Champions</h2><span class="tag">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes${K.CAPTURE_ORDER.some(x => S.roster[x]) ? ` · ${K.CAPTURE_ORDER.filter(x => S.roster[x]).length} captured` : ''}</span></div><div class="grid-cards">${sortedIds().map(x => cardHtml(x, { act: 'sel', sel: x === id, inteam: S.team.includes(x) })).join('')}</div></div>
       <div class="detail rar-${c.rar}" data-dtab="${champTab}">
-        <div class="d-head"><img class="spr bigspr" src="${SPR.url(id, 2)}" alt=""><div>
+        <div class="d-head"><img class="spr bigspr ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
           <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">Team ${S.team.indexOf(id) + 1}</span>` : ''}</h2>
           <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
