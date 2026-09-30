@@ -403,21 +403,28 @@
     const strip = S.team.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
     const chap = Math.min(S.chap ?? maxChap, maxChap);
-    const tile = (st, i) => {
-      const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
-      const label = state === 'cleared' ? 'Cleared' : state === 'next' ? 'Next' : 'Locked';
-      const lvl = K.diffLvl(st, d);
+    const foeImgs = st => st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('');
+    const dropIc = st => st.slot ? `<img class="gear-ic" src="${gearArt(st.slot, D.rars[D.rars.length - 1], 0)}" alt="">` : '<b>?</b>';
+    const firstRewards = (st, i) => {
+      if (i <= cleared) return [];
       const rw = [];
       if (!hard && st.unlock && !S.roster[st.unlock]) rw.push(`<span class="rw">${por(st.unlock)}${esc(C[st.unlock].short)}</span>`);
-      if (i > cleared) rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
+      rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
+      return rw;
+    };
+    // a stage tile: what you fight, its level, what it drops, and what tapping it does (Fight / Replay / locked)
+    const tile = (st, i) => {
+      const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
+      const rw = firstRewards(st, i);
+      const go = state === 'next' ? 'Fight ›' : state === 'cleared' ? 'Replay' : `${LOCK_SVG} Locked`;
       return `<button class="stage ${state} ${st.boss ? 'bossst' : ''}" data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}>
-        <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span><span class="st-state tag">${label}</span></div>
-        <div class="st-foes">${st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('')}</div>
-        <div class="st-meta"><span class="st-ess">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')}</span><span class="pill">Lv ${lvl}</span><span class="pill">${K.PHASES} phases</span><span class="pill">${st.phases.flat().length} foes</span></div>
+        <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span>${state === 'cleared' ? '<span class="st-state tag">✓</span>' : ''}</div>
+        <div class="st-foes">${foeImgs(st)}</div>
+        <div class="st-meta"><span class="st-ess">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')}</span><span class="pill">Lv ${K.diffLvl(st, d)}</span></div>
         ${st.boss ? `<div class="st-boss">Boss: ${esc(st.boss)}</div>` : ''}
-        <div class="st-drop"><span class="st-dic">${st.slot ? `<img class="gear-ic" src="${gearArt(st.slot, D.rars[D.rars.length - 1], 0)}" alt="">` : '<b>?</b>'}</span><span class="st-dtx"><b>${dropName(st)}</b><small>${K.SETS[st.set].name}</small></span></div>
-        <div class="st-rars">${D.rars.map(r => `<span class="rpill rar-${r}">${K.RARITIES[r]}</span>`).join('')}</div>
-        ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}</button>`;
+        <div class="st-drop"><span class="st-dic">${dropIc(st)}</span><span class="st-dtx"><b>${dropName(st)}</b></span></div>
+        ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}
+        <span class="st-go">${go}</span></button>`;
     };
     const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
     const chapBtns = K.CHAPTERS.map((ch, c) => {
@@ -426,23 +433,35 @@
     }).join('');
     const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
     const cdone = idx.filter(i => i <= cleared).length;
-    return `<div class="${hard ? 'hardmode diff-' + D.id : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need.</p>
-        <div style="margin-top:10px" class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
-        <p class="diff-note">${esc(D.name)}: ${d ? `enemies level ${K.diffLvl(K.STAGES[0], d)}–${K.diffLvl(K.STAGES[K.STAGES.length - 1], d)} and much stronger. ` : ''}Gear drops: ${rarsHtml(D.rars)} only.${d < K.DIFFS.length - 1 ? ` Clear all ${K.STAGES.length} stages to open ${K.DIFFS[d + 1].name}.` : ''}</p></div>
-      <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>
+    // the one big call to action: the next stage on this difficulty
+    const nx = K.STAGES[next], nrw = nx ? firstRewards(nx, next) : [];
+    const cont = nx ? `<section class="camp-next ${nx.boss ? 'boss' : ''}">
+        <div class="cn-main"><span class="tag">Next battle${d ? ' · ' + esc(D.name) : ''}</span><h3>${stageName(next)}</h3>
+          ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}
+          <div class="cn-foes">${foeImgs(nx)}</div>
+          <div class="st-meta"><span class="pill">Lv ${K.diffLvl(nx, d)}</span><span class="pill">${K.PHASES} phases</span><span class="pill cn-drop"><span class="st-dic">${dropIc(nx)}</span>${dropName(nx)}</span>${nrw.length ? `<span class="cn-rw">First clear: ${nrw.join('')}</span>` : ''}</div></div>
+        <button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight</button></section>`
+      : `<section class="camp-next done"><div class="cn-main"><span class="tag">${esc(D.name)} complete</span><h3>Every stage cleared!</h3><span class="cn-sub">${K.DIFFS[d + 1] ? `${K.DIFFS[d + 1].name} is open: pick it above for better gear.` : 'You beat the hardest difficulty.'} Replay stages to farm gear.</span></div></section>`;
+    return `<div class="campaign ${hard ? 'hardmode diff-' + D.id : ''}">
+      <div class="camp-head"><h2>Campaign</h2>
+        <div class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
+        <p class="diff-note">Drops ${rarsHtml(D.rars)} gear${d ? ` · enemies Lv ${K.diffLvl(K.STAGES[0], d)}–${K.diffLvl(K.STAGES[K.STAGES.length - 1], d)}` : ''}</p></div>
+      ${cont}
+      <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
-      <div class="area-label tag">Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)} · ${cdone}/7 cleared</div>
-      <p class="chap-desc">${esc(K.CHAPTERS[chap].desc)}</p>
-      <div class="chap-set"><span class="tag">Chapter set</span> <b>${K.SETS[K.CHAPTERS[chap].set].name}</b> · ${K.SETS[K.CHAPTERS[chap].set].desc}</div>
+      <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared · ${K.SETS[K.CHAPTERS[chap].set].name}</span></div>
       <div class="stages">${idx.slice(0, 6).map(i => tile(K.STAGES[i], i)).join('')}</div>
       <div class="stages boss-row">${tile(K.STAGES[idx[6]], idx[6])}</div>
-      <div class="help">
+      <details class="camp-info"><summary>How the campaign works</summary>
+        <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
+        <p class="chap-set"><b>${K.SETS[K.CHAPTERS[chap].set].name}</b> (this chapter's set): ${K.SETS[K.CHAPTERS[chap].set].desc}</p>
+        <div class="help">
         <div><h3>Essences</h3><div class="tri">${['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'Ember'].map(affChip).join('<span class="arr">›</span>')}</div>
         <p><b>Strong Hit</b>: +20% damage, stronger debuffs, 2 Break damage. <b>Weak Hit</b>: −25% damage, no crits, half debuff chance, no Break damage. ${affChip('Aether')} Aether is neutral and always lands a Normal Hit.</p></div>
         <div><h3>Speed and bosses</h3><p>Every unit fills its turn meter by its Speed; faster champions act more often. Bosses have a <b>Break Meter</b>: hit them with Strong Hits to cause an <b>Affinity Break</b>, stunning them for 2 turns while they take 15% more damage.</p></div>
         <div><h3>Getting stronger</h3><p>Level your champions to their maximum and ascend them with Ascension Stones for an extra star. Duplicate heroes from the Fate Altar upgrade their skills. Legendary heroes are far stronger, and only the Fate Altar has them.</p></div>
         <div><h3>Gear and sets</h3><p>Six gear slots per champion. Two or four pieces from the same set grant a bonus. Every chapter drops its own set; the Boss Hall has exclusive sets such as Fury, Nightshard, Vengeance and Ashcurse.</p></div>
-      </div></div>`;
+        </div></details></div>`;
   }
 
   // ----- boss hall -----
