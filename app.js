@@ -293,6 +293,8 @@
   const unlocked = t => !PLAYER_UNLOCK[t] || S.p.lvl >= PLAYER_UNLOCK[t];
   const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.team[0]);
   function paintAccount() {
+    // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
+    paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
     // no hero yet (starter choice): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
@@ -327,8 +329,8 @@
     { go: 'arena', label: 'Arena', box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
     { go: 'profiel', label: 'Town Hall: your profile', box: [830, 20, 320, 265], plate: [864, 283, 214, 50] },
     { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
-    { box: [90, 320, 380, 215], plate: [206, 533, 178, 50] },
-    { go: 'champions', label: 'Heroes & Gear', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
+    { go: 'champions', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
+    { go: 'social', label: 'Social: friends and guild', name: 'Social', icon: 'people', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
     { box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
     { box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
     { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
@@ -345,18 +347,21 @@
     const at = ([x, y, w, h]) => `left:${pc(x, HOME_W)};top:${pc(y, HOME_H)};width:${pc(w, HOME_W)};height:${pc(h, HOME_H)}`;
     const shardsReady = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const tut = firstSteps();
+    // renamed buildings get a name plate over the name painted in the image (the forge is Heroes & Gear, the campfire Social)
+    const PLATE_IC = { helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
+    const namePlate = z => z.name ? `<span class="hz-plate named" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true">${PLATE_IC[z.icon] || ''}</svg></i>${esc(z.name)}</span>` : '';
     const zones = HOME_ZONES.map(z => {
       // one button covers the building and its plate
       const [bx, by, bw, bh] = z.box, [px, py, pw, ph] = z.plate, x0 = Math.min(bx, px), y0 = Math.min(by, py);
       const area = [x0, y0, Math.max(bx + bw, px + pw) - x0, Math.max(by + bh, py + ph) - y0];
-      if (tut && z.go && z.go !== 'campagne') return `<button type="button" class="hz" style="${at(area)}" data-act="tutlock" aria-label="${z.label} (opens after your first battle)"></button>`;
+      if (tut && z.go && z.go !== 'campagne') return `<button type="button" class="hz" style="${at(area)}" data-act="tutlock" aria-label="${z.label} (opens after your first battle)"></button>${namePlate(z)}`;
       if (tut && z.go === 'campagne') return `<button type="button" class="hz tut-go" style="${at(area)}" data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"></button>`;
       if (!z.go) return `<button type="button" class="hz soon" style="${at(area)}" data-act="soon" aria-label="Coming soon"></button>
         <span class="hz-plate" style="${at(z.plate)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
       const need = PLAYER_UNLOCK[z.go], locked = need && !unlocked(z.go);
       const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 6, HOME_W)};top:${pc(py - 14, HOME_H)}">Lv ${need}</span>`
         : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>` : '';
-      return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (unlocks at player level ${need})` : ''}" title="${z.label}"></button>${badge}`;
+      return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (unlocks at player level ${need})` : ''}" title="${z.label}"></button>${namePlate(z)}${badge}`;
     }).join('');
     // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
     const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
@@ -373,6 +378,7 @@
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
     render();
     if (t === 'arena') arenaEnter();
+    if (t === 'social' || t === 'mail') socialLoad();
   }
   function render() {
     hud();
@@ -386,7 +392,7 @@
       map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'mail' ? mailHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
     // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
@@ -851,6 +857,118 @@
     const got = [...(silver ? [`+${silver.toLocaleString('en-US')} Sigils`] : []), ...Object.keys(fs).map(k => `+${fs[k]} ${K.SHARD[k].name}`)].join(' · ');
     toast(got ? `${best ? `Top 5 of the week (#${best})! ` : ''}Weekly arena rewards: ${got}.` : 'No rewards to claim.', false, 5000);
   }
+  // ================= SOCIAL + MAIL =================
+  // Friends and mail live in Supabase (0005_social.sql): friend codes and requests, gifts from the server, and the
+  // weekly arena rewards. Everything needs a signed-in account; the header's mail button shows how much is waiting.
+  const SO = { tab: 'friends', code: '', friends: null, mail: null, err: '', who: null, loading: false };
+  const RW_KEYS = ['fate', 'greater', 'ancient', 'mythic', 'legendary'];
+  const signedIn = () => { const cl = cloud(); return !!(cl && cl.signedIn && cl.signedIn()); };
+  // fetches friends and mail; paints the header badge and re-renders an open Social or Mail screen
+  async function socialLoad() {
+    if (!signedIn() || SO.loading) { paintMail(); return; }
+    const cl = cloud(), who = cl.info().email;
+    if (SO.who !== who) Object.assign(SO, { who, code: '', friends: null, mail: null });
+    SO.loading = true;
+    try {
+      const [code, friends, mail] = await Promise.all([cl.rpc('my_friend_code'), cl.rpc('friend_list'), cl.rpc('mail_list')]);
+      Object.assign(SO, { code: code || '', friends: friends || [], mail: mail || [], err: '' });
+    } catch (e) { SO.err = 'Could not reach the server. Check your connection and try again.'; }
+    SO.loading = false;
+    paintMail();
+    if ((tab === 'social' || tab === 'mail') && !B) render();
+  }
+  const mailCount = () => (SO.friends || []).filter(f => f.kind === 'incoming').length + (SO.mail || []).filter(m => !m.claimed).length;
+  function paintMail() {
+    const b = $('#mail'); if (!b) return;
+    const n = signedIn() ? mailCount() : 0, badge = b.querySelector('.mail-n');
+    badge.hidden = !n; badge.textContent = n > 9 ? '9+' : n; b.classList.toggle('has', n > 0);
+    b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
+  }
+  // what a gift gives, as text and as additions to the save
+  const giftParts = r => [...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.stones > 0 ? [`${+r.stones} Ascension ${+r.stones === 1 ? 'Stone' : 'Stones'}`] : []), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
+  function grantGift(r) {
+    if (+r.silver > 0) S.silver += Math.floor(+r.silver);
+    if (+r.stones > 0) S.stones += Math.floor(+r.stones);
+    for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
+  }
+  const progressText = f => f.cleared != null && f.cleared >= 0 && K.STAGES[f.cleared] ? stageName(f.cleared) : 'Just started';
+  const personRow = (f, acts) => `<li><span class="fr-av">${f.avatar && C[f.avatar] ? por(f.avatar) : ''}</span><span class="fr-main"><b>${esc(f.name)}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}${f.rating ? ` · Arena ${f.rating}` : ''}</small></span><span class="fr-acts">${acts}</span></li>`;
+  function needAccount(title) {
+    const cl = cloud();
+    if (!cl || !cl.enabled) return `<p class="empty-note">${title} needs the online version of the game.</p>`;
+    return `<div class="lockbox">${LOCK_SVG}<div><h3>Sign in to use ${title.toLowerCase()}</h3><p class="empty-note">Friends, gifts and rewards are kept with your account.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div>`;
+  }
+  function socialHtml() {
+    const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
+    const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">${LOCK_SVG} Guild</button></div>`;
+    const head = `<div class="section-head"><div><h2>Social</h2><p class="lede">Add friends with their friend code and see how far they are.</p></div></div>${tabs}`;
+    if (SO.tab === 'guild') return head + `<div class="lockbox">${LOCK_SVG}<div><h3>Guilds are coming soon</h3><p class="empty-note">Team up with other players, chat together and fight a guild boss for shared rewards.</p></div></div>`;
+    if (!signedIn()) return head + needAccount('Friends');
+    if (!SO.friends) return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p><button class="btn" data-act="socreload">Try again</button>` : '<p class="empty-note">Loading your friends…</p>');
+    const friends = SO.friends.filter(f => f.kind === 'friend'), out = SO.friends.filter(f => f.kind === 'outgoing');
+    const code = SO.code ? SO.code.slice(0, 4) + ' ' + SO.code.slice(4) : '…';
+    return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p>` : '') + `<div class="soc-top">
+        <section class="soc-card"><span class="tag">Your friend code</span><div class="fr-code"><b>${code}</b><button class="btn small" data-act="copycode">Copy</button></div><small class="empty-note">Share it with a friend so they can add you.</small></section>
+        <section class="soc-card"><span class="tag">Add a friend</span><form class="fr-add" data-form="addfriend"><input name="fcode" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Friend code, e.g. 1A2B 3C4D" aria-label="Friend code"><button class="btn primary small" type="submit">Send request</button></form></section></div>
+      ${incoming.length ? `<section class="fr-sec"><h3>Friend requests</h3><ul class="fr-list">${incoming.map(f => personRow(f, `<button class="btn primary small" data-act="fraccept" data-id="${f.user_id}">Accept</button><button class="btn small" data-act="frdecline" data-id="${f.user_id}">Decline</button>`)).join('')}</ul></section>` : ''}
+      <section class="fr-sec"><h3>Friends <small class="empty-note">${friends.length}</small></h3>${friends.length ? `<ul class="fr-list">${friends.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="${esc(f.name)}">Remove</button>`)).join('')}</ul>` : '<p class="empty-note">No friends yet. Send your friend code to someone, or add theirs above.</p>'}</section>
+      ${out.length ? `<section class="fr-sec"><h3>Sent requests</h3><ul class="fr-list">${out.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="">Cancel</button>`)).join('')}</ul></section>` : ''}`;
+  }
+  function mailHtml() {
+    const head = `<div class="section-head"><div><h2>Mail</h2><p class="lede">Gifts, rewards and friend requests.</p></div>${signedIn() ? '<button class="btn small" data-act="socreload">Refresh</button>' : ''}</div>`;
+    if (!signedIn()) return head + needAccount('Mail');
+    if (!SO.mail) return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p>` : '<p class="empty-note">Checking your mail…</p>');
+    const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
+    const items = [
+      ...incoming.map(f => `<li class="ml-item new"><span class="ml-ic">${svgIcon('people')}</span><span class="ml-main"><b>Friend request from ${esc(f.name)}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}</small></span><span class="fr-acts"><button class="btn primary small" data-act="fraccept" data-id="${f.user_id}">Accept</button><button class="btn small" data-act="frdecline" data-id="${f.user_id}">Decline</button></span></li>`),
+      ...SO.mail.map(m => {
+        if (m.kind === 'arena') { const t = K.arenaTier(m.rewards.rating), top = K.ARENA_RANK_REWARDS[(m.rewards.rank || 0) - 1]; return `<li class="ml-item new"><span class="ml-ic">${svgIcon('swords')}</span><span class="ml-main"><b>Weekly arena reward</b><small class="empty-note">${t.name} tier${top ? ` · #${m.rewards.rank} of the week` : ''} · ${tierReward(t)}${top ? ' + ' + tierReward(top) : ''}</small></span><span class="fr-acts"><button class="btn primary small" data-act="arclaim">Claim</button></span></li>`; }
+        const parts = giftParts(m.rewards || {}), when = new Date(m.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+        return `<li class="ml-item ${m.claimed ? 'done' : 'new'}"><span class="ml-ic">${svgIcon('gift')}</span><span class="ml-main"><b>${esc(m.title)}</b>${m.body ? `<span class="ml-body">${esc(m.body)}</span>` : ''}<small class="empty-note">${when}${parts.length ? ' · ' + esc(parts.join(' · ')) : ''}</small></span><span class="fr-acts">${m.claimed ? '<span class="tag">Claimed</span>' : `<button class="btn primary small" data-act="mailclaim" data-id="${m.id}">Claim</button>`}</span></li>`;
+      }),
+    ];
+    return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p>` : '') + (items.length ? `<ul class="ml-list">${items.join('')}</ul>` : '<div class="lockbox"><div><h3>No mail</h3><p class="empty-note">Gifts from the game and friend requests show up here.</p></div></div>');
+  }
+  const SVG_IC = {
+    people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>',
+    gift: '<rect x="2" y="6" width="12" height="3"/><path d="M3 9v5.5h10V9M8 6v8.5M8 6c-1-2.5-4-3-4-1.2C4 6 8 6 8 6zm0 0c1-2.5 4-3 4-1.2C12 6 8 6 8 6z"/>',
+    swords: '<path d="M2 2l7 7M2 2h2.5L11 8.5 8.5 11 2 4.5zM14 2l-7 7M14 2h-2.5L5 8.5 7.5 11 14 4.5zM4 12l2-2M12 12l-2-2"/>',
+  };
+  const svgIcon = k => `<svg viewBox="0 0 16 16" aria-hidden="true">${SVG_IC[k]}</svg>`;
+  async function friendAct(fn, body, okMsg) {
+    try { await cloud().rpc(fn, body); if (okMsg) toast(okMsg); } catch (e) { toast('That did not work. Try again in a moment.', true); }
+    socialLoad();
+  }
+  async function addFriend(raw) {
+    const code = String(raw || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
+    if (code.length !== 8) { toast('A friend code has 8 characters (letters A-F and numbers).', true); return; }
+    let r; try { r = await cloud().rpc('friend_request', { code }); } catch (e) { toast('Could not send the request. Try again.', true); return; }
+    const MSG = { sent: 'Friend request sent.', accepted: 'You are now friends!', already: 'You are already friends, or a request is waiting.', self: 'That is your own friend code.', not_found: 'No player has that friend code.', full: 'You have reached 50 friends and requests.' };
+    toast(MSG[r] || 'Done.', r === 'not_found' || r === 'self' || r === 'full');
+    socialLoad();
+  }
+  async function claimMail(id) {
+    let r; try { r = await cloud().rpc('claim_mail', { mail_id: +id }); } catch (e) { toast('Could not claim this gift. Try again.', true); return; }
+    if (!r) { toast('This gift was already claimed.'); socialLoad(); return; }
+    grantGift(r); save(); hud(); SFX.up();
+    toast(`Claimed: ${giftParts(r).join(' · ') || 'a gift'}.`, false, 4000);
+    socialLoad();
+  }
+  // Start over: a player may wipe their own progress and pick a starter again, but only after clearing Chapter I
+  // (so the starter choice is no free reroll). The current progress is kept as a backup first.
+  const START_OVER_AFTER = 6; // stage index of Chapter I · Stage 7
+  function startOverHtml() {
+    const ok = S.cleared >= START_OVER_AFTER;
+    return `<section class="prof-bk"><h3>Start over</h3><p class="empty-note">Wipe your progress and begin again from the starter choice: heroes, gear, Sigils, shards, campaign and Boss Hall progress and player level all reset. Your name stays. ${ok ? 'Your current progress is saved as a backup on this device first.' : 'Available once you have cleared Chapter I.'}</p>
+      <div class="row"><button class="btn small danger" data-act="startover" ${ok ? '' : 'disabled'}>${ok ? 'Start over' : `${LOCK_SVG} Clear Chapter I first`}</button></div></section>`;
+  }
+  function startOver() {
+    if (S.cleared < START_OVER_AFTER) return;
+    backupRaw(JSON.stringify(S), true);
+    const s = resetSave(S); delete s.wasReset;
+    S = s; homeScroll = null; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });
+    toast('Your adventure starts over. Choose your starter hero!', false, 5000);
+  }
   function backupsHtml() {
     const rows = readBackups().map((b, i) => {
       let o = {}; try { o = JSON.parse(b.raw) || {}; } catch (e) { /* unreadable copy */ }
@@ -899,6 +1017,7 @@
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
+      ${startOverHtml()}
       ${backupsHtml()}
     </div>`;
   }
@@ -909,6 +1028,7 @@
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
   });
   document.addEventListener('submit', e => {
+    const af = e.target.closest('[data-form="addfriend"]'); if (af) { e.preventDefault(); addFriend(af.fcode.value); af.fcode.value = ''; return; }
     const f = e.target.closest('[data-form="pname"]'); if (!f) return;
     e.preventDefault();
     const name = f.pname.value.replace(/[<>"&\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
@@ -925,6 +1045,7 @@
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
     if (e.target.closest('.brand') && !B && !S.needStarter) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
     if (!a || a.closest('#battle')) return;
@@ -949,7 +1070,15 @@
     else if (act === 'ardef') arenaCall('defense').then(r => { if (r.state) toast('Your current team now defends you in the arena.'); });
     else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) startArena(r.fight); });
     else if (act === 'arlb') loadBoard(a.dataset.kind);
-    else if (act === 'arclaim') claimArena();
+    else if (act === 'arclaim') claimArena().then(socialLoad);
+    else if (act === 'soctab') { SO.tab = a.dataset.t; render(); }
+    else if (act === 'socreload') socialLoad();
+    else if (act === 'copycode') { const c = SO.code; navigator.clipboard.writeText(c).then(() => toast('Friend code copied.'), () => toast('Your friend code: ' + c, false, 5000)); }
+    else if (act === 'fraccept') friendAct('friend_respond', { other: id, accept: true }, 'Friend added!');
+    else if (act === 'frdecline') friendAct('friend_respond', { other: id, accept: false }, 'Request declined.');
+    else if (act === 'frremove') { if (a.dataset.name) confirmBox('Remove friend?', `Remove <b>${esc(a.dataset.name)}</b> from your friends?`, 'Remove', () => friendAct('friend_remove', { other: id }, 'Friend removed.')); else friendAct('friend_remove', { other: id }, 'Request cancelled.'); }
+    else if (act === 'mailclaim') claimMail(a.dataset.id);
+    else if (act === 'startover') confirmBox('Start over?', `All your heroes, gear, Sigils, shards and progress will be gone and you begin again at the starter choice. Your name stays.<br><br>A backup of your current progress is kept on this device (Town Hall → Backups), just in case.`, 'Yes, start over', startOver);
     else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
@@ -1899,6 +2028,8 @@
     $('#logo').src = LOGO_URL;
     $('#ic-coin').src = SIGIL_ART; $('#ic-coin').className = 'sigil-ic'; $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
     render();
+    // new mail (gifts, friend requests, arena rewards) is checked every 2 minutes while the game is open
+    paintMail(); setInterval(() => { if (!B && document.visibilityState === 'visible') socialLoad(); }, 120000);
     if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;
     if (S.migrated) { delete S.migrated; delete S.migrated4; delete S.migrated5; delete S.migrated6; save(); toast('Your progress was carried over. Your champions were replaced by the new heroes.'); }

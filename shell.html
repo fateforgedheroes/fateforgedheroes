@@ -595,6 +595,11 @@ button, a, input { touch-action: manipulation; }
 @media (hover: none) { .stage:hover:not(:disabled) { transform: none; } }
 
 /* player profile: account button, locked tabs, profile screen */
+#mail { position: relative; }
+#mail .mail-n { position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--bad); color: #fff; font: 700 11px/18px var(--font-tag); text-align: center; box-shadow: 0 0 0 2px #000; }
+#mail.has { color: var(--gold); border-color: var(--gold-dim); animation: mailpulse 1.6s ease-in-out infinite alternate; }
+@keyframes mailpulse { from { box-shadow: 0 0 0 0 rgba(217,180,90,0); } to { box-shadow: 0 0 10px 1px rgba(217,180,90,.45); } }
+@media (prefers-reduced-motion: reduce) { #mail.has { animation: none; } }
 #account { position: relative; gap: 6px; padding-left: 3px; max-width: 240px; }
 #account .acc-av { width: 26px; height: 26px; flex: none; border: 1px solid var(--gold-dim); }
 #account .acc-lv { font-family: var(--font-tag); font-weight: 700; font-size: 11px; color: var(--gold); white-space: nowrap; }
@@ -677,6 +682,35 @@ button, a, input { touch-action: manipulation; }
 .lb-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lb-name b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-score { text-align: right; font-size: .9rem; color: var(--muted); }
+/* social + mail */
+.soc-tabs { margin-top: 4px; }
+.soc-tabs button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.soc-top { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.soc-card { background: var(--panel); border: 2px solid var(--line); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.fr-code { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fr-code b { font-family: var(--font-tag); font-size: 1.5rem; letter-spacing: .12em; color: var(--gold); user-select: all; }
+.fr-add { display: flex; gap: 6px; flex-wrap: wrap; }
+.fr-add input { flex: 1 1 160px; min-width: 0; background: var(--panel-2); border: 2px solid var(--line); color: var(--fg); padding: 6px 10px; font: inherit; text-transform: uppercase; letter-spacing: .08em; }
+.fr-add input:focus { outline: none; border-color: var(--gold); }
+.fr-sec { margin-bottom: 14px; }
+.fr-sec h3 { margin: 0 0 8px; display: flex; align-items: baseline; gap: 8px; }
+.fr-list, .ml-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.fr-list li, .ml-item { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 2px solid var(--line); padding: 8px 10px; }
+.fr-av { width: 44px; height: 44px; flex: none; background: var(--panel-2); border: 1px solid var(--line); }
+.fr-av img.spr { width: 100%; height: 100%; }
+.fr-main, .ml-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.fr-main b, .ml-main b { overflow-wrap: anywhere; }
+.fr-acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: none; }
+.ml-item.new { border-color: var(--gold-dim); box-shadow: inset 3px 0 0 var(--gold); }
+.ml-item.done { opacity: .6; }
+.ml-ic { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 50%; background: #1a130a; border: 1px solid var(--gold-dim); color: var(--gold); }
+.ml-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: round; stroke-linecap: round; }
+.ml-body { color: var(--fg); font-size: .95rem; }
+@media (max-width: 600px) {
+  .fr-list li, .ml-item { flex-wrap: wrap; }
+  .fr-acts { flex: 1 1 100%; justify-content: stretch; }
+  .fr-acts .btn { flex: 1 1 0; }
+}
 @media (max-width: 760px) {
   .arena { grid-template-columns: minmax(0, 1fr); }
   .ar-opp { flex-wrap: wrap; }
@@ -701,6 +735,9 @@ button, a, input { touch-action: manipulation; }
   background: linear-gradient(180deg, #1c171f, #0d0a10); border: .18cqw solid #b08a3e; border-radius: .5cqw; box-shadow: 0 0 0 .12cqw #000, 0 .3cqw .8cqw rgba(0,0,0,.6);
   color: #cfc4d6; font-family: var(--font-display); font-weight: 700; font-size: 1.15cqw; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .hz-plate svg { width: 1.2cqw; height: 1.2cqw; fill: none; stroke: var(--gold); stroke-width: 1.6; flex: none; }
+.hz-plate.named { color: #f3e9d8; gap: .7cqw; justify-content: flex-start; padding-left: .3cqw; font-size: 1.25cqw; }
+.hz-plate.named i { width: 2.6cqw; height: 2.6cqw; flex: none; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle, #2a2130, #120e14); border: .15cqw solid #b08a3e; box-shadow: 0 0 0 .1cqw #000; }
+.hz-plate.named i svg { width: 1.5cqw; height: 1.5cqw; }
 .hz-badge { position: absolute; pointer-events: none; transform: translateX(-50%); }
 .hz-badge.lock { display: flex; align-items: center; background: #120e14; color: var(--gold); border: .15cqw solid var(--gold-dim); padding: .15cqw .5cqw; font-family: var(--font-tag); font-weight: 700; font-size: .95cqw; letter-spacing: .05em; box-shadow: 0 0 0 .1cqw #000; }
 .hz-badge.dot { width: 1.1cqw; height: 1.1cqw; background: var(--ember); box-shadow: 0 0 0 .15cqw #000, 0 0 .8cqw var(--ember); }
@@ -969,6 +1006,7 @@ button, a, input { touch-action: manipulation; }
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b></div>
       <button class="iconbtn" id="sound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">Sound</button>
+      <button class="iconbtn" id="mail" type="button" aria-label="Mail" title="Mail: gifts and friend requests"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="9.5" rx="1"/><path d="M2 4.5 8 9l6-4.5"/></svg><span class="lbl">Mail</span><b class="mail-n" hidden>0</b></button>
       <button class="iconbtn acc" id="account" type="button" aria-label="Your profile and account">Profile</button>
     </div>
   </header>
