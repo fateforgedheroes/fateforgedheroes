@@ -242,6 +242,18 @@
     info() { return { enabled, email: session && session.user ? session.user.email || 'your account' : null, status: status.k }; },
     // sign-in dialog, or the account menu when signed in
     openAccount() { if (!enabled) return; session && session.user ? accountMenu() : loginScreen(); },
+    // signed in with a cloud account? (the arena and leaderboards need one)
+    signedIn() { return !!(enabled && session && session.user); },
+    // calls an Edge Function (e.g. 'arena'); resolves to the JSON reply, also for errors ({ error, state? }).
+    // Throws only when the server cannot be reached.
+    async fn(name, body) {
+      if (!(await valid())) return { error: 'Please sign in first.' };
+      const res = await fetch(URL0 + '/functions/v1/' + name, { method: 'POST', headers: { apikey: KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
+      let data = null; try { data = await res.json(); } catch (e) { data = null; }
+      return data || { error: 'The server did not answer (HTTP ' + res.status + ').' };
+    },
+    // calls a database function (leaderboard, claim_arena_rewards)
+    async rpc(name, body) { if (!(await valid())) throw new Error('Please sign in first.'); return req('/rest/v1/rpc/' + name, { method: 'POST', body: body || {} }); },
     // called on every local save; uploads a few seconds later
     queue() { if (!enabled || !session) return; clearTimeout(pushT); pushT = setTimeout(() => push(), 3000); },
   };

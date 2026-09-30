@@ -23,8 +23,8 @@
 
   // ---------- state ----------
   // player profile: account level gates the Fate Altar and the Boss Hall
-  const PLAYER_UNLOCK = { altaar: 5, kerkers: 10 };
-  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall' };
+  const PLAYER_UNLOCK = { altaar: 5, kerkers: 10, arena: 12 };
+  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena' };
   const pxNeed = l => 80 + 40 * (l - 1);
   // per cleared stage / Boss Hall level
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
@@ -281,7 +281,7 @@
     const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
     sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${S.sound ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${S.sound ? 'Sound on' : 'Sound off'}</span>`;
     document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0 && unlocked('altaar'));
-    for (const t in PLAYER_UNLOCK) document.querySelector(`#tabs [data-tab="${t}"]`).classList.toggle('locked', !unlocked(t));
+    for (const t in PLAYER_UNLOCK) document.querySelector(`#tabs [data-tab="${t}"]`)?.classList.toggle('locked', !unlocked(t));
     paintAccount();
   }
   const unlocked = t => !PLAYER_UNLOCK[t] || S.p.lvl >= PLAYER_UNLOCK[t];
@@ -318,7 +318,7 @@
   const HOME_W = 1536, HOME_H = 1024;
   const HOME_ZONES = [
     { go: 'kerkers', label: 'Boss Hall', box: [20, 0, 450, 330], plate: [150, 243, 222, 44] },
-    { box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
+    { go: 'arena', label: 'Arena', box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
     { go: 'profiel', label: 'Town Hall: your profile', box: [830, 20, 320, 265], plate: [864, 283, 214, 50] },
     { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
     { box: [90, 320, 380, 215], plate: [206, 533, 178, 50] },
@@ -356,6 +356,7 @@
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
     render();
+    if (t === 'arena') arenaEnter();
   }
   function render() {
     hud();
@@ -369,7 +370,7 @@
       map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
     // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
@@ -710,6 +711,104 @@
 
   // ----- player profile -----
   let editName = false;
+  // ================= ARENA =================
+  // Everything that counts is decided by the `arena` Edge Function (supabase/functions/arena): this screen shows its
+  // state, sends your team and replays the fights it played. Leaderboards come from the `leaderboard` database function.
+  const AR = { st: null, busy: false, err: '', lb: 'arena', board: null, boardErr: '', loadedAt: 0, who: null };
+  const cloud = () => window.FFH_CLOUD;
+  // team snapshot in the shape the server checks (K.checkTeam)
+  const snapTeam = ids => ids.filter(id => S.roster[id] && C[id]).map(id => { const h = S.roster[id]; return { id, lvl: h.lvl, stars: h.stars, sk: C[id].skills.map((_, i) => Math.min(K.SKILL_MAX, (h.sk || [])[i] || 0)), items: itemsOf(id).map(K.snapItem) }; });
+  async function arenaCall(action, extra) {
+    AR.busy = true; if (tab === 'arena' && !B) render();
+    let r;
+    try { r = await cloud().fn('arena', { action, name: S.p.name, avatar: avatarId(), team: snapTeam(S.team), ...extra }); }
+    catch (e) { r = { error: 'No connection to the arena. Check your internet and try again.' }; }
+    AR.busy = false;
+    if (r.state) { AR.st = r.state; AR.loadedAt = Date.now(); }
+    AR.err = r.error || '';
+    if (tab === 'arena' && !B) render();
+    return r;
+  }
+  async function loadBoard(kind) {
+    AR.lb = kind; AR.board = null; AR.boardErr = '';
+    if (tab === 'arena' && !B) render();
+    let rows = null;
+    try { rows = await cloud().rpc('leaderboard', { kind }); } catch (e) { AR.boardErr = 'The leaderboard could not be loaded.'; }
+    if (AR.lb !== kind) return;
+    AR.board = rows || [];
+    if (tab === 'arena' && !B) render();
+  }
+  function arenaEnter() {
+    const cl = cloud();
+    if (!unlocked('arena') || !cl || !cl.signedIn()) return;
+    const who = cl.info().email;
+    if (AR.who !== who) Object.assign(AR, { who, st: null, board: null, err: '' });
+    if (!AR.busy && (!AR.st || Date.now() - AR.loadedAt > 60000)) arenaCall('state');
+    if (!AR.board) loadBoard(AR.lb);
+  }
+  const miniTeam = team => `<div class="ar-team">${team.filter(h => C[h.id]).map(h => `<span class="ar-h rar-${C[h.id].rar}" title="${esc(C[h.id].name)} · level ${h.lvl}">${por(h.id)}<i>${h.lvl}</i></span>`).join('')}</div>`;
+  const tierReward = t => [sigils(t.silver), ...Object.entries(t.fs).map(([k, n]) => `${shardIc(k)} ${n}× ${esc(K.SHARD[k].name)}`)].join(' · ');
+  function campaignText(r) {
+    const d = r.detail || {}, dcl = Array.isArray(d.dcl) ? d.dcl : [];
+    for (let i = dcl.length - 1; i >= 1; i--) if (dcl[i] >= 0 && K.DIFFS[i] && K.STAGES[dcl[i]]) return `${K.DIFFS[i].name} · ${stageName(dcl[i])}`;
+    return K.STAGES[d.cleared] ? `Easy · ${stageName(d.cleared)}` : `${r.score} stages`;
+  }
+  function boardHtml() {
+    const kinds = [['arena', 'Arena'], ['campaign', 'Campaign'], ['bosses', 'Boss Hall']];
+    const seg = `<div class="seg" role="group" aria-label="Leaderboard">${kinds.map(([k, l]) => `<button type="button" data-act="arlb" data-kind="${k}" aria-pressed="${AR.lb === k}">${l}</button>`).join('')}</div>`;
+    const fmt = r => AR.lb === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : AR.lb === 'campaign' ? campaignText(r) : `${r.score} boss levels${r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}`;
+    const rows = AR.board ? AR.board.map(r => `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = AR.lb === 'arena' ? 'Ratings from fights the server played.' : 'From cloud saves of signed-in players.';
+    return `<section class="ar-board"><div class="section-head"><h3>Leaderboard</h3>${seg}</div><p class="empty-note">${note}</p>
+      ${AR.boardErr ? `<p class="ar-err">${esc(AR.boardErr)}</p>` : !AR.board ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
+  }
+  function arenaHtml() {
+    const lede = 'Fight the defense teams of other players. The server plays every fight, so the ranking is fair. Every Monday you get a reward for your rating.';
+    if (!unlocked('arena')) return lockedHtml('arena', lede);
+    const head = `<div class="section-head"><div><h2>Arena</h2><p class="lede">${lede}</p></div></div>`;
+    const cl = cloud();
+    if (!cl || !cl.enabled) return head + '<p class="empty-note">The arena needs the online version of the game.</p>';
+    if (!cl.signedIn()) return head + `<div class="lockbox">${LOCK_SVG}<div><h3>Sign in to enter the arena</h3><p class="empty-note">Arena fights and rankings are kept on the server, so you need an account.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div>`;
+    const st = AR.st;
+    if (!st) return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p><button class="btn" data-act="arstate">Try again</button>` : '<p class="empty-note">Entering the arena…</p>') + boardHtml();
+    const tier = K.arenaTier(st.rating), next = K.ARENA_TIERS[K.ARENA_TIERS.indexOf(tier) + 1];
+    const secs = Math.max(0, st.nextToken - Math.round((Date.now() - AR.loadedAt) / 1000));
+    const me = `<div class="ar-me tier-${tier.name.toLowerCase()}">
+        <div class="ar-rating"><span class="tag">${tier.name}</span><b>${st.rating}</b><small class="empty-note">rating</small></div>
+        <dl class="stats"><dt>Attacks</dt><dd>${st.wins} won · ${st.losses} lost</dd><dt>Defense</dt><dd>${st.defWins} won · ${st.defLosses} lost</dd><dt>Tokens</dt><dd>${st.tokens} / ${K.ARENA_TOKENS}${st.tokens >= K.ARENA_TOKENS ? '' : ` · next in ${Math.max(1, Math.ceil(secs / 60))} min`}</dd></dl>
+        <p class="empty-note">Weekly reward (${tier.name}): ${tierReward(tier)}. ${st.weekFights ? `You fought ${st.weekFights}× this week.` : 'Fight at least once this week to earn it.'}${next ? ` ${next.name} from ${next.min} rating.` : ''}</p>
+        ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
+    const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')}</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
+        <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>`;
+    const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b>${o.kind === 'bot' ? ' <span class="tag">Bot</span>' : ''}<small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
+    const opps = `<section class="ar-opps"><div class="section-head"><h3>Opponents</h3><button class="btn small" data-act="arrefresh" ${AR.busy ? 'disabled' : ''}>New opponents</button></div>
+      <p class="empty-note">You attack with your current team (power ${K.teamPower(snapTeam(S.team)).toLocaleString('en-US')}). A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
+    return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="arena">${me}${def}</div>${opps}${boardHtml()}`;
+  }
+  function startArena(f) {
+    runBattle({ type: 'arena', att: f.att, def: f.def, seed: f.seed, win: f.win, fight: f, area: f.seed % 5, title: `Arena · vs ${f.opponent.name}` });
+  }
+  function finishArena(cfg) {
+    const f = cfg.fight, m = $('#modal'), tier = K.arenaTier(f.rating), was = K.arenaTier(f.before);
+    AR.board = null;
+    m.innerHTML = `<div class="modal-box ${f.win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${f.win ? 'Victory' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)} · rating ${f.opponent.rating}</p>
+      <ul class="rewards"><li><span class="aff" style="--c:var(--gold)">R</span><span>Rating ${f.before} → <b>${f.rating}</b> (${f.delta >= 0 ? '+' : ''}${f.delta})</span></li>
+        ${tier !== was ? `<li class="loot lvup"><span class="aff" style="--c:var(--gold)">★</span><span><b>${tier.name}</b> tier${f.rating > f.before ? ' reached!' : ''}</span></li>` : ''}
+        <li><span class="aff" style="--c:var(--info)">T</span><span>Tokens left: ${AR.st ? AR.st.tokens : '?'} / ${K.ARENA_TOKENS}</span></li></ul>
+      <div class="modal-actions"><button class="btn primary" data-act="modal" data-go="arena">Back to the arena</button></div></div>`;
+    m.hidden = false;
+    m.querySelector('.btn').focus();
+  }
+  async function claimArena() {
+    let rows;
+    try { rows = await cloud().rpc('claim_arena_rewards'); } catch (e) { toast('Could not claim the rewards. Try again.', true); return; }
+    let silver = 0; const fs = {};
+    for (const r of rows || []) { const t = K.arenaTier(r.rating); silver += t.silver; for (const k in t.fs) fs[k] = (fs[k] || 0) + t.fs[k]; }
+    S.silver += silver; for (const k in fs) S.fs[k] = (S.fs[k] || 0) + fs[k];
+    if (AR.st) AR.st.rewards = 0;
+    save(); render(); SFX.up();
+    toast(silver ? `Weekly arena rewards: +${silver.toLocaleString('en-US')} Sigils${Object.keys(fs).map(k => ` · +${fs[k]} ${K.SHARD[k].name}`).join('')}.` : 'No rewards to claim.', false, 4000);
+  }
   function backupsHtml() {
     const rows = readBackups().map((b, i) => {
       let o = {}; try { o = JSON.parse(b.raw) || {}; } catch (e) { /* unreadable copy */ }
@@ -802,6 +901,12 @@
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
     else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
+    else if (act === 'arstate') arenaCall('state');
+    else if (act === 'arrefresh') arenaCall('refresh');
+    else if (act === 'ardef') arenaCall('defense').then(r => { if (r.state) toast('Your current team now defends you in the arena.'); });
+    else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) startArena(r.fight); });
+    else if (act === 'arlb') loadBoard(a.dataset.kind);
+    else if (act === 'arclaim') claimArena();
     else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
@@ -938,7 +1043,8 @@
   // Speeds unlock with campaign progress (stage index that must be reached); 5× only when replaying something already beaten.
   const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
   let spd = 1, speeds = [1];
-  const beatenBefore = cfg => cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0);
+  // arena fights are replays of a fight already decided, so every unlocked speed (also 5×) may be used
+  const beatenBefore = cfg => cfg.type === 'arena' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
   function speedsFor(cfg) {
     const reached = S.cleared + 1, replay = beatenBefore(cfg);
     return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
@@ -996,6 +1102,8 @@
       let a = 0;
       enemies.forEach(u => { if (u === boss) place(u, BOSS_POS, 220); else place(u, ADD_POS[a++ % ADD_POS.length], 220); });
     } else {
+      // arena defenders are heroes: they line up like heroes (tanks in front), mirrored
+      if (B && B.cfg.type === 'arena') { const pos = formation(enemies); enemies.forEach(u => place(u, ENEMY_POS[4][pos.get(u)], 220)); return; }
       const ep = ENEMY_POS[Math.min(4, enemies.length)];
       enemies.forEach((u, i) => place(u, ep[i % ep.length], 220));
     }
@@ -1453,6 +1561,7 @@
   function setAutoBtn() { const b = $('#b-auto'); b.classList.toggle('on', S.auto); b.setAttribute('aria-pressed', S.auto ? 'true' : 'false'); b.title = 'Auto battle: ' + (S.auto ? 'on' : 'off'); }
   function setSpeedBtn() { const b = $('#b-speed'); b.innerHTML = `<b>${spd}×</b>`; b.classList.toggle('on', spd > 1); b.title = 'Battle speed ' + spd + '×' + (speedHint() ? '. ' + speedHint() : ''); b.setAttribute('aria-label', b.title); SFX.calm = calm(); }
   $('#b-auto').addEventListener('click', () => {
+    if (B && B.cfg.type === 'arena') { toast('Arena fights always play on auto.'); return; }
     S.auto = !S.auto; save(); setAutoBtn();
     if (B) B.b.auto = S.auto;
     if (S.auto && pending) { const { u, res, b } = pending; pending = null; R.hl = new Set(); updateOverlay(); $('#b-hint').textContent = 'Auto is playing this turn.'; res(b.ai(u)); }
@@ -1463,6 +1572,8 @@
     if (spd === 1 && speedHint()) toast(speedHint());
   });
   $('#b-quit').addEventListener('click', () => {
+    // arena: the result is already known, so this skips ahead (fast forward) instead of surrendering
+    if (B && B.cfg.type === 'arena') { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
     const btn = $('#b-quit');
     if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to give up'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up'); }, 3000); return; }
     quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up');
@@ -1499,10 +1610,14 @@
   }
   async function runBattle(cfg) {
     SFX.unlock();
-    const heroes = S.team.map(id => K.heroUnit(id, S.roster[id], itemsOf(id)));
-    let enemies = phaseUnits(cfg, 0);
+    // Arena: a replay of the fight the server already played. Both teams come from the server's snapshots and the dice
+    // from its seed (K.arenaSetup), so this plays out exactly like on the server; both sides play on auto.
+    const arena = cfg.type === 'arena', nPh = arena ? 1 : K.PHASES;
+    let heroes, enemies;
+    if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
+    else { heroes = S.team.map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false;
-    $('#b-title').textContent = cfg.title; $('#b-round').textContent = `Phase 1/${K.PHASES} · Turn 1`;
+    $('#b-title').textContent = cfg.title; $('#b-round').textContent = (nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
     R.area = cfg.area;
     const narrow = window.innerWidth < 640;
@@ -1513,8 +1628,8 @@
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
-    b.auto = S.auto;
-    B = { b, cfg, ph: 0, nPh: K.PHASES };
+    b.auto = arena || S.auto;
+    B = { b, cfg, ph: 0, nPh };
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -1525,13 +1640,13 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
-    log(`The battle begins: ${K.PHASES} phases. Speed decides the turn order.`);
+    await showBanner(cfg.title, arena ? 'Arena · both teams fight on auto' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    log(arena ? 'The arena fight begins. Speed decides the turn order.' : `The battle begins: ${K.PHASES} phases. Speed decides the turn order.`);
     // phases: the same hero units fight on; damage stats add up over the phases
     const tot = { dmg: {}, crits: 0, maxHit: 0, turns: 0 };
     const addStats = x => { for (const k in x.stats.dmg) tot.dmg[k] = (tot.dmg[k] || 0) + x.stats.dmg[k]; tot.crits += x.stats.crits; tot.maxHit = Math.max(tot.maxHit, x.stats.maxHit); tot.turns += x.turns; };
     let res;
-    for (let p = 0; p < K.PHASES; p++) {
+    for (let p = 0; p < nPh; p++) {
       if (p) {
         enemies = phaseUnits(cfg, p);
         await nextPhase(heroes, enemies, p);
@@ -1547,8 +1662,11 @@
       R.active = null; R.hl = new Set(); updateOverlay();
       if (res !== 'win' || b.aborted) break;
     }
+    if (arena) K.setRng(null);
     b.stats = tot; b.turns = tot.turns;
-    const win = res === 'win' && !b.aborted;
+    // arena: the server's result counts (the replay should always agree; warn if it ever does not)
+    if (arena && (res === 'win') !== cfg.win) console.warn('Arena replay differs from the server result', cfg.seed);
+    const win = arena ? cfg.win : res === 'win' && !b.aborted;
     if (win) {
       SFX.win();
       const alive = heroes.filter(u => u.alive);
@@ -1559,7 +1677,7 @@
       SFX.lose(); R.dim = 0.4;
       await showBanner(b.aborted ? 'Surrendered' : 'Defeated', cfg.title, 'big lose', 900);
     }
-    finishBattle(win);
+    if (arena) finishArena(cfg); else finishBattle(win);
   }
 
   function grantXp(amount) {
@@ -1595,7 +1713,7 @@
     }
     for (const k in PLAYER_UNLOCK) if (!S.seen[k] && S.p.lvl >= PLAYER_UNLOCK[k]) {
       S.seen[k] = true;
-      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
     }
     return out;
   }
@@ -1706,6 +1824,7 @@
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'champs') setTab('champions');
+    else if (cfg.type === 'arena') setTab('arena');
     else setTab(cfg.type === 'stage' ? 'campagne' : 'kerkers');
   }
 

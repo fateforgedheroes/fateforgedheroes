@@ -1,7 +1,13 @@
 // ================= ENGINE v4: Essences, hit types, speed/turn meter, bosses with phases + break =================
 const K = (function () {
-  const rint = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
-  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  // All engine randomness goes through rnd(). Arena fights swap in a seeded generator (setRng) so the server and the
+  // browser play out exactly the same fight from the same seed; visual effects in app.js keep using Math.random.
+  let rnd = Math.random;
+  const setRng = fn => { rnd = fn || Math.random; };
+  // mulberry32: small, fast, good enough for game dice; seed = 32-bit integer
+  function seeded(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  const rint = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const pick = arr => arr[Math.floor(rnd() * arr.length)];
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   // ---------- Essences ----------
@@ -723,7 +729,7 @@ const K = (function () {
     for (const u of heroes) {
       if (!u.alive) continue;
       u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * 0.15));
-      u.effects = []; u.tm = Math.random() * 20;
+      u.effects = []; u.tm = rnd() * 20;
       for (const s of u.skills) s.cdLeft = 0;
     }
   }
@@ -797,8 +803,8 @@ const K = (function () {
   function genGear(opts, id) {
     const il = opts.il || 1;
     let rar;
-    if (opts.rars) rar = opts.rars.length > 1 && Math.random() < (opts.up ?? 0.3) ? opts.rars[1] : opts.rars[0];
-    else { const roll = Math.random() + il * 0.02 + (opts.rarBoost || 0); rar = roll > 1.32 ? 4 : roll > 1.08 ? 3 : roll > 0.78 ? 2 : roll > 0.42 ? 1 : 0; }
+    if (opts.rars) rar = opts.rars.length > 1 && rnd() < (opts.up ?? 0.3) ? opts.rars[1] : opts.rars[0];
+    else { const roll = rnd() + il * 0.02 + (opts.rarBoost || 0); rar = roll > 1.32 ? 4 : roll > 1.08 ? 3 : roll > 0.78 ? 2 : roll > 0.42 ? 1 : 0; }
     const slot = opts.slot || pick(SLOTS), mk = pick(MAIN_OPTIONS[slot]);
     const set = opts.sets ? pick(opts.sets) : pick(BASIC_SETS);
     const it = { id, slot, rar, lvl: 0, il, set, main: mk, subs: [], owner: null };
@@ -850,14 +856,14 @@ const K = (function () {
   ];
   const SHARD = Object.fromEntries(FATE_SHARDS.map(f => [f.id, f]));
   const SHARD_PRICE = 2500;
-  function rollShards() { return FATE_SHARDS.filter(f => Math.random() < f.drop).map(f => f.id); }
+  function rollShards() { return FATE_SHARDS.filter(f => rnd() < f.drop).map(f => f.id); }
   // pity: after PITY_EPIC summons in a row without an Epic or better, the next one is at least Epic (st.pity counts).
   // Only shards in PITY_SHARDS (Ancient and up) count and can trigger it; Fate and Greater Fate Shards leave it alone.
   const PITY_EPIC = 40;
   const PITY_SHARDS = ['ancient', 'mythic', 'legendary'];
   function summonOne(st, type) {
     const T = SHARD[type || 'fate'];
-    const r = Math.random() * 100; let acc = 0, rar = 1;
+    const r = rnd() * 100; let acc = 0, rar = 1;
     for (let i = 4; i >= 0; i--) { if (!T.rates[i]) continue; acc += T.rates[i]; if (r < acc) { rar = i; break; } }
     if (acc < 100 && r >= acc) rar = T.rates.findIndex(x => x > 0);
     if (PITY_SHARDS.includes(T.id)) {
@@ -917,7 +923,7 @@ const K = (function () {
       uid: ++UID, id: src.id, name: src.name, side, aff: src.aff,
       maxHp: st.hp, hp: st.hp, atk: st.atk, def: st.def, spd: st.spd, crit: st.crit, cdmg: st.cdmg, acc: st.acc, res: st.res, sets: st.flags || {},
       skills: mkSkills(src.phases ? src.phases[0] : src.skills, skLv),
-      passive: src.passive || null, effects: [], alive: true, stacks: {}, flags: {}, boss: !!src.boss, big: !!src.isBoss, slot: 0, tm: Math.random() * 20,
+      passive: src.passive || null, effects: [], alive: true, stacks: {}, flags: {}, boss: !!src.boss, big: !!src.isBoss, slot: 0, tm: rnd() * 20,
     };
   }
   function heroUnit(id, h, items) { return makeUnit({ ...CHAMPS[id], id }, 'hero', heroStats(id, h, items), h.sk); }
@@ -1035,7 +1041,7 @@ const K = (function () {
           if (this.aborted) return;
           used = act.skill;
           await this.perform(u, act.skill, act.target);
-          if (extra === 0 && u.alive && u.flags.crit && u.sets.extraTurn && Math.random() < 0.18 && !this.check()) {
+          if (extra === 0 && u.alive && u.flags.crit && u.sets.extraTurn && rnd() < 0.18 && !this.check()) {
             extra = 1; this.h.float(u, 'Extra turn!', 'buff'); this.h.log(`${u.name} gets an extra turn.`, u.side);
             for (const s of u.skills) s.cdLeft = s === used ? s.cd : Math.max(0, s.cdLeft - 1);
             await this.h.pause(300);
@@ -1043,7 +1049,7 @@ const K = (function () {
         } while (true);
       }
       // boss end-of-turn passives
-      if (u.alive && u.passive === 'toxicpresence') for (const t of this.living(this.foes(u))) if (Math.random() < 0.15) this.addEffect(t, { k: 'poison', n: 2, v: 1 });
+      if (u.alive && u.passive === 'toxicpresence') for (const t of this.living(this.foes(u))) if (rnd() < 0.15) this.addEffect(t, { k: 'poison', n: 2, v: 1 });
       if (u.alive && u.passive === 'deathmark') { u.stacks.mark = (u.stacks.mark || 0) + 1; if (u.stacks.mark % 2 === 0) { const t = pick(this.living(this.foes(u))); if (t) this.addEffect(t, { k: 'mark', n: 2 }); } }
       this.endTurn(u, used);
     }
@@ -1133,14 +1139,14 @@ const K = (function () {
               if (fx.steal) this.heal(u, dealt * fx.steal);
               if (u.sets.lifesteal) this.heal(u, dealt * 0.3);
               if (u.passive === 'bloodfeast') this.heal(u, dealt * 0.25);
-              if (u.passive === 'frozencurse' && t.alive && Math.random() < 0.3) this.addEffect(t, { k: 'spdDown', n: 2 });
+              if (u.passive === 'frozencurse' && t.alive && rnd() < 0.3) this.addEffect(t, { k: 'spdDown', n: 2 });
               if (u.passive === 'staticcharge') u.stacks.charge = (u.stacks.charge || 0) >= 3 ? 0 : (u.stacks.charge || 0) + 1;
               if (was && !t.alive) killed++;
               hitMap.set(t, r.hit);
               if (dealt > 0) this.onHitPassives(u, t, r, skill);
               if (!isCounter && t.alive && dealt > 0 && !SKIP.some(k => this.has(t, k)) && !counters.includes(t)) {
                 const ch = (t.passive === 'retribution' ? 0.3 : 0) + (t.sets.counter ? 0.25 : 0) + (this.has(t, 'counter') ? 0.5 : 0);
-                if (ch > 0 && Math.random() < ch) counters.push(t);
+                if (ch > 0 && rnd() < ch) counters.push(t);
               }
             }
             if (hits > 1 && i < hits - 1) await this.h.pause(160);
@@ -1152,11 +1158,11 @@ const K = (function () {
             let acc = u.acc - (this.has(u, 'accDown') ? 30 : 0);
             const ch = clamp(base * (1 + (acc - t.res) / 100), 0, 1);
             if (this.has(t, 'immune')) { this.h.float(t, 'Immune', 'resist'); continue; }
-            if (Math.random() < ch) this.addEffect(t, { k: fx.k, n: fx.n, src: u.uid, v: (fx.k === 'burn' && u.passive === 'kindling') || (fx.k === 'poison' && (u.passive === 'venomfaith' || this.enemies.some(x => x.alive && x.passive === 'venomfaith' && x.side === u.side))) ? 1.5 : 1 });
+            if (rnd() < ch) this.addEffect(t, { k: fx.k, n: fx.n, src: u.uid, v: (fx.k === 'burn' && u.passive === 'kindling') || (fx.k === 'poison' && (u.passive === 'venomfaith' || this.enemies.some(x => x.alive && x.passive === 'venomfaith' && x.side === u.side))) ? 1.5 : 1 });
             else this.h.float(t, 'Resisted', 'resist');
           }
         } else if (fx.t === 'randomDebuff') {
-          for (const t of targets.filter(t => t.alive && t.side !== u.side)) { if (this.has(t, 'immune')) continue; if (Math.random() < 0.6) this.addEffect(t, { k: pick(['atkDown', 'defDown', 'spdDown', 'poison', 'burn', 'silence', 'accDown']), n: 2 }); }
+          for (const t of targets.filter(t => t.alive && t.side !== u.side)) { if (this.has(t, 'immune')) continue; if (rnd() < 0.6) this.addEffect(t, { k: pick(['atkDown', 'defDown', 'spdDown', 'poison', 'burn', 'silence', 'accDown']), n: 2 }); }
         } else if (fx.t === 'buff') {
           const list = fx.to === 'self' ? [u] : fx.to === 'allAllies' ? this.living(this.allies(u)) : targets.filter(t => t.side === u.side);
           for (const t of (list.length ? list : [u]).filter(t => t.alive)) this.addEffect(t, { k: fx.k, n: fx.n });
@@ -1200,10 +1206,10 @@ const K = (function () {
     }
     onHitPassives(a, t, r) {
       if (!t.alive || !a.alive) return;
-      if (t.passive === 'molten' && r.hit === 'weak' && Math.random() < 0.2) this.addEffect(a, { k: 'burn', n: 2 });
-      if (t.passive === 'frozencore' && Math.random() < 0.25) this.addEffect(a, { k: 'spdDown', n: 2 });
-      if (t.passive === 'ancientroots' && Math.random() < 0.2) { this.addEffect(a, { k: 'spdDown', n: 2 }); this.h.float(a, 'Rooted', 'debuff'); }
-      if (t.passive === 'glacial' && Math.random() < 0.2) this.addEffect(a, { k: 'spdDown', n: 1 });
+      if (t.passive === 'molten' && r.hit === 'weak' && rnd() < 0.2) this.addEffect(a, { k: 'burn', n: 2 });
+      if (t.passive === 'frozencore' && rnd() < 0.25) this.addEffect(a, { k: 'spdDown', n: 2 });
+      if (t.passive === 'ancientroots' && rnd() < 0.2) { this.addEffect(a, { k: 'spdDown', n: 2 }); this.h.float(a, 'Rooted', 'debuff'); }
+      if (t.passive === 'glacial' && rnd() < 0.2) this.addEffect(a, { k: 'spdDown', n: 1 });
     }
     addEffect(t, e, quiet) {
       if (!EFFECTS[e.k].buff && e.k !== 'broken' && this.has(t, 'immune')) return;
@@ -1236,7 +1242,7 @@ const K = (function () {
       if (H.crit) {
         let cr = a.crit + (this.has(a, 'critUp') ? 25 : 0);
         if (a.passive === 'shadowhunter' && t.effects.some(e => !EFFECTS[e.k].buff)) cr += 25;
-        crit = Math.random() * 100 < Math.min(CRIT_CAP, cr);
+        crit = rnd() * 100 < Math.min(CRIT_CAP, cr);
       }
       if (crit) raw *= 1 + (a.cdmg + (this.has(a, 'cdmgUp') ? 30 : 0)) / 100;
       let d = raw * H.mult * (100 / (100 + def));
@@ -1257,7 +1263,7 @@ const K = (function () {
       if (t.passive === 'scalearmor' && skill && skill.anim === 'melee') d *= 0.75;
       if (t.passive === 'thickhide') d *= 0.9;
       if (this.living(this.allies(t)).some(x => x.passive === 'lightbearer')) d *= 0.9;
-      d *= 0.95 + Math.random() * 0.1;
+      d *= 0.95 + rnd() * 0.1;
       return { dmg: Math.max(1, Math.round(d)), crit, hit, skill };
     }
     damage(t, amount, src, info) {
@@ -1352,14 +1358,103 @@ const K = (function () {
         const minions = foes.filter(f => f.summoned);
         const strong = foes.filter(f => hitType(u.aff, f.aff) === 'strong');
         const okk = foes.filter(f => hitType(u.aff, f.aff) !== 'weak');
-        const p = minions.length && minions.length < foes.length && Math.random() < 0.4 ? minions : strong.length ? strong : okk.length ? okk : foes;
+        const p = minions.length && minions.length < foes.length && rnd() < 0.4 ? minions : strong.length ? strong : okk.length ? okk : foes;
         return p.reduce((a, b) => (a.hp < b.hp ? a : b));
       }
-      return Math.random() < 0.5 ? foes.reduce((a, b) => (a.hp < b.hp ? a : b)) : pick(foes);
+      return rnd() < 0.5 ? foes.reduce((a, b) => (a.hp < b.hp ? a : b)) : pick(foes);
     }
   }
 
+  // ---------- Arena (shared by the game and the server, supabase/functions/arena) ----------
+  // A team snapshot is what the server stores and fights with: [{ id, lvl, stars, sk: [..], items: [{ slot, rar, lvl, il, set, main, subs }] }].
+  const power = st => Math.round(st.hp * 0.12 + st.atk * 1.8 + st.def * 1.3 + st.spd * 4 + st.crit * 5 + st.cdmg * 2 + (st.acc + st.res) * 0.8);
+  const snapItem = it => ({ slot: it.slot, rar: it.rar, lvl: it.lvl, il: it.il, set: it.set, main: it.main, subs: it.subs.map(s => [s[0], s[1]]) });
+  const teamPower = team => team.reduce((t, h) => t + power(heroStats(h.id, h, h.items)), 0);
+  // highest item level that can drop: last campaign stage on the top difficulty, or the last Boss Hall level
+  const MAX_IL = Math.max(STAGES[STAGES.length - 1].lvl + DIFFS[DIFFS.length - 1].lvl, bossLvl(BOSS_ORDER.length - 1, BOSS_LEVELS));
+  const isInt = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
+  // Checks that a snapshot could exist in a fair game (levels, stars, skills, gear rolls within the rules).
+  // Returns null when fine, else a short reason. It cannot prove the player earned it; it stops edited saves.
+  function checkTeam(team) {
+    if (!Array.isArray(team) || team.length < 1 || team.length > 4) return 'team size';
+    const ids = new Set();
+    for (const h of team) {
+      const c = h && CHAMPS[h.id];
+      if (!c) return 'unknown hero';
+      if (ids.has(h.id)) return 'duplicate hero'; ids.add(h.id);
+      if (!isInt(h.stars, baseStars(h.id), maxStars(h.id))) return 'stars';
+      if (!isInt(h.lvl, 1, maxLvl(h.stars, h.id))) return 'level';
+      if (!Array.isArray(h.sk) || h.sk.length !== c.skills.length || !h.sk.every(v => isInt(v, 0, SKILL_MAX))) return 'skills';
+      if (!Array.isArray(h.items) || h.items.length > SLOTS.length) return 'items';
+      const slots = new Set();
+      for (const it of h.items) {
+        if (!it || !SLOTS.includes(it.slot) || slots.has(it.slot)) return 'item slot'; slots.add(it.slot);
+        if (!isInt(it.rar, 0, 5) || !isInt(it.lvl, 0, MAX_GEAR_LVL) || !isInt(it.il, 1, MAX_IL) || !SETS[it.set]) return 'item';
+        if (!MAIN_OPTIONS[it.slot].includes(it.main)) return 'item main stat';
+        const boosts = Math.floor(it.lvl / 4);
+        if (!Array.isArray(it.subs) || it.subs.length > Math.min(4, it.rar + boosts)) return 'item substats';
+        const keys = new Set([it.main]);
+        for (const s of it.subs) {
+          const p = Array.isArray(s) && SUB_POOL.find(x => x[0] === s[0]);
+          if (!p || keys.has(s[0])) return 'item substat'; keys.add(s[0]);
+          // every roll is at most round(max × scale); +25% slack for items from older game versions
+          if (!isInt(s[1], 1, Math.ceil((1 + boosts) * Math.round(p[2] * subScale(it, s[0])) * 1.25))) return 'item substat value';
+        }
+      }
+    }
+    return null;
+  }
+  // units for an arena fight; side 'hero' attacks, side 'enemy' defends
+  const arenaUnits = (team, side) => team.map(h => makeUnit({ ...CHAMPS[h.id], id: h.id }, side, heroStats(h.id, h, h.items), h.sk));
+  // Sets the seeded dice and builds both teams; the caller runs the Battle (auto for both sides) and then calls setRng(null).
+  function arenaSetup(att, def, seed) { setRng(seeded(seed)); return { heroes: arenaUnits(att, 'hero'), enemies: arenaUnits(def, 'enemy') }; }
+  async function arenaFight(att, def, seed) {
+    try { const { heroes, enemies } = arenaSetup(att, def, seed); const b = new Battle(heroes, enemies); b.auto = true; const res = await b.run(); return { win: res === 'win', turns: b.turns }; }
+    finally { setRng(null); }
+  }
+  // rating: Elo with K 32 for the attacker; the defender (who did not play) moves half as much
+  function arenaElo(ra, rd, win) {
+    const exp = 1 / (1 + Math.pow(10, (rd - ra) / 400));
+    let att = Math.round(32 * ((win ? 1 : 0) - exp));
+    if (win && att < 1) att = 1;
+    if (!win && att > -1) att = -1;
+    return { att, def: -Math.round(att / 2) };
+  }
+  // weekly rewards by rating at the end of the week (only for players who fought that week)
+  const ARENA_TIERS = [
+    { name: 'Bronze', min: 0, silver: 2000, fs: {} },
+    { name: 'Silver', min: 1100, silver: 4000, fs: { greater: 1 } },
+    { name: 'Gold', min: 1300, silver: 7000, fs: { greater: 2 } },
+    { name: 'Platinum', min: 1500, silver: 10000, fs: { ancient: 1 } },
+    { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 2 } },
+  ];
+  const arenaTier = rating => ARENA_TIERS.filter(t => rating >= t.min).pop();
+  const ARENA_TOKENS = 10, ARENA_TOKEN_MIN = 60; // max tokens, minutes per new token
+  // Arena bots fill the opponent list while there are few players: a team near the attacker's level, stronger at a higher rating.
+  const BOT_NAMES = ['Arena Warden', 'Iron Sentinel', 'Ashen Duelist', 'Gravecourt Knight', 'Stormblade Champion', 'Frostbound Guard', 'Umbral Gladiator', 'Radiant Vanguard'];
+  function arenaBot(rating, refLvl, seed) {
+    setRng(seeded(seed));
+    try {
+      const tier = Math.max(0, Math.min(4, Math.floor((rating - 900) / 200)));
+      const rarW = [[60, 40, 0, 0], [30, 55, 15, 0], [10, 50, 35, 5], [0, 35, 50, 15], [0, 15, 55, 30]][tier];
+      const pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar >= 1), team = [];
+      while (team.length < 4) {
+        let r = rnd() * 100, rar = 1;
+        for (let i = 0; i < 4; i++) { r -= rarW[i]; if (r < 0) { rar = i + 1; break; } }
+        const cand = pool.filter(id => CHAMPS[id].rar === rar && !team.some(h => h.id === id));
+        if (!cand.length) continue;
+        const id = pick(cand), stars = Math.min(maxStars(id), baseStars(id) + rint(0, 2));
+        const lvl = Math.max(1, Math.min(maxLvl(stars, id), Math.round(refLvl + (rating - 1000) / 50 + rint(-2, 2))));
+        const rars = [[1, 2], [2, 3], [2, 3], [3, 4], [4]][tier];
+        const items = SLOTS.map(slot => { const it = genGear({ il: Math.max(1, lvl), slot, rars, up: 0.3, sets: pick([BASIC_SETS, ['scherpte', 'woede'], ['wilgenbast', 'levensbron']]) }, 0); for (let n = rint(0, 3 + tier * 2); n > 0 && it.lvl < MAX_GEAR_LVL; n--) { it.lvl++; upgradeMilestone(it); } return snapItem(it); });
+        team.push({ id, lvl, stars, sk: CHAMPS[id].skills.map(() => rint(0, tier)), items });
+      }
+      return { name: BOT_NAMES[seed % BOT_NAMES.length], team };
+    } finally { setRng(null); }
+  }
+
   return {
+    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,

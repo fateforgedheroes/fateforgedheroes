@@ -1,0 +1,97 @@
+// Arena server logic. Pure JavaScript without Supabase or Deno APIs, so the same file runs in the Edge Function
+// (index.ts gives it a database) and in a browser test with a fake database.
+// `K` is the game engine (engine.js), `db` the storage (see index.ts for the methods), `user` the signed-in user.
+// Every result is decided here: the browser only sends its team and which offer it attacks.
+
+const clean = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 20) || 'Adventurer';
+const avatarOk = (K, a) => (typeof a === 'string' && K.CHAMPS[a] ? a : null);
+const preview = team => team.map(h => ({ id: h.id, lvl: h.lvl, stars: h.stars }));
+// keeps only the known fields of a checked team (nothing else a browser sent gets stored)
+const tidy = team => team.map(h => ({ id: h.id, lvl: h.lvl, stars: h.stars, sk: [...h.sk], items: h.items.map(it => ({ slot: it.slot, rar: it.rar, lvl: it.lvl, il: it.il, set: it.set, main: it.main, subs: it.subs.map(s => [s[0], s[1]]) })) }));
+const randSeed = () => Math.floor(Math.random() * 2147483647);
+
+// tokens refill one per ARENA_TOKEN_MIN minutes up to ARENA_TOKENS (the same rule as arena_take_token in SQL)
+function tokensNow(K, p, now) {
+  const per = K.ARENA_TOKEN_MIN * 60000, since = now - Date.parse(p.tokens_at);
+  const t = Math.min(K.ARENA_TOKENS, p.tokens + Math.floor(since / per));
+  return { tokens: t, next: t >= K.ARENA_TOKENS ? 0 : Math.ceil((per - (since % per)) / 1000) };
+}
+const avgLvl = team => (team && team.length ? Math.round(team.reduce((t, h) => t + h.lvl, 0) / team.length) : 10);
+
+// three opponents: real players near your rating first, bots for the rest
+async function makeOffers(K, db, me, refLvl) {
+  const players = (await db.opponents(me.user_id, me.rating)).filter(p => p.defense);
+  players.sort(() => Math.random() - 0.5);
+  const offers = players.slice(0, 3).map(p => ({ kind: 'player', user_id: p.user_id, name: p.name, avatar: p.avatar, rating: p.rating, power: p.defense_power, team: preview(p.defense) }));
+  const spread = [-60, 10, 90];
+  for (let i = offers.length; i < 3; i++) {
+    const seed = randSeed(), rating = Math.max(0, me.rating + spread[i] + Math.round((Math.random() - 0.5) * 40));
+    const bot = K.arenaBot(rating, refLvl, seed);
+    offers.push({ kind: 'bot', name: bot.name, avatar: bot.team[0].id, rating, power: K.teamPower(bot.team), team: bot.team });
+  }
+  return offers.sort((a, b) => a.rating - b.rating);
+}
+
+async function state(K, db, me) {
+  const tk = tokensNow(K, me, Date.now());
+  return {
+    rating: me.rating, wins: me.wins, losses: me.losses, defWins: me.def_wins, defLosses: me.def_losses,
+    tokens: tk.tokens, nextToken: tk.next, weekFights: me.week_fights,
+    defense: me.defense ? preview(me.defense) : null, defensePower: me.defense_power,
+    offers: (me.offers || []).map(o => ({ kind: o.kind, name: o.name, avatar: o.avatar, rating: o.rating, power: o.power, team: preview(o.team) })),
+    rewards: await db.unclaimed(me.user_id),
+  };
+}
+
+export async function handle(K, db, user, body) {
+  body = body || {};
+  let me = await db.getPlayer(user.id);
+  const name = clean(body.name), avatar = avatarOk(K, body.avatar);
+  if (!me) me = await db.createPlayer(user.id, { name, avatar });
+  else if (body.name && (me.name !== name || me.avatar !== avatar)) me = await db.updatePlayer(user.id, { name, avatar });
+  const bad = body.team === undefined ? null : K.checkTeam(body.team), team = body.team && !bad ? tidy(body.team) : null;
+
+  if (body.action === 'state') {
+    if (!me.offers) me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
+    return { state: await state(K, db, me) };
+  }
+  if (body.action === 'refresh') {
+    me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
+    return { state: await state(K, db, me) };
+  }
+  if (body.action === 'defense') {
+    if (!team) return { error: 'This team cannot be used (' + (bad || 'no team') + ').', status: 400 };
+    me = await db.updatePlayer(user.id, { defense: team, defense_power: K.teamPower(team) });
+    return { state: await state(K, db, me) };
+  }
+  if (body.action === 'fight') {
+    if (!team) return { error: 'This team cannot be used (' + (bad || 'no team') + ').', status: 400 };
+    const o = (me.offers || [])[body.offer];
+    if (!o) return { error: 'That opponent is gone. Pick another one.', status: 409, state: await state(K, db, me) };
+    let defTeam = o.team, defRating = o.rating, defId = null;
+    if (o.kind === 'player') {
+      const p = await db.getPlayer(o.user_id);
+      if (!p || !p.defense) {
+        me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
+        return { error: 'That player has no defense team any more. New opponents are ready.', status: 409, state: await state(K, db, me) };
+      }
+      defTeam = p.defense; defRating = p.rating; defId = p.user_id;
+    }
+    const left = await db.takeToken(user.id, K.ARENA_TOKEN_MIN, K.ARENA_TOKENS);
+    if (left < 0) { me = await db.getPlayer(user.id); return { error: 'No arena tokens left. A new one comes every hour.', status: 429, state: await state(K, db, me) }; }
+    const seed = randSeed(), me0 = me;
+    const r = await K.arenaFight(team, defTeam, seed);
+    const elo = K.arenaElo(me.rating, defRating, r.win);
+    const res = await db.apply(user.id, defId, elo.att, defId ? elo.def : 0, r.win);
+    await db.log({ attacker: user.id, defender: defId, attacker_name: me.name, defender_name: o.name, seed, win: r.win, att_delta: elo.att, def_delta: defId ? elo.def : 0, att_team: team, def_team: defTeam });
+    // a player without a defense team defends with the team they attack with, so others can find them
+    const patch = { offers: await makeOffers(K, db, { ...me, rating: res.att_rating }, avgLvl(team)) };
+    if (!me.defense) { patch.defense = team; patch.defense_power = K.teamPower(team); }
+    me = await db.updatePlayer(user.id, patch);
+    return {
+      fight: { seed, att: team, def: defTeam, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: me0.rating, opponent: { name: o.name, rating: defRating, kind: o.kind } },
+      state: await state(K, db, me),
+    };
+  }
+  return { error: 'Unknown action.', status: 400 };
+}

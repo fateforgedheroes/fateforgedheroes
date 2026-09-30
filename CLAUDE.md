@@ -24,6 +24,9 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 | `privacy.html favicon.png` | Copied into `dist/`. |
 | `0001_saves.sql` | Supabase table `saves` (one row per user, RLS own-row only) + `delete_my_account()`. |
 | `0002_save_history.sql` | Safety net: trigger `saves_keep_history` copies the old save into `save_history` before every overwrite (max one per 15 min, always when heroes or progress shrink; newest 40 per player). `restore_save(id)` puts one back (SQL Editor only). Run once after 0001. |
+| `0003_arena.sql` | Arena + leaderboards: `arena_players`, `arena_log`, `arena_rewards` (no client writes), `arena_take_token`, `arena_apply`, weekly `arena_week_end` (pg_cron, Monday 00:00 UTC), `claim_arena_rewards()`, `leaderboard(kind)`. |
+| `supabase/functions/arena/` | Edge Function `arena`: `logic.js` (all server rules, no Supabase/Deno APIs, also runs in a browser test with a fake db) + `index.ts` (auth check, REST with the service role). `engine.mjs` is generated at deploy (gitignored). |
+| `.github/workflows/arena-function.yml` | Deploys the Edge Function on pushes to main that touch the engine or the function. Needs repo secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF`. |
 | `campaign-sim.cjs` | Test: for each of the 4 starters, a simulated new player (farms lower stages after a loss, upgrades gear, ascends, buys and summons shards, picks the best team per essence) must finish the campaign within 8,000 battles. Must print PASS 4×; the battle count shows how long the grind is. |
 
 The currency is called **Sigils** in the game but stored as `S.silver` (and `winSilver`, `rankCost().silver`, `TUNE.silver` in the engine); keep those names, saves depend on them. Show it with `ic('coin')` / `sigils(n)` in app.js.
@@ -32,7 +35,7 @@ Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…)
 
 ## Navigation (app.js)
 
-There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab = 'home'`): the homebase map with clickable buildings (`HOME_ZONES`: building box + name plate in image pixels). Active: Campaign, Boss Halls, Summon Altar (Fate Altar), Heroes & Gear, Town Hall (profile). Zones without `go` show a "Coming soon" plate that covers the painted name, so those buildings (forge, arena, research, ship, market, challenge gate) can become any future mode: give the zone a `go`. Every other screen starts with `backBar()` ("‹ Home"; Heroes and Team share a switch). The logo also leads home.
+There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab = 'home'`): the homebase map with clickable buildings (`HOME_ZONES`: building box + name plate in image pixels). Active: Campaign, Boss Halls, Summon Altar (Fate Altar), Heroes & Gear, Town Hall (profile), Arena (`tab = arena`). Zones without `go` show a "Coming soon" plate that covers the painted name, so those buildings (forge, arena, research, ship, market, challenge gate) can become any future mode: give the zone a `go`. Every other screen starts with `backBar()` ("‹ Home"; Heroes and Team share a switch). The logo also leads home.
 
 ## Game systems (engine.js)
 
@@ -50,7 +53,7 @@ There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab 
 - **Boss Hall:** 25 bosses × 10 levels, `bossLvl(i, n)`.
 - **Fate Altar:** `FATE_SHARDS` (fate, greater, ancient, mythic, legendary) with drop chance per win and rarity table. A Fate Shard costs `SHARD_PRICE` (2500) Sigils. Pity: after `PITY_EPIC` (40) summons without an Epic or better, the next one is Epic (`S.pity`); only `PITY_SHARDS` (Ancient, Mythic, Legendary) count and trigger it.
 - **Difficulty / grind:** `K.TUNE` in engine.js. `chDiff` makes campaign enemies stronger per chapter from Chapter III on (0.2 → Chapter X enemies ~2.6× their base), `bossWall` (1.05) extra for stage 7, `xp`/`silver` scale rewards. The game is meant to be a long grind (median ~2,800 battles for the Easy campaign); retune with `campaign-sim.cjs` after balance changes.
-- **Player profile** (`S.p`, app.js): name (first change free, then `RENAME_COST` = 2500 silver; `S.p.renames` counts changes), avatar (a hero id), player level + XP, stats. Player XP comes from battles (`playerWinXp`, curve `pxNeed`); level-ups pay silver, every 5th level a Greater Fate Shard. `PLAYER_UNLOCK` gates tabs: Fate Altar at level 5, Boss Hall at level 10. The header `#account` button opens the profile screen (tab `profiel`), which also holds the cloud account section (`FFH_CLOUD.info()` / `openAccount()`).
+- **Player profile** (`S.p`, app.js): name (first change free, then `RENAME_COST` = 2500 silver; `S.p.renames` counts changes), avatar (a hero id), player level + XP, stats. Player XP comes from battles (`playerWinXp`, curve `pxNeed`); level-ups pay silver, every 5th level a Greater Fate Shard. `PLAYER_UNLOCK` gates tabs: Fate Altar at level 5, Boss Hall at level 10, Arena at level 12. The header `#account` button opens the profile screen (tab `profiel`), which also holds the cloud account section (`FFH_CLOUD.info()` / `openAccount()`).
 - **Auto battle** (`S.auto`) is remembered: once switched on it stays on for every battle until turned off. Auto, speed and give up are small round icon buttons (`.b-ctl .rb`) over the top right of the battle view.
 - **Battle speed** (app.js `SPEED_UNLOCK`): 2× from Chapter I · Stage 4, 3× from Chapter III · Stage 1, 5× from Chapter II · Stage 1 but only when replaying a cleared stage or beaten Boss Hall level. `S.speed` is the preferred speed; `spd` is what the current battle runs at. At 5× (`calm()`) there are no screen flashes or shakes, hit flashes are faint and combat sounds are throttled (`SFX.calm`).
 - **Feeding and skills:** any hero outside the team, or a spare copy (`S.fodder[id]`: captured enemies and Fate Altar duplicates), can be fed for XP (`feedXp`, more for rarer and higher-level food; Rare+ asks "Are you sure?"). A spare copy of the same hero raises its lowest skill by one level instead (`skillUp`). Skills max at `SKILL_MAX` (5), +`SKILL_STEP` (8%) power per level, cooldown −1 at max.
@@ -58,6 +61,8 @@ There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab 
 - **Unlock messages:** `newUnlocks()` after a battle shows a popup for speed 3×, speed 5×, the Fate Altar and the Boss Hall, once each (`S.seen`).
 - **Formation** (app.js `formation`): tanks (role or role2) and warriors stand in the front line (`HERO_POS` 0 and 2), everyone else in the back line (1 and 3); a line with more than two heroes spills over.
 - **Hero Gear tab:** six tiles (one per slot) with an Upgrade button each; tapping a tile opens `gearPop(slot)` with the stats, Upgrade, Swap, Remove. "Upgrade all" (`upgradeAll`) spends Sigils on the worn gear, the most important piece for the hero's role first (`GEAR_PRI`, e.g. tanks HP/DEF), each as far as it goes.
+- **Arena** (player level 12, needs a cloud account): asynchronous; you attack the saved defense teams of other players (or bots while there are few). The server decides everything: the browser sends its team snapshot (`snapTeam` → `K.checkTeam` on the server rejects impossible levels/stars/skills/gear rolls) and which of the three offers it attacks; the Edge Function plays the fight with `K.arenaFight(att, def, seed)`, updates the Elo ratings (`K.arenaElo`, defender moves half) and returns the seed. The game then replays it with `K.arenaSetup` (same seed, same snapshots, both sides on auto): all engine randomness goes through `rnd()` (`K.setRng`, seeded mulberry32), so the replay is identical; visual effects keep using `Math.random`. Tokens: `ARENA_TOKENS` (10), one per `ARENA_TOKEN_MIN` (60) minutes. Weekly rewards by rating tier (`K.ARENA_TIERS`), only for players who attacked that week; the game pays them out on claim. Bots: `K.arenaBot(rating, level, seed)`. Arena defenders line up with `formation()` too.
+- **Leaderboards** (in the Arena screen): Arena (server ratings), Campaign and Boss Hall (read from cloud saves by the `leaderboard` SQL function; only as honest as the saves, so no rewards hang on them).
 
 ## Save format (app.js)
 
@@ -70,12 +75,12 @@ Cloud sync (cloud.js): one row per account in `saves`. Each device stores in loc
 - After changing balance or engine: run `node campaign-sim.cjs` (or `npm test`) and keep it passing.
 - Test in a browser (build, then open `dist/index.html`) before pushing; check the console for errors, also at 390 px width.
 - Never put the Supabase service_role/secret key, Google client secret or database password in code.
-- Anti-cheat is not solved yet: all logic runs client-side. Leaderboards/guilds/arena need server-side checks (Supabase Edge Functions) before rewards count.
+- Anti-cheat: the campaign, loot and upgrades run client-side, so saves can be edited. Arena results are decided on the server, but teams come from the save (checked for plausibility only). Anything that pays out between players needs a server-side check (Supabase Edge Function).
 
 ## Roadmap
 
 1. Tidy repo layout (sources in `src/`, art in `src/assets/`); `build.mjs` already supports it.
 2. Google sign-in (enable provider in Supabase; button appears automatically).
 3. Feedback button → Supabase table.
-4. Leaderboards (server-verified), then guilds with chat and a guild boss, then arena vs saved teams.
+4. Guilds with chat and a guild boss. (Arena and leaderboards: done; next steps could be manual arena play verified by replaying the choices on the server, and a defense log.)
 5. Art still missing for heroes Caelwyn, Ravelyn, Torvane.
