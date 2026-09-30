@@ -33,11 +33,24 @@
   const renameCost = () => (S.p.renames ? RENAME_COST : 0);
   function newPlayer() { return { name: 'Adventurer', avatar: null, renames: 0, lvl: 1, xp: 0, st: { won: 0, lost: 0, bossWon: 0, summons: 0 } }; }
   // fields added to v7 after release: fill them in on load (a player who already changed their name used the free change)
-  function fixup(s) { if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {}; return s; }
+  // Campaign difficulties (K.DIFFS): S.cleared = Easy progress (the old Normal), S.dcl[d] = highest stage cleared on difficulty d >= 1,
+  // S.diff = selected difficulty. The old Brutal mode (S.hard, S.clearedHard) carries over as Normal progress.
+  // S.seen: unlock messages already shown (speed 3×/5×, Fate Altar, Boss Hall); existing players don't get old ones again.
+  function fixup(s) {
+    if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
+    if (!s.dcl) { s.dcl = [null, s.clearedHard ?? -1, -1, -1, -1]; s.diff = 0; delete s.hard; delete s.clearedHard; }
+    if (!s.seen) {
+      s.seen = {};
+      for (const [sp, at] of SPEED_UNLOCK) if (sp > 2 && s.cleared + 1 >= at) s.seen['spd' + sp] = true;
+      for (const k in PLAYER_UNLOCK) if (s.p.lvl >= PLAYER_UNLOCK[k]) s.seen[k] = true;
+    }
+    return s;
+  }
+  const clearedOn = d => (d ? S.dcl[d] ?? -1 : S.cleared);
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
   // A new save has no heroes yet: the player first picks one of K.STARTERS (needStarter), the rest is earned in Chapter I.
   function fresh() {
-    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, clearedHard: -1, hard: false, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
+    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, dcl: [null, -1, -1, -1, -1], diff: 0, seen: {}, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
     for (let i = 0; i < 4; i++) s.inv.push(K.genGear({ il: 1 }, s.nid++));
     return s;
   }
@@ -128,7 +141,7 @@
 
   // ---------- sound ----------
   const SFX = (() => {
-    let ctx = null, master = null;
+    let ctx = null, master = null, volK = 1;
     function ac() {
       if (!S || !S.sound) return null;
       if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.2; master.connect(ctx.destination); } catch (e) { return null; } }
@@ -140,7 +153,7 @@
       const t = c.currentTime + (delay || 0), o = c.createOscillator(), g = c.createGain();
       o.type = type || 'square'; o.frequency.setValueAtTime(freq, t);
       if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq * slide), t + dur);
-      g.gain.setValueAtTime(vol || 0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      g.gain.setValueAtTime((vol || 0.3) * volK, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
       o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.03);
     }
     function noise(dur, vol, hp, delay) {
@@ -148,9 +161,9 @@
       const t = c.currentTime + (delay || 0), b = c.createBuffer(1, Math.floor(c.sampleRate * dur), c.sampleRate), d = b.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
       const s = c.createBufferSource(); s.buffer = b; const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp || 800;
-      const g = c.createGain(); g.gain.value = vol || 0.4; s.connect(f); f.connect(g); g.connect(master); s.start(t);
+      const g = c.createGain(); g.gain.value = (vol || 0.4) * volK; s.connect(f); f.connect(g); g.connect(master); s.start(t);
     }
-    return {
+    const api = {
       unlock() { ac(); },
       hit() { noise(0.1, 0.45, 700); tone(150, 0.09, 'square', 0.18, 0.5); },
       crit() { noise(0.22, 0.7, 250); tone(95, 0.25, 'sawtooth', 0.3, 0.4); tone(900, 0.1, 'square', 0.12, 1.6, 0.03); },
@@ -171,6 +184,19 @@
       up() { tone(660, 0.1, 'square', 0.12, 1.5); tone(990, 0.15, 'square', 0.1, 1.2, 0.08); },
       fail() { tone(200, 0.25, 'square', 0.15, 0.6); },
     };
+    // calm mode (5× battles): combat sounds play at most once per 400 ms, at half volume
+    const COMBAT = ['hit', 'crit', 'swing', 'arrow', 'magic', 'fire', 'boom', 'heal', 'buff', 'shield', 'death', 'banner'];
+    let last = 0;
+    api.calm = false;
+    for (const k of COMBAT) {
+      const f = api[k];
+      api[k] = (...a) => {
+        if (!api.calm) return f(...a);
+        const now = performance.now(); if (now - last < 400) return; last = now;
+        volK = 0.5; f(...a); volK = 1;
+      };
+    }
+    return api;
   })();
 
   // ---------- helpers ----------
@@ -181,7 +207,46 @@
   const ic = (name, cls) => name === 'stone' ? `<img class="shard-ic ${cls || 'ic'}" src="${STONE_ART}" alt="Ascension Stone">`
     : name === 'coin' ? `<img class="sigil-ic ${cls || 'ic'}" src="${SIGIL_ART}" alt="Sigils">`
     : `<img class="spr ${cls || 'ic'}" src="${SPR.iconUrl(name, 2)}" alt="">`;
-  const sigils = n => `${ic('coin')} ${n.toLocaleString('en-US')} Sigils`;
+  const LOCK_SVG = '<svg class="lock-ic" viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  const glyph = d => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${d}" fill="currentColor"/></svg>`;
+  const SLOT_GLYPH = {
+    wapen: glyph('M12.6 1.2h2.2v2.2L6.7 11.5 4.5 9.3zM3.2 9.6l3.2 3.2-1.1 1.1-.9-.9-1.7 1.7-1.3-1.3 1.7-1.7-.9-.9z'),
+    helm: glyph('M3 9.2a5 5 0 0 1 10 0V14h-2.8v-3.6H5.8V14H3zM7.2 2.2h1.6v2H7.2z'),
+    schild: glyph('M8 1l6 2.2v4.2c0 3.9-2.8 6.4-6 7.8-3.2-1.4-6-3.9-6-7.8V3.2zm0 2.3v9.4c2-1 3.8-2.8 3.8-5.3V4.7z'),
+    handschoenen: glyph('M4 15V7.5h.9V3.4h1.5v4h.8V2.2h1.5v5.2h.8V3.1H11v4.6h.8V6.2h1.4v5.2c0 2.2-1.6 3.6-3.9 3.6z'),
+    borstpantser: glyph('M5 1.5h6l3.2 2.6-1.6 3.1-1.1-.8V14.5h-7V6.4l-1.1.8L1.8 4.1zM6.3 3 8 4.8 9.7 3z'),
+    laarzen: glyph('M5 1.5h4.2v7.6l4.6 2.3c.5.3.7.7.7 1.2v1.9H3.4v-3.3L5 9.4z'),
+  };
+  // which stats matter most per role, used by "Upgrade all" to upgrade the most important gear first
+  const GEAR_PRI = {
+    Tank: { hp: 3, hpP: 3, def: 3, defP: 3, res: 2, spd: 2, acc: 1, atk: 0.5, atkP: 0.5, crit: 0.3, cdmg: 0.3 },
+    Warrior: { atk: 3, atkP: 3, hp: 2, hpP: 2, def: 2, defP: 2, crit: 2, cdmg: 2, spd: 2, acc: 1, res: 1 },
+    Assassin: { atk: 3, atkP: 3, crit: 3, cdmg: 3, spd: 2, acc: 1, hp: 1, hpP: 1, def: 0.5, defP: 0.5, res: 0.5 },
+    Ranger: { atk: 3, atkP: 3, crit: 3, cdmg: 3, spd: 2, acc: 1.5, hp: 1, hpP: 1, def: 0.5, defP: 0.5, res: 0.5 },
+    Mage: { atk: 3, atkP: 3, crit: 2, cdmg: 2, acc: 2.5, spd: 2, hp: 1, hpP: 1, def: 0.5, defP: 0.5, res: 1 },
+    Support: { hp: 3, hpP: 3, spd: 3, def: 2, defP: 2, res: 2, acc: 1, atk: 1, atkP: 1, crit: 0.5, cdmg: 0.5 },
+    Controller: { acc: 3, spd: 3, hp: 2, hpP: 2, atk: 1.5, atkP: 1.5, def: 1.5, defP: 1.5, res: 1.5, crit: 1, cdmg: 1 },
+  };
+  function gearPri(heroId, it) {
+    const c = C[heroId], a = GEAR_PRI[c.role] || GEAR_PRI.Warrior, b = GEAR_PRI[c.role2];
+    const w = k => b ? (a[k] || 0) * 0.75 + (b[k] || 0) * 0.25 : a[k] || 0;
+    return w(it.main) * 2 + it.subs.reduce((s, x) => s + w(x[0]) * 0.5, 0) + it.rar * 0.1;
+  }
+  // upgrades the hero's gear, most important item first, each as far as it goes, until the Sigils run out
+  function upgradeAll(heroId) {
+    const list = itemsOf(heroId).sort((x, y) => gearPri(heroId, y) - gearPri(heroId, x));
+    let ok = 0, fail = 0, spent = 0;
+    for (const it of list) {
+      while (it.lvl < K.MAX_GEAR_LVL && S.silver >= K.upgradeCost(it)) {
+        const cost = K.upgradeCost(it); S.silver -= cost; spent += cost;
+        if (Math.random() < K.upgradeChance(it)) { it.lvl++; K.upgradeMilestone(it); ok++; } else fail++;
+      }
+    }
+    return { ok, fail, spent };
+  }
+  // gear rarities as coloured words, e.g. "Rare / Epic"
+  const rarsHtml = rars => rars.map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' / ');
+  const sigils = n =>`${ic('coin')} ${n.toLocaleString('en-US')} Sigils`;
   const itemsOf = id => S.inv.filter(it => it.owner === id);
   const itemName = it => `${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()}${it.lvl ? ' +' + it.lvl : ''}`;
   const starStr = (n, max) => `<span class="stars" title="${n} sterren">${'★'.repeat(n)}<i>${'★'.repeat((max || K.MAX_STARS) - n)}</i></span>`;
@@ -304,14 +369,14 @@
   const stageName = i => { const st = K.STAGES[i]; return `Chapter ${ROMAN[st.chapter]} · Stage ${st.n + 1}`; };
   const dropName = st => st.slot ? K.SLOT_NAMES[st.slot] : 'Random gear';
   function campaignHtml() {
-    const hard = S.hard, cleared = hard ? S.clearedHard : S.cleared, next = cleared + 1;
+    const d = S.diff || 0, D = K.DIFFS[d], hard = d > 0, cleared = clearedOn(d), next = cleared + 1;
     const strip = S.team.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
     const chap = Math.min(S.chap ?? maxChap, maxChap);
     const tile = (st, i) => {
       const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
       const label = state === 'cleared' ? 'Cleared' : state === 'next' ? 'Next' : 'Locked';
-      const lvl = st.lvl + (hard ? K.HARD_BONUS : 0);
+      const lvl = st.lvl + D.lvl;
       const rw = [];
       if (!hard && st.unlock && !S.roster[st.unlock]) rw.push(`<span class="rw">${por(st.unlock)}${esc(C[st.unlock].short)}</span>`);
       if (i > cleared) rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
@@ -319,18 +384,19 @@
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span><span class="st-state tag">${label}</span></div>
         <div class="st-foes">${st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('')}</div>
         <div class="st-meta">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')} ${K.PHASES} phases · ${st.phases.map(p => p.length).join('+')} enemies · level ${lvl}${st.boss ? ` · <span class="boss">Boss: ${esc(st.boss)}</span>` : ''}</div>
-        <div class="st-drop"><span class="aff" style="--c:var(--gold)">${st.slot ? K.SLOT_NAMES[st.slot][0] : '?'}</span>Drops: ${dropName(st)} · ${K.SETS[st.set].name}</div>
+        <div class="st-drop"><span class="aff" style="--c:var(--gold)">${st.slot ? K.SLOT_NAMES[st.slot][0] : '?'}</span>Drops: ${dropName(st)} · ${K.SETS[st.set].name} · ${rarsHtml(D.rars)}</div>
         ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}</button>`;
     };
-    const hardOk = S.cleared >= K.STAGES.length - 1;
+    const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
     const chapBtns = K.CHAPTERS.map((ch, c) => {
       const done = K.STAGES.filter(st => st.chapter === c).filter(st => K.STAGES.indexOf(st) <= cleared).length;
       return `<button type="button" class="${c === chap ? 'sel' : ''} ${done === 7 ? 'done' : ''}" data-act="chap" data-n="${c}" ${c > maxChap ? 'disabled' : ''} title="${esc(ch.name)} · ${done}/7">${ROMAN[c]}</button>`;
     }).join('');
     const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
     const cdone = idx.filter(i => i <= cleared).length;
-    return `<div class="${hard ? 'hardmode' : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need.</p>
-        <div style="margin-top:10px" class="seg" role="group" aria-label="Difficulty"><button type="button" data-act="mode" data-hard="0" aria-pressed="${!hard}">Normal</button><button type="button" data-act="mode" data-hard="1" aria-pressed="${hard}" ${hardOk ? '' : 'disabled title="Beat Chapter X on Normal first"'}>Brutal${hardOk ? '' : ' (after Chapter X)'}</button></div></div>
+    return `<div class="${hard ? 'hardmode diff-' + D.id : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need.</p>
+        <div style="margin-top:10px" class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
+        <p class="diff-note">${esc(D.name)}: ${d ? `enemies +${D.lvl} levels and much stronger. ` : ''}Gear drops: ${rarsHtml(D.rars)} only.${d < K.DIFFS.length - 1 ? ` Clear all ${K.STAGES.length} stages to open ${K.DIFFS[d + 1].name}.` : ''}</p></div>
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
       <div class="area-label tag">Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)} · ${cdone}/7 cleared</div>
@@ -403,7 +469,7 @@
         <div class="altar-stage">${shardAnim('legendary').replace('class="fs-anim"', 'class="fs-anim big"')}
           <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${sigils(K.SHARD_PRICE)}</button></div>
           <span class="empty-note">Fate Shards drop from every victory in the campaign and the Boss Hall. First clears give a guaranteed shard.</span>
-          <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div></div>
+          <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><small class="empty-note">Only Ancient, Mythic and Legendary Fate Shards count towards this.</small><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div></div>
         </div>
         <div class="fs-grid">${cards}</div>
       </div>`;
@@ -470,7 +536,7 @@
     const essences = ['all', ...K.ESSENCES].map(a => `<button type="button" class="ess-f ${TF.aff === a ? 'on' : ''}" data-act="tfaff" data-aff="${a}" aria-pressed="${TF.aff === a}" title="${a === 'all' ? 'All essences' : a}">${a === 'all' ? 'All' : affChip(a)}</button>`).join('');
     return `<div class="tfilter">
       <div class="tf-ess" role="group" aria-label="Essence">${essences}</div>
-      <label>Rarity<select data-filter="rar">${opt('all', 'All', TF.rar)}${K.RARITIES.map((r, i) => opt(i, r, TF.rar)).join('')}</select></label>
+      <label>Rarity<select data-filter="rar">${opt('all', 'All', TF.rar)}${K.RARITIES.slice(0, 5).map((r, i) => opt(i, r, TF.rar)).join('')}</select></label>
       <label>Class<select data-filter="role">${opt('all', 'All', TF.role)}${CLASSES.map(r => opt(r, r, TF.role)).join('')}</select></label>
       <label>Sort by<select data-filter="sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select></label>
       <label class="tf-check"><input type="checkbox" data-filter="unowned" ${TF.unowned ? 'checked' : ''}> Show unowned</label>
@@ -496,13 +562,13 @@
     }
     const items = itemsOf(id), counts = K.setCounts(items);
     const setInfo = Object.keys(counts).map(k => { const SS = K.SETS[k], on = counts[k] >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${counts[k]}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }).join('');
+    // gear: one compact tile per slot (tap it for the item's stats), with its own Upgrade button
     const gear = K.SLOTS.map(slot => {
       const it = items.find(x => x.slot === slot);
-      if (!it) return `<div class="gslot empty"><span class="tag">${K.SLOT_NAMES[slot]}</span><span class="empty-note">Nothing equipped</span><div class="row"><button class="btn small" data-act="inv" data-slot="${slot}">Choose</button></div></div>`;
+      if (!it) return `<div class="gtile empty"><button type="button" class="gt-main" data-act="inv" data-slot="${slot}" aria-label="Choose a ${K.SLOT_NAMES[slot].toLowerCase()}"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${SLOT_GLYPH[slot]}</span><span class="gt-name">Empty</span></button><button type="button" class="btn small" data-act="inv" data-slot="${slot}">Choose</button></div>`;
       const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it);
-      return `<div class="gslot rar-${it.rar}"><span class="tag">${K.SLOT_NAMES[slot]} · level ${it.il}</span><span class="item-name">${itemName(it)}</span><span class="item-set">${K.SETS[it.set].name}</span>${itemStatsHtml(it)}
-        <div class="row"><button class="btn small primary" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade · ${ic('coin')} ${cost.toLocaleString('en-US')} · ${Math.round(K.upgradeChance(it) * 100)}%`}</button>
-        <button class="btn small" data-act="inv" data-slot="${slot}">Swap</button><button class="btn small" data-act="unequip" data-item="${it.id}">Remove</button></div></div>`;
+      return `<div class="gtile rar-${it.rar}"><button type="button" class="gt-main" data-act="gearpop" data-slot="${slot}" aria-label="${esc(itemName(it))}: show stats"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${SLOT_GLYPH[slot]}${it.lvl ? `<i class="gt-lv">+${it.lvl}</i>` : ''}</span><span class="gt-name rartxt">${K.RARITIES[it.rar]}</span><span class="gt-set">${K.SETS[it.set].name.replace(/ Set$/, '')}</span></button>
+        <button type="button" class="btn small primary gt-up" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade<small>${ic('coin')}${cost.toLocaleString('en-US')}</small>`}</button></div>`;
     }).join('');
     let inv = '';
     if (invSlot) {
@@ -525,7 +591,7 @@
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
         <div class="dpanel" data-p="skills">${skills}</div>
-        <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><div class="gear-acts"><button class="btn small" data-act="bestgear">Equip best gear</button><button class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all gear</button></div></div>${setInfo ? `<div class="setbonus" style="margin-bottom:10px">${setInfo}</div>` : ''}<div class="gear-slots">${gear}</div>${inv}</div>
+        <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><div class="gear-acts"><button class="btn small" data-act="bestgear">Equip best gear</button><button class="btn small primary" data-act="upall" ${items.some(x => x.lvl < K.MAX_GEAR_LVL) ? '' : 'disabled'}>Upgrade all</button><button class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div></div><div class="gear-grid">${gear}</div>${setInfo ? `<div class="setbonus">${setInfo}<small class="empty-note">A set bonus counts once, however many extra pieces you wear.</small></div>` : ''}${inv}</div>
         <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
       </div></div>`;
   }
@@ -559,6 +625,20 @@
     m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cf-q"><h2 id="cf-q">${title}</h2><p class="lede">${text}</p>
       <div class="modal-actions"><button class="btn primary" data-act="cfyes">${yes}</button><button class="btn" data-act="cfno">Cancel</button></div></div>`;
     m.hidden = false; m.querySelector('.btn').focus();
+  }
+  // popup with the stats of the item in `slot` of the selected hero, with Upgrade / Swap / Remove
+  function gearPop(slot) {
+    const it = itemsOf(selChamp).find(x => x.slot === slot), m = $('#modal');
+    if (!it) { m.hidden = true; return; }
+    const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it), SS = K.SETS[it.set];
+    m.innerHTML = `<div class="modal-box gear-pop rar-${it.rar}" role="dialog" aria-modal="true" aria-labelledby="gp-t">
+      <div class="gp-head"><span class="gt-ic">${SLOT_GLYPH[slot]}</span><div><h2 id="gp-t" class="rartxt">${esc(itemName(it))}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
+      ${itemStatsHtml(it)}
+      <p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>
+      ${maxed ? '' : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
+      <div class="modal-actions"><button class="btn primary" data-act="up" data-item="${it.id}" data-pop="1" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Upgrade'}</button><button class="btn" data-act="inv" data-slot="${slot}">Swap</button><button class="btn" data-act="unequip" data-item="${it.id}">Remove</button><button class="btn" data-act="gpclose">Close</button></div></div>`;
+    m.hidden = false;
+    const f = m.querySelector('.btn:not(:disabled)'); if (f) f.focus();
   }
   // gives XP to the selected hero; returns the levels gained
   function giveXp(gain) {
@@ -644,7 +724,7 @@
           <small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP</small></div></div>
       <div class="prof-cols">
         <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out Sigils. Every fifth level also gives a Greater Fate Shard.</p></section>
-        <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${S.clearedHard >= 0 ? stat('Brutal stages cleared', `${S.clearedHard + 1} / ${K.STAGES.length}`) : ''}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
+        <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
@@ -691,7 +771,7 @@
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
     else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
-    else if (act === 'mode') { S.hard = a.dataset.hard === '1'; delete S.chap; save(); render(); }
+    else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'play') startCampaign(+a.dataset.stage);
     else if (act === 'bhsel') { S.bhCur = id; save(); render(); }
@@ -707,12 +787,12 @@
       save(); render();
     } else if (act === 'sel') { selChamp = id; invSlot = null; render(); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
-    else if (act === 'inv') { invSlot = a.dataset.slot; champTab = 'gear'; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+    else if (act === 'inv') { $('#modal').hidden = true; invSlot = a.dataset.slot; champTab = 'gear'; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     else if (act === 'invclose') { invSlot = null; render(); }
     else if (act === 'equip' && item) {
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = selChamp; invSlot = null; save(); render(); toast(`${itemName(item)} equipped.`);
-    } else if (act === 'unequip' && item) { item.owner = null; save(); render(); }
+    } else if (act === 'unequip' && item) { $('#modal').hidden = true; item.owner = null; save(); render(); }
     else if (act === 'sell' && item) { const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); save(); render(); toast(`Sold for ${v} Sigils.`); }
     else if (act === 'sellbad') {
       const bad = S.inv.filter(x => !x.owner && x.rar <= 1 && x.lvl === 0);
@@ -725,6 +805,20 @@
       if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
       else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
       save(); render();
+      if (a.dataset.pop) gearPop(item.slot);
+    } else if (act === 'gearpop') gearPop(a.dataset.slot);
+    else if (act === 'gpclose') $('#modal').hidden = true;
+    else if (act === 'upall') {
+      const h = selChamp, worn = itemsOf(h).filter(x => x.lvl < K.MAX_GEAR_LVL);
+      if (!worn.length) return;
+      const first = [...worn].sort((x, y) => gearPri(h, y) - gearPri(h, x))[0];
+      confirmBox('Upgrade all gear?', `Upgrades the gear of <b>${esc(C[h].short)}</b> as far as your ${sigils(S.silver)} go, the most important piece for ${/^[AEIOU]/.test(C[h].role) ? "an" : "a"} ${esc(roleStr(C[h]))} first (starting with the ${K.SLOT_NAMES[first.slot].toLowerCase()}). Failed attempts cost Sigils too.`, 'Upgrade all', () => {
+        const r = upgradeAll(h);
+        $('#modal').hidden = true;
+        if (!r.ok && !r.fail) { toast('Not enough Sigils for any upgrade.', true); return; }
+        (r.ok ? SFX.up : SFX.fail)(); save(); render();
+        toast(`${r.ok} ${r.ok === 1 ? 'upgrade' : 'upgrades'} succeeded, ${r.fail} failed · −${r.spent.toLocaleString('en-US')} Sigils.`, !r.ok, 3600);
+      });
     } else if (act === 'bestgear') {
       const h = S.roster[selChamp]; let changed = 0;
       for (const slot of K.SLOTS) {
@@ -812,7 +906,7 @@
   // Speeds unlock with campaign progress (stage index that must be reached); 5× only when replaying something already beaten.
   const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
   let spd = 1, speeds = [1];
-  const beatenBefore = cfg => cfg.type === 'stage' ? cfg.i <= (cfg.hard ? S.clearedHard : S.cleared) : cfg.n <= (S.bh[cfg.id] || 0);
+  const beatenBefore = cfg => cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0);
   function speedsFor(cfg) {
     const reached = S.cleared + 1, replay = beatenBefore(cfg);
     return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
@@ -850,8 +944,21 @@
     const m = info(u.id);
     u._rs = { x, y, hx: x, ox: off || 0, oy: 0, flash: 0, alpha: 1, glow: 0, phase: Math.random() * 4, m, pose: null, poseUntil: 0, popN: 0, jump: 0 };
   }
+  // formation: tanks and warriors in the front line (HERO_POS 0 and 2), attackers and supports behind them (1 and 3);
+  // a line with more than two heroes spills over into the other one
+  const FRONT_ROLES = ['Tank', 'Warrior'];
+  const frontRank = u => { const c = C[u.id] || {}; return c.role === 'Tank' ? 0 : c.role2 === 'Tank' ? 1 : FRONT_ROLES.includes(c.role) ? 2 : 3; };
+  function formation(heroes) {
+    const sorted = [...heroes].sort((a, b) => frontRank(a) - frontRank(b));
+    const front = sorted.filter(u => frontRank(u) < 3), back = sorted.filter(u => frontRank(u) === 3);
+    const out = new Map(), fs = [0, 2], bs = [1, 3];
+    for (const u of front) out.set(u, fs.length ? fs.shift() : bs.shift());
+    for (const u of back) out.set(u, bs.length ? bs.shift() : fs.shift());
+    return out;
+  }
   function layout(heroes, enemies) {
-    heroes.forEach((u, i) => place(u, HERO_POS[i], -220));
+    const pos = formation(heroes);
+    heroes.forEach(u => place(u, HERO_POS[pos.get(u)], -220));
     const boss = enemies.find(u => u.big || u.id === 'morwenna');
     if (boss) {
       let a = 0;
@@ -928,7 +1035,9 @@
     $('#ov').appendChild(el);
     setTimeout(() => { el.remove(); rs.popN = Math.max(0, rs.popN - 1); }, 1050);
   }
-  function flash() { const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+  // calm() = 5× speed: no screen flashes or shakes and fewer sounds (too flashy at that speed)
+  const calm = () => spd >= 5;
+  function flash() { if (calm()) return; const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
   const center = u => [u._rs.x + u._rs.ox, u._rs.y - u._rs.m.top * 0.5];
   const headOf = u => [u._rs.x + u._rs.ox, u._rs.y - u._rs.m.top];
 
@@ -1066,7 +1175,7 @@
   function setPose(u, pose, ms) { u._rs.pose = pose; u._rs.poseUntil = performance.now() + ms / spd; }
   function frame(now) {
     if (!R.running) return;
-    const sh = R.shake > 0.3 ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 ? Math.round((Math.random() - 0.5) * R.shake) : 0;
+    const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
     R.shake *= 0.86;
     g.setTransform(1, 0, 0, 1, -VIEW.x, 0);
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
@@ -1206,7 +1315,7 @@
       R.dim = 0;
     },
     hit: (t, amt, info) => {
-      const rs = t._rs; rs.flash = 1;
+      const rs = t._rs; rs.flash = calm() ? 0.35 : 1;
       if (info.kind === 'poison' || info.kind === 'burn' || info.kind === 'bleed') { popup(t, '-' + amt, info.kind); rise(rs.x, rs.y - 10, info.kind === 'burn' ? ['#ff8a2a', '#ffd060'] : info.kind === 'bleed' ? ['#e0303a', '#801018'] : ['#a8e060', '#6a9a3a'], 6, 16); }
       else {
         if (info.hit === 'strong') popup(t, 'STRONG HIT', 'strong'); else if (info.hit === 'weak') popup(t, 'WEAK HIT', 'weak');
@@ -1309,8 +1418,8 @@
       else { selSkill = n - 1; refreshChoice(); }
     }
   });
-  function setAutoBtn() { const b = $('#b-auto'); b.textContent = 'Auto: ' + (S.auto ? 'on' : 'off'); b.classList.toggle('on', S.auto); }
-  function setSpeedBtn() { const b = $('#b-speed'); b.textContent = 'Speed ' + spd + '×'; b.classList.toggle('on', spd > 1); b.title = speedHint() || 'Battle speed'; }
+  function setAutoBtn() { const b = $('#b-auto'); b.classList.toggle('on', S.auto); b.setAttribute('aria-pressed', S.auto ? 'true' : 'false'); b.title = 'Auto battle: ' + (S.auto ? 'on' : 'off'); }
+  function setSpeedBtn() { const b = $('#b-speed'); b.innerHTML = `<b>${spd}×</b>`; b.classList.toggle('on', spd > 1); b.title = 'Battle speed ' + spd + '×' + (speedHint() ? '. ' + speedHint() : ''); b.setAttribute('aria-label', b.title); SFX.calm = calm(); }
   $('#b-auto').addEventListener('click', () => {
     S.auto = !S.auto; save(); setAutoBtn();
     if (B) B.b.auto = S.auto;
@@ -1323,8 +1432,8 @@
   });
   $('#b-quit').addEventListener('click', () => {
     const btn = $('#b-quit');
-    if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.textContent = 'Sure? Click again'; setTimeout(() => { btn.textContent = 'Give up'; }, 3000); return; }
-    quitArm = 0; btn.textContent = 'Give up';
+    if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to give up'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up'); }, 3000); return; }
+    quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up');
     if (!B) return;
     B.b.aborted = true;
     if (pending) { const { u, res, b } = pending; pending = null; res(b.ai(u)); }
@@ -1332,16 +1441,16 @@
 
   // ----- start / intro / finish -----
   function startCampaign(i) {
-    const st = K.STAGES[i], hard = S.hard, lvl = st.lvl + (hard ? K.HARD_BONUS : 0);
+    const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = st.lvl + D.lvl;
     S.chap = st.chapter;
-    runBattle({ type: 'stage', i, hard, lvl, stage: st, foes: st.foes, area: st.area, title: `${stageName(i)}${hard ? ' · Brutal' : ''}${st.boss ? ' · ' + st.boss : ''}` });
+    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n) {
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
     runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
-  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p) : cfg.phases[p].map(f => K.enemyUnit(f, cfg.lvl));
+  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : cfg.phases[p].map(f => K.enemyUnit(f, cfg.lvl));
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
     const alive = heroes.filter(u => u.alive);
@@ -1370,8 +1479,7 @@
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
-    // auto battle starts off for every stage; switched on, it lasts for all phases of this stage only
-    S.auto = false;
+    // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
     b.auto = S.auto;
     B = { b, cfg, ph: 0, nPh: K.PHASES };
@@ -1446,6 +1554,30 @@
     }
     return ups;
   }
+  // unlock messages (S.seen remembers which were shown): speed 3× and 5×, Fate Altar, Boss Hall
+  function newUnlocks() {
+    const out = [];
+    for (const [sp, at] of SPEED_UNLOCK) if (sp > 2 && !S.seen['spd' + sp] && S.cleared + 1 >= at) {
+      S.seen['spd' + sp] = true;
+      out.push({ k: 'spd', title: `Speed ${sp}× unlocked`, text: sp === 5 ? 'Battles can now run at 5× when you replay a stage you already cleared or a Boss Hall level you already beat.' : `Tap the speed button in battle to switch to ${sp}×.` });
+    }
+    for (const k in PLAYER_UNLOCK) if (!S.seen[k] && S.p.lvl >= PLAYER_UNLOCK[k]) {
+      S.seen[k] = true;
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+    }
+    return out;
+  }
+  function showUnlocks(list) {
+    if (!list.length) return;
+    const u = list[0], el = document.createElement('div');
+    el.className = 'unlock-pop'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-label', u.title);
+    const svg = u.k === 'spd' ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3l6 5-6 5zM8 3l6 5-6 5z" fill="currentColor"/></svg>' : LOCK_SVG.replace('M5 7V5a3 3 0 0 1 6 0v2', 'M5 7V5a3 3 0 0 1 6 0');
+    el.innerHTML = `<div class="unlock-card"><div class="unlock-ic">${svg}</div><span class="tag">New unlock</span><h2>${esc(u.title)}</h2><p>${esc(u.text)}</p><button class="btn primary" type="button">${list.length > 1 ? 'Next' : 'Great!'}</button></div>`;
+    document.body.appendChild(el);
+    SFX.up();
+    const btn = el.querySelector('button'); btn.focus();
+    btn.addEventListener('click', () => { el.remove(); showUnlocks(list.slice(1)); });
+  }
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
     const items = [], loot = [];
@@ -1454,10 +1586,10 @@
     if (win) {
       xp = K.winXp(lvl); silver = K.winSilver(lvl);
       if (cfg.type === 'stage') {
-        const hard = cfg.hard, cleared = hard ? S.clearedHard : S.cleared;
-        if (cfg.i > cleared) { first = true; if (hard) S.clearedHard = cfg.i; else S.cleared = cfg.i; gotShards.push(cfg.stage.n === 6 ? 'greater' : 'fate'); stones = 3; }
+        const hard = cfg.hard, cleared = clearedOn(cfg.diff);
+        if (cfg.i > cleared) { first = true; if (cfg.diff) S.dcl[cfg.diff] = cfg.i; else S.cleared = cfg.i; gotShards.push(cfg.stage.n === 6 ? 'greater' : 'fate'); stones = 3; }
         else { stones = Math.random() < 0.35 ? 1 : 0; }
-        if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), rarBoost: (hard ? 0.15 : 0) + (cfg.stage.slot ? 0 : 0.1), sets: [cfg.stage.set] }, S.nid++));
+        if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), ...K.stageLoot(cfg.stage, cfg.diff), sets: [cfg.stage.set] }, S.nid++));
         if (first && cfg.stage.n === 6) delete S.chap;
         const u = K.STAGES[cfg.i].unlock;
         const catchable = [...new Set(cfg.stage.phases.flat())].filter(f => !K.BOSSES[f]);
@@ -1474,7 +1606,7 @@
         if (first && cfg.n === 5) gotShards.push('greater');
         if (first && cfg.n === 10) gotShards.push('ancient');
         const drops = 1 + (cfg.n >= 5 ? 1 : 0) + (first ? 1 : 0);
-        for (let i = 0; i < drops; i++) loot.push(K.genGear({ il: lvl, rarBoost: 0.12 + cfg.n * 0.015, sets: K.bossSets(cfg.bi) }, S.nid++));
+        for (let i = 0; i < drops; i++) loot.push(K.genGear({ il: lvl, ...K.bossLoot(cfg.n), sets: K.bossSets(cfg.bi) }, S.nid++));
         if (first && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length) S.bhCur = K.BOSS_ORDER[cfg.bi + 1];
       }
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
@@ -1487,6 +1619,7 @@
     const pxp = win ? playerWinXp(lvl, first, cfg.type === 'boss') : b.aborted ? 0 : Math.round(playerWinXp(lvl) * 0.25);
     const pups = grantPlayerXp(pxp);
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
+    const unlocks = newUnlocks();
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
@@ -1508,7 +1641,8 @@
     }
     const isStage = cfg.type === 'stage';
     const last = isStage && cfg.i === K.STAGES.length - 1;
-    const note = win && first && last && !cfg.hard ? '<p class="lede">You finished all ten chapters. Brutal difficulty is now open.</p>'
+    const nd = isStage && K.DIFFS[cfg.diff + 1];
+    const note = win && first && last ? `<p class="lede">You finished all ten chapters on ${K.DIFFS[cfg.diff].name}.${nd ? ` ${nd.name} difficulty is now open: tougher enemies, better gear (${rarsHtml(nd.rars)}).` : ' You beat the hardest difficulty!'}</p>`
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
       : win ? '' : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits.</p>';
@@ -1522,6 +1656,7 @@
     m.innerHTML = `<div class="modal-box ${win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)}${win && first ? ' · first clear' : ''}</p>${mvp}<ul class="rewards">${items.join('')}</ul>${note}<div class="modal-actions">${openBtns}${acts}</div></div>`;
     m.hidden = false;
     const f = m.querySelector('.btn'); if (f) f.focus();
+    setTimeout(() => showUnlocks(unlocks), 500);
   }
   function endBattleView() {
     R.running = false; pending = null;

@@ -18,7 +18,7 @@
   --bad: #d9533f;
   --info: #7fb2e8;
   --violet: #b08aff;
-  --r0: #9a948c; --r1: #6fbf5a; --r2: #5a9ae8; --r3: #b07ae8; --r4: #e8b83b;
+  --r0: #9a948c; --r1: #6fbf5a; --r2: #5a9ae8; --r3: #b07ae8; --r4: #e8b83b; --r5: #ff4a4a;
   --font-display: "Cinzel", "Trajan Pro", Georgia, "Times New Roman", serif;
   --font-body: "Crimson Pro", Georgia, "Times New Roman", serif;
   --font-tag: "Cinzel", Georgia, serif;
@@ -70,7 +70,7 @@ h3 { font-size: 1.05rem; color: var(--gold); margin-bottom: 8px; }
 .btn img { width: 16px; height: 16px; vertical-align: -3px; }
 
 .aff { display: inline-grid; place-items: center; width: 18px; height: 18px; background: var(--c); color: #140f12; font-family: var(--font-tag); font-size: 10px; font-weight: 700; flex: none; }
-.rar-0 { --rc: var(--r0); } .rar-1 { --rc: var(--r1); } .rar-2 { --rc: var(--r2); } .rar-3 { --rc: var(--r3); } .rar-4 { --rc: var(--r4); }
+.rar-0 { --rc: var(--r0); } .rar-1 { --rc: var(--r1); } .rar-2 { --rc: var(--r2); } .rar-3 { --rc: var(--r3); } .rar-4 { --rc: var(--r4); } .rar-5 { --rc: var(--r5); }
 .rartxt { color: var(--rc); }
 .stars { color: var(--gold); letter-spacing: 1px; font-size: .9rem; white-space: nowrap; }
 .stars i { color: #4a4050; font-style: normal; }
@@ -210,6 +210,47 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .setbonus { display: flex; flex-direction: column; gap: 4px; font-size: .92rem; }
 .setbonus .on { color: var(--good); }
 .setbonus .off { color: var(--muted); }
+/* campaign difficulty */
+.seg.diffs { flex-wrap: wrap; }
+.seg.diffs button { display: inline-flex; align-items: center; gap: 4px; }
+.lock-ic { width: 12px; height: 12px; flex: none; }
+.diff-note { margin: 6px 0 0; color: var(--muted); font-size: .92rem; }
+.diff-note b, .st-drop b.rartxt { font-weight: 600; }
+.diff-normal .stage.next { border-color: var(--r2); }
+.diff-hard .stage.next { border-color: var(--r3); }
+.diff-brutal .stage.next { border-color: var(--r4); }
+.diff-nightmare .stage.next { border-color: var(--r5); }
+/* gear tiles (hero Gear tab) */
+.gear-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.gtile { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.gt-main { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; background: var(--panel-2); border: 2px solid var(--rc, var(--line)); box-shadow: inset 0 0 18px -8px var(--rc, transparent); color: var(--fg); cursor: pointer; min-width: 0; font: inherit; }
+.gt-main:hover { filter: brightness(1.15); }
+.gt-main:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.gtile.empty .gt-main { border-style: dashed; border-color: var(--line); color: var(--muted); box-shadow: none; }
+.gt-slot { font-family: var(--font-tag); font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+.gt-ic { position: relative; width: 34px; height: 34px; color: var(--rc, var(--muted)); display: grid; place-items: center; }
+.gt-ic svg { width: 30px; height: 30px; }
+.gt-lv { position: absolute; right: -10px; bottom: -4px; font-style: normal; font-family: var(--font-tag); font-size: 10px; background: var(--gold); color: #1a130a; padding: 1px 3px; line-height: 1.1; }
+.gt-name { font-size: .85rem; line-height: 1.1; }
+.gt-set { font-size: .72rem; color: var(--muted); line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.gt-up { display: flex; flex-direction: column; align-items: center; line-height: 1.1; padding: 4px 2px; min-height: 38px; justify-content: center; }
+.gt-up small { display: inline-flex; align-items: center; gap: 2px; font-size: .72rem; opacity: .9; letter-spacing: 0; }
+.gt-up small img.ic { width: 12px; height: 12px; }
+.gear-pop .gp-head { display: flex; gap: 10px; align-items: center; }
+.gear-pop .gp-head h2 { font-size: 1.4rem; color: var(--rc); }
+.modal-box.gear-pop { border-color: var(--rc); }
+.gear-pop .item-stats { font-size: 1rem; background: var(--panel-2); padding: 8px 10px; border-left: 4px solid var(--rc); }
+.gear-pop .gp-set { margin: 0; font-size: .92rem; color: var(--muted); }
+.gear-pop .gp-set b { color: var(--fg); }
+/* unlock message */
+.unlock-pop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 16px; background: rgba(8,6,10,.7); animation: fadein .2s ease-out; }
+.unlock-card { width: min(380px, 100%); text-align: center; background: radial-gradient(circle at 50% 0, #3a2c14, var(--panel) 70%); border: 2px solid var(--gold); box-shadow: 0 0 0 4px #000, 0 0 40px -6px var(--gold); padding: 22px 20px 18px; display: flex; flex-direction: column; align-items: center; gap: 8px; animation: pop .3s ease-out; }
+.unlock-card h2 { color: var(--gold); font-size: 1.7rem; margin: 0; }
+.unlock-card p { margin: 0; color: var(--fg); }
+.unlock-ic { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; border: 2px solid var(--gold); color: var(--gold); background: #1a130a; animation: glowpulse 1.4s ease-in-out infinite alternate; }
+.unlock-ic svg { width: 28px; height: 28px; }
+@keyframes glowpulse { from { box-shadow: 0 0 0 0 rgba(232,184,59,.5); } to { box-shadow: 0 0 18px 4px rgba(232,184,59,.35); } }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
 .inv { border: 2px solid var(--gold-dim); background: var(--bg); padding: 12px; }
 .inv-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; margin-top: 8px; }
 .inv-item { border: 2px solid var(--line); border-left: 4px solid var(--rc); background: var(--panel); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
@@ -270,7 +311,7 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 #flash { position: absolute; inset: 0; background: #fff6e0; opacity: 0; pointer-events: none; z-index: 2; }
 #flash.go { animation: flash .22s ease-out; }
 @keyframes flash { 0% { opacity: .55; } 100% { opacity: 0; } }
-.b-bar { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr) auto; gap: 12px; align-items: stretch; background: var(--panel); border: 2px solid var(--line); padding: 10px; }
+.b-bar { display: grid; grid-template-columns: minmax(0, 220px) minmax(0, 1fr); gap: 12px; align-items: stretch; background: var(--panel); border: 2px solid var(--line); padding: 10px; }
 .b-who { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .b-who img { flex: none; }
 .b-who b { display: block; font-size: 1.1rem; }
@@ -285,8 +326,20 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .sk.ready.big:not(:disabled) { border-color: #7a5ab0; }
 .sk:disabled { opacity: .4; cursor: not-allowed; }
 .b-desc { flex-basis: 100%; color: var(--muted); font-size: .92rem; margin: 0; }
-.b-ctl { display: flex; flex-direction: column; gap: 6px; }
-.b-ctl .btn { white-space: nowrap; }
+/* battle controls: small round buttons over the top right of the battle view */
+.b-ctl { position: absolute; top: 6px; right: 6px; display: flex; gap: 6px; z-index: 4; }
+.rb { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: rgba(16,11,16,.78); border: 2px solid var(--line); color: var(--fg); cursor: pointer; box-shadow: 0 2px 0 rgba(0,0,0,.5); transition: border-color .15s, color .15s, transform .1s; }
+.rb svg { width: 18px; height: 18px; }
+.rb b { font-family: var(--font-tag); font-size: 11px; line-height: 1; }
+.rb:hover { border-color: var(--gold); }
+.rb:active { transform: scale(.92); }
+.rb:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.rb.on { border-color: var(--gold); color: var(--gold); background: rgba(47,38,24,.9); box-shadow: 0 0 10px -2px var(--gold); }
+.rb.danger { color: #ff9a8a; }
+.rb.danger.armed { border-color: var(--bad); background: rgba(106,36,36,.92); color: #fff; animation: armpulse .6s ease-in-out infinite alternate; }
+@keyframes armpulse { from { box-shadow: 0 0 0 0 var(--bad); } to { box-shadow: 0 0 0 4px rgba(200,60,60,.35); } }
+.rb.danger.armed::after { content: "Tap again to give up"; position: absolute; top: 40px; right: 0; white-space: nowrap; font-size: .75rem; background: rgba(16,11,16,.9); border: 1px solid var(--bad); padding: 2px 6px; color: #ffd8cc; }
+.b-ctl .rb { position: relative; }
 .btn.on { border-color: var(--gold); color: var(--gold); }
 #b-log { list-style: none; margin: 0; padding: 8px 12px; background: var(--panel); border: 2px solid var(--line); max-height: 96px; overflow-y: auto; font-size: .88rem; color: var(--muted); }
 #b-log li.hero { color: #cfe0f0; }
@@ -319,7 +372,6 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
   .champ-layout, .altar { grid-template-columns: minmax(0, 1fr); }
   .d-cols { grid-template-columns: minmax(0, 1fr); }
   .b-bar { grid-template-columns: minmax(0, 1fr); }
-  .b-ctl { flex-direction: row; flex-wrap: wrap; }
   .sk { min-width: 0; flex: 1 1 130px; }
   .brand h1 { font-size: 1.35rem; }
   .slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -772,8 +824,8 @@ button, a, input { touch-action: manipulation; }
   .sk b { font-size: .8rem; line-height: 1.15; overflow-wrap: anywhere; }
   .sk small { font-size: .72rem; line-height: 1.2; }
   .b-desc { grid-column: 1 / -1; font-size: .85rem; }
-  .b-ctl { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .b-ctl .btn { min-height: 40px; white-space: normal; line-height: 1.1; }
+  .b-ctl { top: 4px; right: 4px; gap: 5px; }
+  .rb { width: 32px; height: 32px; }
   #b-log { max-height: 60px; padding: 6px 10px; font-size: .8rem; }
 
   /* dialogs */
@@ -811,15 +863,16 @@ button, a, input { touch-action: manipulation; }
   <section id="battle" hidden>
     <div class="b-top"><h2 id="b-title">Stage 1</h2><span id="b-round">Turn 1</span></div>
     <div class="order" id="order" aria-label="Turn order"></div>
-    <div class="stage-wrap"><canvas id="bc" width="480" height="270"></canvas><div id="ov"></div><div id="flash"></div><div id="banner" hidden></div></div>
+    <div class="stage-wrap"><canvas id="bc" width="480" height="270"></canvas><div id="ov"></div><div id="flash"></div><div id="banner" hidden></div>
+      <div class="b-ctl">
+        <button class="rb" id="b-auto" type="button" aria-label="Auto battle" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 1.6l3.9.4-.9 3.8z" fill="currentColor"/><path d="M6.4 11 8 5.2 9.6 11M6.9 9.3h2.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
+        <button class="rb" id="b-speed" type="button" aria-label="Battle speed"><b>1×</b></button>
+        <button class="rb danger" id="b-quit" type="button" aria-label="Give up"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13.5" stroke="currentColor" stroke-width="1.6"/><path d="M4.3 2.2h8.2l-2 3.2 2 3.2H4.3z" fill="currentColor"/></svg></button>
+      </div>
+    </div>
     <div class="b-bar">
       <div class="b-who"><img id="b-por" class="spr" alt=""><div><b id="b-name">&nbsp;</b><small id="b-hint">&nbsp;</small></div></div>
       <div class="b-skills" id="b-skills"></div>
-      <div class="b-ctl">
-        <button class="btn small" id="b-auto" type="button">Auto: off</button>
-        <button class="btn small" id="b-speed" type="button">Speed 1×</button>
-        <button class="btn small danger" id="b-quit" type="button">Give up</button>
-      </div>
     </div>
     <ol id="b-log" aria-live="polite"></ol>
   </section>

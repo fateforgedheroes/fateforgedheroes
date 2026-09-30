@@ -20,7 +20,9 @@ const K = (function () {
   }
   const affMult = (a, d) => HIT[hitType(a, d)].mult;
 
-  const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'];
+  // index 5 (Mythical) exists for gear only (Nightmare campaign); heroes go up to Legendary
+  const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythical'];
+  const CRIT_CAP = 75; // crit rate never goes above this, also with buffs
   const RAR_MULT = [0.85, 0.92, 1, 1.12, 1.4];
   const RAR_CAP = [40, 40, 50, 60, 60];
   const ROLES = {
@@ -685,18 +687,37 @@ const K = (function () {
       STAGES.push({ chapter: c, n: s, lvl, foes, phases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
     }
   });
-  const HARD_BONUS = 14;
+  // Campaign difficulties: the whole campaign again, with enemies `lvl` levels higher and `f` times stronger.
+  // Each one opens when every stage of the previous one is cleared. `rars` = the only gear rarities that drop
+  // (the higher one is rarer, see stageLoot). Easy is the base campaign that campaign-sim.cjs tunes.
+  const DIFFS = [
+    { id: 'easy', name: 'Easy', lvl: 0, f: 1, rars: [1, 2] },
+    { id: 'normal', name: 'Normal', lvl: 6, f: 1.35, rars: [2, 3] },
+    { id: 'hard', name: 'Hard', lvl: 12, f: 1.8, rars: [3, 4] },
+    { id: 'brutal', name: 'Brutal', lvl: 18, f: 2.4, rars: [4] },
+    { id: 'nightmare', name: 'Nightmare', lvl: 24, f: 3.2, rars: [4, 5] },
+  ];
+  // gear drop options for a campaign stage: the higher rarity gets likelier in later chapters and on the boss stage
+  function stageLoot(st, d) {
+    const D = DIFFS[d || 0], hi = D.rars[D.rars.length - 1];
+    const up = hi === 5 ? 0.06 + st.chapter * 0.015 + (st.n === 6 ? 0.06 : 0) : 0.15 + st.chapter * 0.035 + (st.n === 6 ? 0.15 : 0);
+    return { rars: D.rars, up: Math.min(0.6, up) };
+  }
+  // Boss Hall gear: Rare/Epic on levels 1-4, Epic/Legendary on 5-8, only Legendary on 9-10 (never Mythical)
+  const bossLoot = n => ({ rars: n <= 4 ? [2, 3] : n <= 8 ? [3, 4] : [4], up: 0.25 + (n - 1) % 4 * 0.05 });
   // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter),
   // and the chapter boss stage is an extra wall. Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs.
-  // chDiff 0.26: a new player who farms, upgrades, ascends and summons needs roughly 1,200-4,000 battles
-  // (median ~2,300) to finish the campaign, most of them in Chapters VII-X (campaign-sim.cjs, 12/12 runs pass).
+  // chDiff 0.2 / bossWall 1.05 (retuned for the Easy loot table, non-stacking sets, the crit cap and 2500-Sigil shards):
+  // a new player who farms, upgrades, ascends and summons needs roughly 2,000-4,000 battles (median ~2,800) to finish
+  // the Easy campaign, most of them in Chapters VII-X (campaign-sim.cjs).
   // Late chapters need summoned Epic/Legendary heroes and upgraded gear; levels alone are not enough.
-  const TUNE = { chDiff: 0.26, bossWall: 1.15, xp: 1, silver: 1 };
+  const TUNE = { chDiff: 0.2, bossWall: 1.05, xp: 1, silver: 1 };
   // Chapters I-II play at the base level; from Chapter III on every chapter adds chDiff
   const stageDiff = st => (1 + TUNE.chDiff * Math.max(0, st.chapter - 1)) * (st.n === 6 ? TUNE.bossWall : 1);
   function toughen(u, f) { u.maxHp = u.hp = Math.round(u.maxHp * f); u.atk = Math.round(u.atk * f); return u; }
   // chapter bosses fight a few levels below the stage level (they bring adds); p = phase index, default the last phase
-  const stageUnits = (st, lvl, p) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st)));
+  // d = difficulty index (DIFFS); lvl already includes the difficulty's level bonus
+  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st) * DIFFS[d || 0].f));
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -764,19 +785,24 @@ const K = (function () {
     return Math.round(base * q);
   }
   const SUB_POOL = [['hpP', 3, 6], ['atkP', 3, 6], ['defP', 3, 6], ['crit', 2, 5], ['cdmg', 3, 7], ['acc', 3, 8], ['res', 3, 8], ['atk', 4, 10], ['hp', 30, 70], ['def', 2, 5], ['spd', 2, 4]];
+  // substat scale: grows with item level; Mythical rolls 25% higher
+  const subScale = (it, k) => (k === 'spd' ? 1 : 1 + it.il / 25) * (it.rar >= 5 ? 1.25 : 1);
   function rollSub(it, exclude) {
     const pool = SUB_POOL.filter(p => !exclude.includes(p[0]));
-    const p = pick(pool), sc = p[0] === 'spd' ? 1 : 1 + it.il / 25;
-    return [p[0], Math.round(rint(p[1], p[2]) * sc)];
+    const p = pick(pool);
+    return [p[0], Math.round(rint(p[1], p[2]) * subScale(it, p[0]))];
   }
+  // opts.rars + opts.up: fixed loot table (campaign difficulty / Boss Hall, see stageLoot and bossLoot);
+  // without them the rarity rolls freely from Common to Legendary (starting gear)
   function genGear(opts, id) {
     const il = opts.il || 1;
-    const roll = Math.random() + il * 0.02 + (opts.rarBoost || 0);
-    const rar = roll > 1.32 ? 4 : roll > 1.08 ? 3 : roll > 0.78 ? 2 : roll > 0.42 ? 1 : 0;
+    let rar;
+    if (opts.rars) rar = opts.rars.length > 1 && Math.random() < (opts.up ?? 0.3) ? opts.rars[1] : opts.rars[0];
+    else { const roll = Math.random() + il * 0.02 + (opts.rarBoost || 0); rar = roll > 1.32 ? 4 : roll > 1.08 ? 3 : roll > 0.78 ? 2 : roll > 0.42 ? 1 : 0; }
     const slot = opts.slot || pick(SLOTS), mk = pick(MAIN_OPTIONS[slot]);
     const set = opts.sets ? pick(opts.sets) : pick(BASIC_SETS);
     const it = { id, slot, rar, lvl: 0, il, set, main: mk, subs: [], owner: null };
-    for (let i = 0; i < rar; i++) it.subs.push(rollSub(it, [mk, ...it.subs.map(s => s[0])]));
+    for (let i = 0; i < Math.min(4, rar); i++) it.subs.push(rollSub(it, [mk, ...it.subs.map(s => s[0])]));
     return it;
   }
   function gearStats(it) {
@@ -791,14 +817,15 @@ const K = (function () {
   function upgradeMilestone(it) {
     if (it.lvl % 4 !== 0) return null;
     if (it.subs.length < 4) { const s = rollSub(it, [it.main, ...it.subs.map(x => x[0])]); it.subs.push(s); return 'new stat: ' + fmtStat(s[0], s[1]); }
-    const s = pick(it.subs), pool = SUB_POOL.find(p => p[0] === s[0]), sc = s[0] === 'spd' ? 1 : 1 + it.il / 25;
-    const add = Math.round(rint(pool[1], pool[2]) * sc); s[1] += add; return fmtStat(s[0], add) + ' extra';
+    const s = pick(it.subs), pool = SUB_POOL.find(p => p[0] === s[0]);
+    const add = Math.round(rint(pool[1], pool[2]) * subScale(it, s[0])); s[1] += add; return fmtStat(s[0], add) + ' extra';
   }
   const sellValue = it => Math.round(30 * (it.rar + 1) * (it.lvl + 1) * (1 + it.il / 15));
   function setCounts(items) { const c = {}; for (const it of items) c[it.set] = (c[it.set] || 0) + 1; return c; }
+  // sets do not stack: a set's bonus counts once, however many extra pieces are worn
   function activeSets(items) {
     const c = setCounts(items), out = [];
-    for (const k in c) { const S = SETS[k]; if (!S) continue; const times = Math.floor(c[k] / S.n); for (let i = 0; i < times; i++) out.push(k); }
+    for (const k in c) if (SETS[k] && c[k] >= SETS[k].n) out.push(k);
     return out;
   }
 
@@ -822,17 +849,21 @@ const K = (function () {
     { id: 'legendary', name: 'Legendary Fate Shard', drop: 0.00025, rates: [0, 0, 0, 35, 65], desc: 'Guaranteed Epic or better, with a big chance of Legendary.' },
   ];
   const SHARD = Object.fromEntries(FATE_SHARDS.map(f => [f.id, f]));
-  const SHARD_PRICE = 1200;
+  const SHARD_PRICE = 2500;
   function rollShards() { return FATE_SHARDS.filter(f => Math.random() < f.drop).map(f => f.id); }
-  // pity: after PITY_EPIC summons in a row without an Epic or better, the next one is at least Epic (st.pity counts)
+  // pity: after PITY_EPIC summons in a row without an Epic or better, the next one is at least Epic (st.pity counts).
+  // Only shards in PITY_SHARDS (Ancient and up) count and can trigger it; Fate and Greater Fate Shards leave it alone.
   const PITY_EPIC = 40;
+  const PITY_SHARDS = ['ancient', 'mythic', 'legendary'];
   function summonOne(st, type) {
     const T = SHARD[type || 'fate'];
     const r = Math.random() * 100; let acc = 0, rar = 1;
     for (let i = 4; i >= 0; i--) { if (!T.rates[i]) continue; acc += T.rates[i]; if (r < acc) { rar = i; break; } }
     if (acc < 100 && r >= acc) rar = T.rates.findIndex(x => x > 0);
-    if (rar < 3 && (st.pity || 0) + 1 >= PITY_EPIC) rar = 3;
-    st.pity = rar >= 3 ? 0 : (st.pity || 0) + 1;
+    if (PITY_SHARDS.includes(T.id)) {
+      if (rar < 3 && (st.pity || 0) + 1 >= PITY_EPIC) rar = 3;
+      st.pity = rar >= 3 ? 0 : (st.pity || 0) + 1;
+    }
     let pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === rar);
     if (!pool.length) pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar === 2);
     const id = pick(pool);
@@ -873,7 +904,7 @@ const K = (function () {
     const flags = {};
     for (const k of activeSets(items)) { const S = SETS[k]; if (S.bonus) for (const bk in S.bonus) add(bk, S.bonus[bk]); if (S.flag) flags[S.flag] = true; }
     for (const k in s) s[k] = Math.round(s[k]);
-    s.crit = Math.min(100, s.crit);
+    s.crit = Math.min(CRIT_CAP, s.crit);
     s.flags = flags;
     return s;
   }
@@ -1205,7 +1236,7 @@ const K = (function () {
       if (H.crit) {
         let cr = a.crit + (this.has(a, 'critUp') ? 25 : 0);
         if (a.passive === 'shadowhunter' && t.effects.some(e => !EFFECTS[e.k].buff)) cr += 25;
-        crit = Math.random() * 100 < cr;
+        crit = Math.random() * 100 < Math.min(CRIT_CAP, cr);
       }
       if (crit) raw *= 1 + (a.cdmg + (this.has(a, 'cdmgUp') ? 30 : 0)) / 100;
       let d = raw * H.mult * (100 / (100 + def));
@@ -1329,10 +1360,10 @@ const K = (function () {
   }
 
   return {
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, HARD_BONUS, stageUnits,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC,
+    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

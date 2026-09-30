@@ -34,7 +34,7 @@ function reward(st, S, first) {
   // duplicates become spare copies: feed them to the same hero for skill levels
   for (const id in st.fodder || {}) while (st.fodder[id] > 0 && st.roster[id] && K.skillUp(st.roster[id], id) >= 0) st.fodder[id]--;
   st.silver += K.winSilver(S.lvl); st.stones += first ? 3 : Math.random() < 0.35 ? 1 : 0;
-  if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: S.lvl, slot: S.slot || K.pick(K.SLOTS), sets: [S.set] }, st.nid++));
+  if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: S.lvl, slot: S.slot || K.pick(K.SLOTS), ...K.stageLoot(S, 0), sets: [S.set] }, st.nid++));
   // strongest four heroes for the next stage form the team (essence matters: avoid heroes the enemies are strong against),
   // then gear, ascension and upgrades
   const next = K.STAGES[Math.min(st.cleared + 1, K.STAGES.length - 1)], foes = next.phases.flat().map(f => K.ALL_UNITS[f].aff);
