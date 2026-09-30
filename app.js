@@ -709,7 +709,7 @@
   // ----- starter choice (new players) -----
   const STARTER_PITCH = {
     krothar: 'The balanced bruiser. Hits harder when wounded and cleaves the whole enemy line with bleeding wounds.',
-    drakulen: 'The survivor. Heals himself with every hit and lands huge critical hits once he has good gear.',
+    ithyra: 'The frost mage. Freezes and slows enemies, deals 30% more damage to them, and hits the whole enemy team with Blizzard.',
     zephara: 'The glass cannon. The fastest starter, with big single-target damage and stuns, but less HP and Defense.',
     thalnir: 'The unbreakable. Regenerates every turn, taunts the enemy team and poisons everything it touches.',
   };
@@ -1035,16 +1035,14 @@
     toast(`Claimed: ${giftParts(r).join(' · ') || 'a gift'}.`, false, 4000);
     socialLoad();
   }
-  // Start over: a player may wipe their own progress and pick a starter again, but only after clearing Chapter I
-  // (so the starter choice is no free reroll). The current progress is kept as a backup first.
-  const START_OVER_AFTER = 6; // stage index of Chapter I · Stage 7
+  // Start over: a player may wipe their own progress and pick a starter again, at any time.
+  // The current progress is kept as a backup first.
   function startOverHtml() {
-    const ok = S.cleared >= START_OVER_AFTER;
-    return `<section class="prof-bk"><h3>Start over</h3><p class="empty-note">Wipe your progress and begin again from the starter choice: heroes, gear, Sigils, shards, campaign and Boss Hall progress and player level all reset. Your name stays. ${ok ? 'Your current progress is saved as a backup on this device first.' : 'Available once you have cleared Chapter I.'}</p>
-      <div class="row"><button class="btn small danger" data-act="startover" ${ok ? '' : 'disabled'}>${ok ? 'Start over' : `${LOCK_SVG} Clear Chapter I first`}</button></div></section>`;
+    return `<section class="prof-bk"><h3>Start over</h3><p class="empty-note">Wipe your progress and begin again from the starter choice: heroes, gear, Sigils, shards, campaign and Boss Hall progress and player level all reset. Your name stays. Your current progress is saved as a backup on this device first.</p>
+      <div class="row"><button class="btn small danger" data-act="startover">Start over</button></div></section>`;
   }
   function startOver() {
-    if (S.cleared < START_OVER_AFTER) return;
+    if (S.needStarter) return;
     backupRaw(JSON.stringify(S), true);
     const s = resetSave(S); delete s.wasReset;
     S = s; homeScroll = null; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });

@@ -762,7 +762,7 @@ const K = (function () {
     }
   }
   // a new player picks one starter; the rest of the team is earned in Chapter I (see CHAPTERS[0].unlock)
-  const STARTERS = ['krothar', 'drakulen', 'zephara', 'thalnir'];
+  const STARTERS = ['thalnir', 'krothar', 'zephara', 'ithyra']; // tank, warrior, assassin, mage
   // legacy starting roster, only used to migrate very old saves
   const START_ROSTER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar'];
   const START_TEAM = ['bromir', 'grythor', 'skavren', 'draelyn'];
