@@ -380,7 +380,16 @@
     if (t === 'arena') arenaEnter();
     if (t === 'social' || t === 'mail') socialLoad();
   }
+  // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
+    try { renderScreen(); }
+    catch (e) {
+      console.error(e);
+      $('#screen').innerHTML = `<div class="lockbox"><div><h3>Something went wrong on this screen</h3><p class="empty-note">Please send this message to the developer: <code>${esc(tab)}: ${esc(e && e.message || e)}</code></p><button class="btn primary" data-act="tab" data-tab="home">Back to Home</button></div></div>`;
+      if (tab === 'home') $('#screen').querySelector('button').hidden = true;
+    }
+  }
+  function renderScreen() {
     hud();
     const el = $('#screen');
     if (S.needStarter) { el.innerHTML = starterHtml(); paintDungeonArt(); return; }
