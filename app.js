@@ -2025,18 +2025,20 @@
       S.seen[k] = true;
       out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
     }
-    return out;
+    // the homebase message comes last: its button leads there
+    return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));
   }
   function showUnlocks(list) {
     if (!list.length) return;
     const u = list[0], el = document.createElement('div');
     el.className = 'unlock-pop'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-label', u.title);
     const svg = u.k === 'auto' ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 1.6l3.9.4-.9 3.8z" fill="currentColor"/></svg>' : u.k === 'spd' ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1 3l6 5-6 5zM8 3l6 5-6 5z" fill="currentColor"/></svg>' : LOCK_SVG.replace('M5 7V5a3 3 0 0 1 6 0v2', 'M5 7V5a3 3 0 0 1 6 0');
-    el.innerHTML = `<div class="unlock-card"><div class="unlock-ic">${svg}</div><span class="tag">New unlock</span><h2>${esc(u.title)}</h2><p>${esc(u.text)}</p><button class="btn primary" type="button">${list.length > 1 ? 'Next' : 'Great!'}</button></div>`;
+    el.innerHTML = `<div class="unlock-card"><div class="unlock-ic">${svg}</div><span class="tag">New unlock</span><h2>${esc(u.title)}</h2><p>${esc(u.text)}</p><button class="btn primary" type="button">${u.k === 'home' ? 'Go to homebase' : list.length > 1 ? 'Next' : 'Great!'}</button></div>`;
     document.body.appendChild(el);
     SFX.up();
     const btn = el.querySelector('button'); btn.focus();
-    btn.addEventListener('click', () => { el.remove(); showUnlocks(list.slice(1)); });
+    // "Your homebase is open": the button closes the battle result and goes to the homebase
+    btn.addEventListener('click', () => { el.remove(); if (u.k === 'home') { SFX.click(); if (B) modalAction('open-home'); else setTab('home'); window.scrollTo({ top: 0 }); return; } showUnlocks(list.slice(1)); });
   }
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
