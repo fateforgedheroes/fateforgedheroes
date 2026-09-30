@@ -529,8 +529,11 @@ const K = (function () {
   const isCaptured = id => !!(CHAMPS[id] && CHAMPS[id].captured);
   // XP a hero gets from eating one fodder unit: a share of the hero's next level, more for rarer fodder
   // XP from feeding a hero (a spare copy at level 1, or any hero from the roster at its level) to another hero
-  const FEED_RATE = [0.25, 0.4, 0.6, 0.9, 1.3];
-  const feedXp = (foodId, heroLvl, foodLvl) => Math.round(xpNeed(heroLvl) * FEED_RATE[CHAMPS[foodId].rar] * (1 + ((foodLvl || 1) - 1) / 20));
+  // Feeding gives a fixed amount of XP by the food's rarity and level. It does not depend on the hero that eats it:
+  // it used to be a share of the eater's next level, so every feed was worth the same part of a level at any level
+  // and feeding a high-level hero gave several levels at once. heroLvl is kept in the signature but unused.
+  const FEED_BASE = [1000, 1800, 3200, 5500, 9000];
+  const feedXp = (foodId, heroLvl, foodLvl) => Math.round(FEED_BASE[CHAMPS[foodId].rar] * (1 + ((foodLvl || 1) - 1) / 10));
   const breakStones = fodderId => CHAMPS[fodderId].rar + 1;
 
   // ---------- Bosses ----------
@@ -543,7 +546,8 @@ const K = (function () {
     ], { passive: 'molten', passiveName: 'Molten Blood', passiveDesc: 'Weak Hits against the Brimstone Dragon have a 20% chance to Burn the attacker. Below 30% HP it enrages and deals 30% more damage.', hp: 3000, atk: 98, spd: 98 }),
     voidtitan: B('Void Titan', 'Umbral', 'Titan', [
       [SK('Void Strike', 'enemy', 'melee', 'dark', 0, '', [D(1.2)]), SK('Dark Pulse', 'enemies', 'magic', 'dark', 3, '', [D(0.7), DB('defDown', 2, 0.35)], { startCd: 1 })],
-      [SK('Void Collapse', 'enemies', 'magic', 'dark', 0, '', [D(0.85)]), SK('Summon Void Shards', 'self', 'buff', 'curse', 4, '', [{ t: 'summon', id: 'schim', max: 2 }], { startCd: 0 }), SK('Void Strike', 'enemy', 'melee', 'dark', 2, '', [D(1.3)], { startCd: 1 })],
+      // phase 2: the basic attack is single-target again (an every-turn team hit made him a wall on every difficulty)
+      [SK('Void Strike', 'enemy', 'melee', 'dark', 0, '', [D(1.3)]), SK('Summon Void Shards', 'self', 'buff', 'curse', 4, '', [{ t: 'summon', id: 'schim', max: 2 }], { startCd: 0 }), SK('Void Collapse', 'enemies', 'magic', 'dark', 2, '', [D(0.85)], { startCd: 1 })],
     ], { passive: 'voidarmor', passiveName: 'Void Armor', passiveDesc: 'Takes 10% less damage while the Break Meter is above 50%.', onPhase: [null, [BF('spdUp', 3, 'self')]], hp: 3200, def: 70, spd: 92 }),
     frostcolossus: B('Frost Colossus', 'Frost', 'Golem', [
       [SK('Ice Smash', 'enemy', 'melee', 'smash', 0, '', [D(1.2)]), SK('Frost Wave', 'enemies', 'magic', 'water', 3, '', [D(0.7), DB('spdDown', 2, 0.4)], { startCd: 1 })],
@@ -693,16 +697,20 @@ const K = (function () {
       STAGES.push({ chapter: c, n: s, lvl, foes, phases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
     }
   });
-  // Campaign difficulties: the whole campaign again, with enemies `lvl` levels higher and `f` times stronger.
+  // Campaign difficulties: the whole campaign again at a higher level band. Enemy level = base + stage level × slope,
+  // so a harder difficulty is a challenge from its first chapter on (not trivial early and a wall late), and the
+  // chapter-to-chapter growth (chDiff) is squeezed by `spread`; `f` makes every enemy stronger.
   // Each one opens when every stage of the previous one is cleared. `rars` = the only gear rarities that drop
   // (the higher one is rarer, see stageLoot). Easy is the base campaign that campaign-sim.cjs tunes.
   const DIFFS = [
-    { id: 'easy', name: 'Easy', lvl: 0, f: 1, rars: [1, 2] },
-    { id: 'normal', name: 'Normal', lvl: 6, f: 1.35, rars: [2, 3] },
-    { id: 'hard', name: 'Hard', lvl: 12, f: 1.8, rars: [3, 4] },
-    { id: 'brutal', name: 'Brutal', lvl: 18, f: 2.4, rars: [4] },
-    { id: 'nightmare', name: 'Nightmare', lvl: 24, f: 3.2, rars: [4, 5] },
+    { id: 'easy', name: 'Easy', base: 0, slope: 1, f: 1, spread: 1, rars: [1, 2] },
+    { id: 'normal', name: 'Normal', base: 18, slope: 0.75, f: 1.5, spread: 0.75, rars: [2, 3] },
+    { id: 'hard', name: 'Hard', base: 30, slope: 0.65, f: 2.1, spread: 0.7, rars: [3, 4] },
+    { id: 'brutal', name: 'Brutal', base: 40, slope: 0.6, f: 2.4, spread: 0.65, rars: [4] },
+    { id: 'nightmare', name: 'Nightmare', base: 50, slope: 0.55, f: 2.9, spread: 0.6, rars: [4, 5] },
   ];
+  // enemy level of a campaign stage on difficulty d
+  const diffLvl = (st, d) => { const D = DIFFS[d || 0]; return Math.round(D.base + st.lvl * D.slope); };
   // gear drop options for a campaign stage: the higher rarity gets likelier in later chapters and on the boss stage
   function stageLoot(st, d) {
     const D = DIFFS[d || 0], hi = D.rars[D.rars.length - 1];
@@ -711,19 +719,27 @@ const K = (function () {
   }
   // Boss Hall gear: Rare/Epic on levels 1-4, Epic/Legendary on 5-8, only Legendary on 9-10 (never Mythical)
   const bossLoot = n => ({ rars: n <= 4 ? [2, 3] : n <= 8 ? [3, 4] : [4], up: 0.25 + (n - 1) % 4 * 0.05 });
-  // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter),
-  // and the chapter boss stage is an extra wall. Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs.
-  // chDiff 0.2 / bossWall 1.05 (retuned for the Easy loot table, non-stacking sets, the crit cap and 2500-Sigil shards):
-  // a new player who farms, upgrades, ascends and summons needs roughly 2,000-4,000 battles (median ~2,800) to finish
-  // the Easy campaign, most of them in Chapters VII-X (campaign-sim.cjs).
+  // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter,
+  // squeezed by each difficulty's spread), chBoss scales the chapter boss itself, bossWall the whole boss stage.
+  // Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs (Easy) and balance-sim.html (all difficulties):
+  // Easy takes a new player ~1,400-2,900 battles; all five difficulties together ~5,000-16,000 for most players, and
+  // unlucky rosters hit a wall on Nightmare that only better heroes (Ancient+ summons) and Mythical upgrades get past.
   // Late chapters need summoned Epic/Legendary heroes and upgraded gear; levels alone are not enough.
-  const TUNE = { chDiff: 0.2, bossWall: 1.05, xp: 1, silver: 1 };
+  const TUNE = { chDiff: 0.15, bossWall: 1, chBoss: 0.7, xp: 1, silver: 1 };
   // Chapters I-II play at the base level; from Chapter III on every chapter adds chDiff
-  const stageDiff = st => (1 + TUNE.chDiff * Math.max(0, st.chapter - 1)) * (st.n === 6 ? TUNE.bossWall : 1);
+  // strength factor of a stage on difficulty d: chapters I-II at the base, from Chapter III on +chDiff per chapter
+  // (squeezed by the difficulty's spread), times the difficulty's f and bossWall on the boss stage
+  const stageDiff = (st, d) => { const D = DIFFS[d || 0]; return D.f * (1 + TUNE.chDiff * Math.max(0, st.chapter - 1) * D.spread) * (st.n === 6 ? TUNE.bossWall : 1); };
   function toughen(u, f) { u.maxHp = u.hp = Math.round(u.maxHp * f); u.atk = Math.round(u.atk * f); return u; }
   // chapter bosses fight a few levels below the stage level (they bring adds); p = phase index, default the last phase
   // d = difficulty index (DIFFS); lvl already includes the difficulty's level bonus
-  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st) * DIFFS[d || 0].f));
+  // chBoss scales only the chapter boss itself (not its adds), so a boss stage is a step up and not a wall
+  // STAGE_PW: per-stage correction from Chapter III on, calibrated by simulation (4 end-of-Easy teams, the enemy
+  // strength at which each stage is won half the time, compared with a smooth ~4.8%-per-stage curve; 75% of the
+  // correction is applied). It removes the spikes (4-foe elite stages, chapter bosses) that were walls, and keeps a
+  // chapter's boss a bit harder than its first stage.
+  const STAGE_PW = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.34, 1.04, 1.07, 0.78, 0.92, 0.77, 0.77, 1.46, 1.19, 1.04, 0.87, 1, 0.85, 0.85, 1.59, 1.17, 1.04, 0.87, 0.95, 0.85, 0.83, 1.36, 1.03, 1.04, 0.84, 1.01, 0.85, 0.87, 1.36, 1.09, 0.98, 0.85, 1, 0.86, 0.82, 1.35, 1.06, 1.05, 0.89, 1.11, 0.87, 0.79, 1.45, 1.18, 1.14, 0.89, 0.96, 0.81, 0.9, 1.4, 1.07, 1.08, 0.85, 1.03, 0.95, 0.93];
+  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (BOSSES[f] ? TUNE.chBoss : 1)));
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -745,7 +761,19 @@ const K = (function () {
 
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
-  const bossLvl = (i, n) => Math.round(9 + i * 1.5 + (n - 1) * 4);
+  // Every Boss Hall level plays like a campaign stage, so the Boss Hall is never a shortcut to better gear:
+  // boss i belongs to chapter floor(i × 10 / 25); level 1-4 is Normal, 5-8 Hard and 9-10 Brutal (the same difficulties
+  // whose loot bossLoot hands out), each level a later stage of that chapter. Enemies get that stage's level and
+  // strength, times BOSS_ROOM for the boss room.
+  const BOSS_ROOM = 1.1;
+  function bossRoom(i, n) {
+    const c = Math.min(CHAPTERS.length - 1, Math.floor(i * CHAPTERS.length / BOSS_ORDER.length));
+    const d = n <= 4 ? 1 : n <= 8 ? 2 : 3, st = STAGES[c * 7 + [0, 2, 4, 6][(n - 1) % 4]];
+    return { lvl: diffLvl(st, d), f: stageDiff(st, d) * BOSS_ROOM, d };
+  }
+  const bossLvl = (i, n) => bossRoom(i, n).lvl;
+  // the enemies of phase p of Boss Hall level n (minions, minions, boss), toughened like the matching campaign stage
+  function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => toughen(enemyUnit(f, r.lvl), r.f)); }
   const SET_GROUPS = [['vlammenhart', 'scherpte', 'nachtscherf'], ['woede', 'asvloek', 'vampierbloed'], ['wilgenbast', 'levensbron', 'wraak'], ['windloper', 'scherpte', 'vlammenhart']];
   const bossSets = i => SET_GROUPS[i % SET_GROUPS.length];
   function bossFoes(id, n) { return [id]; }
@@ -1371,7 +1399,7 @@ const K = (function () {
   const snapItem = it => ({ slot: it.slot, rar: it.rar, lvl: it.lvl, il: it.il, set: it.set, main: it.main, subs: it.subs.map(s => [s[0], s[1]]) });
   const teamPower = team => team.reduce((t, h) => t + power(heroStats(h.id, h, h.items)), 0);
   // highest item level that can drop: last campaign stage on the top difficulty, or the last Boss Hall level
-  const MAX_IL = Math.max(STAGES[STAGES.length - 1].lvl + DIFFS[DIFFS.length - 1].lvl, bossLvl(BOSS_ORDER.length - 1, BOSS_LEVELS));
+  const MAX_IL = Math.max(diffLvl(STAGES[STAGES.length - 1], DIFFS.length - 1), bossLvl(BOSS_ORDER.length - 1, BOSS_LEVELS));
   const isInt = (v, a, b) => Number.isInteger(v) && v >= a && v <= b;
   // Checks that a snapshot could exist in a fair game (levels, stars, skills, gear rolls within the rules).
   // Returns null when fine, else a short reason. It cannot prove the player earned it; it stops edited saves.
@@ -1429,6 +1457,14 @@ const K = (function () {
     { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 2 } },
   ];
   const arenaTier = rating => ARENA_TIERS.filter(t => rating >= t.min).pop();
+  // extra weekly reward for the top 5 (rank among everyone who fought that week), on top of the tier reward
+  const ARENA_RANK_REWARDS = [
+    { silver: 0, fs: { mythic: 1 } },
+    { silver: 0, fs: { ancient: 1 } },
+    { silver: 0, fs: { greater: 3 } },
+    { silver: 10000, fs: {} },
+    { silver: 5000, fs: {} },
+  ];
   const ARENA_TOKENS = 10, ARENA_TOKEN_MIN = 60; // max tokens, minutes per new token
   // Arena bots fill the opponent list while there are few players: a team near the attacker's level, stronger at a higher rating.
   const BOT_NAMES = ['Arena Warden', 'Iron Sentinel', 'Ashen Duelist', 'Gravecourt Knight', 'Stormblade Champion', 'Frostbound Guard', 'Umbral Gladiator', 'Radiant Vanguard'];
@@ -1454,9 +1490,9 @@ const K = (function () {
   }
 
   return {
-    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,

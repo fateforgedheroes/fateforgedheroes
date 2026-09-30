@@ -25,7 +25,8 @@
   // player profile: account level gates the Fate Altar and the Boss Hall
   const PLAYER_UNLOCK = { altaar: 5, kerkers: 10, arena: 12 };
   const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena' };
-  const pxNeed = l => 80 + 40 * (l - 1);
+  // player XP per level: steeper than before (level 10, the Boss Hall, now takes ~75-130 battles instead of ~25)
+  const pxNeed = l => 60 * l + 12 * l * l;
   // per cleared stage / Boss Hall level
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
@@ -56,7 +57,7 @@
   }
   // Progress reset for everyone: raise RESET and every older save (local or cloud) starts over on load.
   // Kept: player name (and how often it was changed), sound and speed.
-  const RESET = 1;
+  const RESET = 2; // 2: reset with the difficulty, Boss Hall and XP rebalance
   function resetSave(o) {
     const s = fresh(), p = o.p || {};
     if (p.name) s.p.name = p.name;
@@ -230,6 +231,11 @@
     borstpantser: glyph('M5 1.5h6l3.2 2.6-1.6 3.1-1.1-.8V14.5h-7V6.4l-1.1.8L1.8 4.1zM6.3 3 8 4.8 9.7 3z'),
     laarzen: glyph('M5 1.5h4.2v7.6l4.6 2.3c.5.3.7.7.7 1.2v1.9H3.4v-3.3L5 9.4z'),
   };
+  // gear art (gear.js): 21 icons per slot from plain to mythical; each rarity has its own group (Common shares
+  // Uncommon's, Mythical gets the last 5) and an item always shows the same icon of its group (by item id)
+  const GEAR_GROUPS = [[0, 4], [0, 4], [4, 4], [8, 4], [12, 4], [16, 5]];
+  function gearArt(slot, rar, id) { const [s, n] = GEAR_GROUPS[rar] || GEAR_GROUPS[0], list = GEAR_ART[slot]; return list[Math.min(list.length - 1, s + ((id || 0) % n))]; }
+  const gearIcon = (it, cls) => `<img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">`;
   // which stats matter most per role, used by "Upgrade all" to upgrade the most important gear first
   const GEAR_PRI = {
     Tank: { hp: 3, hpP: 3, def: 3, defP: 3, res: 2, spd: 2, acc: 1, atk: 0.5, atkP: 0.5, crit: 0.3, cdmg: 0.3 },
@@ -390,15 +396,17 @@
     const tile = (st, i) => {
       const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
       const label = state === 'cleared' ? 'Cleared' : state === 'next' ? 'Next' : 'Locked';
-      const lvl = st.lvl + D.lvl;
+      const lvl = K.diffLvl(st, d);
       const rw = [];
       if (!hard && st.unlock && !S.roster[st.unlock]) rw.push(`<span class="rw">${por(st.unlock)}${esc(C[st.unlock].short)}</span>`);
       if (i > cleared) rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
       return `<button class="stage ${state} ${st.boss ? 'bossst' : ''}" data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}>
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span><span class="st-state tag">${label}</span></div>
         <div class="st-foes">${st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('')}</div>
-        <div class="st-meta">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')} ${K.PHASES} phases · ${st.phases.map(p => p.length).join('+')} enemies · level ${lvl}${st.boss ? ` · <span class="boss">Boss: ${esc(st.boss)}</span>` : ''}</div>
-        <div class="st-drop"><span class="aff" style="--c:var(--gold)">${st.slot ? K.SLOT_NAMES[st.slot][0] : '?'}</span>Drops: ${dropName(st)} · ${K.SETS[st.set].name} · ${rarsHtml(D.rars)}</div>
+        <div class="st-meta"><span class="st-ess">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')}</span><span class="pill">Lv ${lvl}</span><span class="pill">${K.PHASES} phases</span><span class="pill">${st.phases.flat().length} foes</span></div>
+        ${st.boss ? `<div class="st-boss">Boss: ${esc(st.boss)}</div>` : ''}
+        <div class="st-drop"><span class="st-dic">${st.slot ? `<img class="gear-ic" src="${gearArt(st.slot, D.rars[D.rars.length - 1], 0)}" alt="">` : '<b>?</b>'}</span><span class="st-dtx"><b>${dropName(st)}</b><small>${K.SETS[st.set].name}</small></span></div>
+        <div class="st-rars">${D.rars.map(r => `<span class="rpill rar-${r}">${K.RARITIES[r]}</span>`).join('')}</div>
         ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}</button>`;
     };
     const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
@@ -410,7 +418,7 @@
     const cdone = idx.filter(i => i <= cleared).length;
     return `<div class="${hard ? 'hardmode diff-' + D.id : ''}"><div class="camp-head"><div><h2>Campaign</h2><p class="lede">Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need.</p>
         <div style="margin-top:10px" class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
-        <p class="diff-note">${esc(D.name)}: ${d ? `enemies +${D.lvl} levels and much stronger. ` : ''}Gear drops: ${rarsHtml(D.rars)} only.${d < K.DIFFS.length - 1 ? ` Clear all ${K.STAGES.length} stages to open ${K.DIFFS[d + 1].name}.` : ''}</p></div>
+        <p class="diff-note">${esc(D.name)}: ${d ? `enemies level ${K.diffLvl(K.STAGES[0], d)}–${K.diffLvl(K.STAGES[K.STAGES.length - 1], d)} and much stronger. ` : ''}Gear drops: ${rarsHtml(D.rars)} only.${d < K.DIFFS.length - 1 ? ` Clear all ${K.STAGES.length} stages to open ${K.DIFFS[d + 1].name}.` : ''}</p></div>
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
       <div class="area-label tag">Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)} · ${cdone}/7 cleared</div>
@@ -581,14 +589,14 @@
       const it = items.find(x => x.slot === slot);
       if (!it) return `<div class="gtile empty"><button type="button" class="gt-main" data-act="inv" data-slot="${slot}" aria-label="Choose a ${K.SLOT_NAMES[slot].toLowerCase()}"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${SLOT_GLYPH[slot]}</span><span class="gt-name">Empty</span></button><button type="button" class="btn small" data-act="inv" data-slot="${slot}">Choose</button></div>`;
       const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it);
-      return `<div class="gtile rar-${it.rar}"><button type="button" class="gt-main" data-act="gearpop" data-slot="${slot}" aria-label="${esc(itemName(it))}: show stats"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${SLOT_GLYPH[slot]}${it.lvl ? `<i class="gt-lv">+${it.lvl}</i>` : ''}</span><span class="gt-name rartxt">${K.RARITIES[it.rar]}</span><span class="gt-set">${K.SETS[it.set].name.replace(/ Set$/, '')}</span></button>
+      return `<div class="gtile rar-${it.rar}"><button type="button" class="gt-main" data-act="gearpop" data-slot="${slot}" aria-label="${esc(itemName(it))}: show stats"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${gearIcon(it)}${it.lvl ? `<i class="gt-lv">+${it.lvl}</i>` : ''}</span><span class="gt-name rartxt">${K.RARITIES[it.rar]}</span><span class="gt-set">${K.SETS[it.set].name.replace(/ Set$/, '')}</span></button>
         <button type="button" class="btn small primary gt-up" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade<small>${ic('coin')}${cost.toLocaleString('en-US')}</small>`}</button></div>`;
     }).join('');
     let inv = '';
     if (invSlot) {
       const list = S.inv.filter(x => x.slot === invSlot && x.owner !== id).sort((a, b) => b.rar - a.rar || b.il - a.il || b.lvl - a.lvl);
       inv = `<div class="inv" id="invpanel"><div class="section-head"><h3>Choose ${K.SLOT_NAMES[invSlot].toLowerCase()}</h3><div class="row" style="display:flex;gap:6px"><button class="btn small" data-act="sellbad" data-slot="${invSlot}">Sell spare common and uncommon</button><button class="btn small" data-act="invclose">Close</button></div></div>
-        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><span class="item-name">${itemName(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
+        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemName(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
           <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}">Equip</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
     }
@@ -646,7 +654,7 @@
     if (!it) { m.hidden = true; return; }
     const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it), SS = K.SETS[it.set];
     m.innerHTML = `<div class="modal-box gear-pop rar-${it.rar}" role="dialog" aria-modal="true" aria-labelledby="gp-t">
-      <div class="gp-head"><span class="gt-ic">${SLOT_GLYPH[slot]}</span><div><h2 id="gp-t" class="rartxt">${esc(itemName(it))}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
+      <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${esc(itemName(it))}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
       ${itemStatsHtml(it)}
       <p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>
       ${maxed ? '' : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
@@ -747,7 +755,7 @@
     if (!AR.board) loadBoard(AR.lb);
   }
   const miniTeam = team => `<div class="ar-team">${team.filter(h => C[h.id]).map(h => `<span class="ar-h rar-${C[h.id].rar}" title="${esc(C[h.id].name)} · level ${h.lvl}">${por(h.id)}<i>${h.lvl}</i></span>`).join('')}</div>`;
-  const tierReward = t => [sigils(t.silver), ...Object.entries(t.fs).map(([k, n]) => `${shardIc(k)} ${n}× ${esc(K.SHARD[k].name)}`)].join(' · ');
+  const tierReward = t => [...(t.silver ? [sigils(t.silver)] : []), ...Object.entries(t.fs).map(([k, n]) => `${shardIc(k)} ${n}× ${esc(K.SHARD[k].name)}`)].join(' · ');
   function campaignText(r) {
     const d = r.detail || {}, dcl = Array.isArray(d.dcl) ? d.dcl : [];
     for (let i = dcl.length - 1; i >= 1; i--) if (dcl[i] >= 0 && K.DIFFS[i] && K.STAGES[dcl[i]]) return `${K.DIFFS[i].name} · ${stageName(dcl[i])}`;
@@ -777,6 +785,7 @@
         <div class="ar-rating"><span class="tag">${tier.name}</span><b>${st.rating}</b><small class="empty-note">rating</small></div>
         <dl class="stats"><dt>Attacks</dt><dd>${st.wins} won · ${st.losses} lost</dd><dt>Defense</dt><dd>${st.defWins} won · ${st.defLosses} lost</dd><dt>Tokens</dt><dd>${st.tokens} / ${K.ARENA_TOKENS}${st.tokens >= K.ARENA_TOKENS ? '' : ` · next in ${Math.max(1, Math.ceil(secs / 60))} min`}</dd></dl>
         <p class="empty-note">Weekly reward (${tier.name}): ${tierReward(tier)}. ${st.weekFights ? `You fought ${st.weekFights}× this week.` : 'Fight at least once this week to earn it.'}${next ? ` ${next.name} from ${next.min} rating.` : ''}</p>
+        <div class="ar-top5"><span class="tag">Top 5 of the week (extra)</span><ol>${K.ARENA_RANK_REWARDS.map((t, i) => `<li><b>#${i + 1}</b> ${tierReward(t)}</li>`).join('')}</ol><small class="empty-note">Ranked by rating among everyone who fought that week.</small></div>
         ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
     const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')}</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
         <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>`;
@@ -803,11 +812,14 @@
     let rows;
     try { rows = await cloud().rpc('claim_arena_rewards'); } catch (e) { toast('Could not claim the rewards. Try again.', true); return; }
     let silver = 0; const fs = {};
-    for (const r of rows || []) { const t = K.arenaTier(r.rating); silver += t.silver; for (const k in t.fs) fs[k] = (fs[k] || 0) + t.fs[k]; }
+    const add = t => { silver += t.silver; for (const k in t.fs) fs[k] = (fs[k] || 0) + t.fs[k]; };
+    let best = 0;
+    for (const r of rows || []) { add(K.arenaTier(r.rating)); const top = K.ARENA_RANK_REWARDS[r.rank - 1]; if (top) { add(top); best = best ? Math.min(best, r.rank) : r.rank; } }
     S.silver += silver; for (const k in fs) S.fs[k] = (S.fs[k] || 0) + fs[k];
     if (AR.st) AR.st.rewards = 0;
     save(); render(); SFX.up();
-    toast(silver ? `Weekly arena rewards: +${silver.toLocaleString('en-US')} Sigils${Object.keys(fs).map(k => ` · +${fs[k]} ${K.SHARD[k].name}`).join('')}.` : 'No rewards to claim.', false, 4000);
+    const got = [...(silver ? [`+${silver.toLocaleString('en-US')} Sigils`] : []), ...Object.keys(fs).map(k => `+${fs[k]} ${K.SHARD[k].name}`)].join(' · ');
+    toast(got ? `${best ? `Top 5 of the week (#${best})! ` : ''}Weekly arena rewards: ${got}.` : 'No rewards to claim.', false, 5000);
   }
   function backupsHtml() {
     const rows = readBackups().map((b, i) => {
@@ -1584,7 +1596,7 @@
 
   // ----- start / intro / finish -----
   function startCampaign(i) {
-    const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = st.lvl + D.lvl;
+    const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
     S.chap = st.chapter;
     runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
@@ -1593,7 +1605,7 @@
     runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
-  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : cfg.phases[p].map(f => K.enemyUnit(f, cfg.lvl));
+  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
     const alive = heroes.filter(u => u.alive);
@@ -1780,7 +1792,7 @@
     if (stones) items.push(`<li ${d()}>${ic('stone')}+${stones} ${stones === 1 ? 'Ascension Stone' : 'Ascension Stones'}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
-    loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}><span class="aff" style="--c:var(--rc)">${K.SLOT_NAMES[it.slot][0]}</span><span><span class="item-name">${itemName(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
+    loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemName(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
     if (captured) items.push(`<li class="loot rar-${C[captured.id].rar}" ${d()}>${por(captured.id)}<span>${captured.isNew ? `Captured: <b class="rartxt">${esc(C[captured.id].name)}</b> joins your roster as a hero.` : `Captured another <b class="rartxt">${esc(C[captured.id].name)}</b> as fodder.`}</span></li>`);
     if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})${S.team.includes(unlock) ? ' joins your team' : ''}</span></li>`);
     // MVP

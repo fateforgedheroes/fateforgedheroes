@@ -1,0 +1,112 @@
+<!doctype html><meta charset="utf-8"><title>Full sim</title><pre id="out"></pre>
+<script src="engine.js"></script>
+<script>
+// Extended balance sim, runs in a browser: open balance-sim.html from the repo root (next to engine.js) through any local
+// web server. Same simulated player as campaign-sim.cjs: Easy, then Normal..Nightmare with each difficulty's loot table,
+// Boss Hall probes at checkpoints, and when the player reaches level 10 (Boss Hall opens).
+// URL options: only=<starters> cap=<battles per difficulty> upto=<number of difficulties> probe=0 (skip Boss Hall probes)
+// chDiff= bossWall= chBoss= f=,,,, base=,,,, slope=,,,, spread=,,,, (override the tuning) calib=1 (per-stage margins after Easy,
+// used to compute STAGE_PW in engine.js)
+const Q = new URLSearchParams(location.search), CAP = +(Q.get('cap') || 12000);
+for (const k of ['chDiff', 'bossWall', 'chBoss']) if (Q.get(k)) K.TUNE[k] = +Q.get(k);
+if (Q.get('f')) Q.get('f').split(',').forEach((v, i) => (K.DIFFS[i].f = +v));
+for (const k of ['base', 'slope', 'spread']) if (Q.get(k)) Q.get(k).split(',').forEach((v, i) => (K.DIFFS[i][k] = +v));
+const PROBE = Q.get('probe') !== '0';
+const UPTO = +(Q.get('upto') || 5);
+window.OUT = [];
+const log = s => { OUT.push(s); document.getElementById('out').textContent = OUT.join('\n'); console.log(s); };
+const W = { atk: 3, hp: 0.12, def: 1, crit: 3, cdmg: 1.5, atkP: 4, hpP: 3, defP: 2, acc: 0.3, res: 0.3, spd: 4 };
+const score = it => K.gearStats(it).reduce((s, [k, v]) => s + (W[k] || 0) * v, 0);
+const newHero = id => ({ lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id].skills.map(() => 0) });
+const power = (st, id) => { const s = K.heroStats(id, st.roster[id], []); return s.hp * 0.12 + s.atk * 1.8 + s.def * 1.3 + s.spd * 4 + s.crit * 5 + s.cdmg * 2 + (s.acc + s.res) * 0.8; };
+// player level, same rules as app.js
+const pxNeed = l => 60 * l + 12 * l * l, playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
+function newState(starter) { return { roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: [-1, -1, -1, -1, -1], silver: 400, stones: 0, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, plvl: 1, pxp: 0, pc: {} }; }
+const heroUnits = st => st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
+async function phases(st, groups) {
+  const heroes = heroUnits(st);
+  for (let p = 0; p < groups.length; p++) { if (p) K.phaseRest(heroes); if ((await new K.Battle(heroes, groups[p](), {}).run()) !== 'win') return 'lose'; }
+  return 'win';
+}
+const fight = (st, S, d) => phases(st, [0, 1, 2].map(p => () => K.stageUnits(S, K.diffLvl(S, d), p, d)));
+const bossFight = (st, i, n) => phases(st, [0, 1, 2].map(p => () => K.bossUnits(K.BOSS_ORDER[i], n, p)));
+const addHero = (st, id) => { const h = newHero(id); h.lvl = Math.max(1, Math.min(K.maxLvl(h.stars, id), Math.min(...st.team.map(t => st.roster[t].lvl)) - 3)); st.roster[id] = h; };
+const CURVES = { now: pxNeed, A: l => 60 * l + 12 * l * l, B: l => 100 * l + 20 * l * l }, cumTo = (fn, L) => { let t = 0; for (let l = 1; l < L; l++) t += fn(l); return t; };
+function curveCheck(st, battles, stage) { for (const c in CURVES) for (const L of [5, 10, 12, 20]) { const k = c + L; if (!st.pc[k] && st.ptot >= cumTo(CURVES[c], L)) st.pc[k] = battles + '@' + (stage + 1); } }
+function playerXp(st, x) { st.ptot = (st.ptot || 0) + x; st.pxp += x; while (st.pxp >= pxNeed(st.plvl)) { st.pxp -= pxNeed(st.plvl); st.plvl++; st.silver += 100 * st.plvl; if (st.plvl % 5 === 0) st.fs.greater++; } }
+function reward(st, S, first, d) {
+  const lvl = K.diffLvl(S, d);
+  for (const id in st.roster) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); if (h.lvl >= cap || K.CHAMPS[id].captured) continue; h.xp += K.winXp(lvl) * (st.team.includes(id) ? 1 : 0.5); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
+  playerXp(st, playerWinXp(lvl, first));
+  if (d === 0 && first && S.unlock && !st.roster[S.unlock]) { addHero(st, S.unlock); if (st.team.length < 4) st.team.push(S.unlock); }
+  if (first) st.fs[S.n === 6 ? 'greater' : 'fate']++;
+  for (const t of K.rollShards()) st.fs[t]++;
+  for (const t in st.fs) while (st.fs[t] > 0) { st.fs[t]--; const had = new Set(Object.keys(st.roster)); const r = K.summonOne(st, t); if (!had.has(r.id)) { const lv = st.roster[r.id]; delete st.roster[r.id]; addHero(st, r.id); st.roster[r.id].sk = lv.sk; } }
+  for (const id in st.fodder || {}) while (st.fodder[id] > 0 && st.roster[id] && K.skillUp(st.roster[id], id) >= 0) st.fodder[id]--;
+  st.silver += K.winSilver(lvl); st.stones += first ? 3 : Math.random() < 0.35 ? 1 : 0;
+  if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: lvl, slot: S.slot || K.pick(K.SLOTS), ...K.stageLoot(S, d), sets: [S.set] }, st.nid++));
+  const next = K.STAGES[Math.min(st.cleared[d] + 1, K.STAGES.length - 1)], foes = next.phases.flat().map(f => K.ALL_UNITS[f].aff);
+  const edge = id => { const a = K.CHAMPS[id].aff; return 1 + 0.2 * (foes.filter(e => K.BEATS[a] === e).length - foes.filter(e => K.BEATS[e] === a).length) / foes.length; };
+  const byPow = Object.keys(st.roster).filter(id => !K.CHAMPS[id].captured).sort((a, b) => power(st, b) * edge(b) - power(st, a) * edge(a));
+  st.team = byPow.slice(0, 4);
+  for (const it of st.inv) if (it.owner && !st.team.includes(it.owner)) it.owner = null;
+  for (const id of st.team) for (const slot of K.SLOTS) { const cur = st.inv.find(i => i.owner === id && i.slot === slot); const best = st.inv.filter(i => i.slot === slot && (!i.owner || i.owner === id)).sort((a, b) => score(b) - score(a))[0]; if (best && best !== cur) { if (cur) cur.owner = null; best.owner = id; } }
+  for (const id of [...st.team, ...byPow.slice(4, 10)]) { const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones >= c.stones && st.silver >= c.silver) { st.stones -= c.stones; st.silver -= c.silver; h.stars++; } }
+  const keep = 2000 + Math.max(...st.team.map(id => st.roster[id].stars < K.maxStars(id) ? K.rankCost(st.roster[id].stars).silver : 0));
+  let sp = true; while (sp) { sp = false; for (const it of st.inv.filter(i => i.owner)) { const c = K.upgradeCost(it); if (it.lvl < K.MAX_GEAR_LVL && st.silver >= c + keep) { st.silver -= c; if (Math.random() < K.upgradeChance(it)) { it.lvl++; K.upgradeMilestone(it); } sp = true; } } }
+  while (st.silver > keep + 12000) { st.silver -= K.SHARD_PRICE; st.fs.fate++; }
+  const spare = st.inv.filter(i => !i.owner).sort((a, b) => score(b) - score(a));
+  for (const it of spare.slice(60)) { st.silver += K.sellValue(it); st.inv.splice(st.inv.indexOf(it), 1); }
+}
+// Boss Hall probe: for a few bosses, the highest level this team beats (2 tries per level, stop at the first level it cannot beat)
+async function bossProbe(st, label) {
+  if (!PROBE) return;
+  const res = [];
+  for (const i of [0, 6, 12, 18, 24]) { let best = 0; for (let n = 1; n <= K.BOSS_LEVELS; n++) { let ok = false; for (let t = 0; t < 2 && !ok; t++) ok = (await bossFight(st, i, n)) === 'win'; if (!ok) break; best = n; } res.push(`#${i + 1} ${K.BOSSES[K.BOSS_ORDER[i]].name.split(' ')[0]}:${best}`); }
+  const pw = st.team.reduce((t, id) => t + power(st, id), 0) | 0, lv = st.team.map(id => st.roster[id].lvl + '/' + st.roster[id].stars + '★').join(' ');
+  log(`   Boss Hall at ${label}: ${res.join('  ')}   (player lvl ${st.plvl}, team ${lv})`);
+}
+// Calibration (?calib=1): after Easy, measure per stage the "margin" of this team: the extra strength factor on the
+// enemies at which the team wins half of its fights (binary search in log space, 16 fights per step)
+async function margins(st) {
+  const out = [];
+  for (let s = 0; s < K.STAGES.length; s++) {
+    const S = K.STAGES[s], lvl = K.diffLvl(S, 0);
+    const winRate = async m => { let w = 0; for (let t = 0; t < 16; t++) if ((await phases(st, [0, 1, 2].map(p => () => K.stageUnits(S, lvl, p, 0).map(u => { u.maxHp = u.hp = Math.round(u.maxHp * m); u.atk = Math.round(u.atk * m); return u; })))) === 'win') w++; return w / 16; };
+    let lo = Math.log(0.05), hi = Math.log(40);
+    for (let i = 0; i < 8; i++) { const mid = (lo + hi) / 2; if ((await winRate(Math.exp(mid))) >= 0.5) lo = mid; else hi = mid; }
+    out.push(+Math.exp((lo + hi) / 2).toFixed(3));
+  }
+  return out;
+}
+async function run(starter) {
+  const st = newState(starter); let total = 0, bossOpenLogged = false;
+  log(`== ${starter}`);
+  for (let d = 0; d < UPTO; d++) {
+    let n = 0, back = 1; const t0 = performance.now();
+    while (st.cleared[d] < K.STAGES.length - 1 && n < CAP) {
+      const s = st.cleared[d] + 1, S = K.STAGES[s]; n++;
+      if ((await fight(st, S, d)) === 'win') {
+        st.cleared[d] = s; reward(st, S, true, d); back = 1;
+        if (d === 0) curveCheck(st, total + n, s);
+        if (d === 0 && !bossOpenLogged && st.plvl >= 10) { bossOpenLogged = true; log(`   player level 10 (Boss Hall opens) after ${total + n} battles, at Easy stage ${s + 1}`); await bossProbe(st, 'Boss Hall opening'); }
+        if (d === 0 && (s === 27 || s === 48)) await bossProbe(st, `Easy stage ${s + 1}`);
+        continue;
+      }
+      const p = K.STAGES[Math.max(0, s - back)]; n++;
+      if ((await fight(st, p, d)) === 'win') { reward(st, p, false, d); back = Math.max(1, back - 1); } else back = Math.min(s, back + 1);
+    }
+    total += n;
+    if (d === 0) log('   player level reached (battles@stage): ' + Object.entries(st.pc).map(([k, v]) => k + ' ' + v).join(' · '));
+    const done = st.cleared[d] === K.STAGES.length - 1;
+    log(`${K.DIFFS[d].name}: ${done ? 'cleared' : 'stuck at ' + (st.cleared[d] + 1) + '/70'} in ${n} battles (total ${total}) · ${((performance.now() - t0) / 1000) | 0}s`);
+    await bossProbe(st, `end of ${K.DIFFS[d].name}`);
+    if (d === 0 && Q.get('calib') && done) { const m = await margins(st); (window.MARGINS = window.MARGINS || []).push(m); log('   margins ' + JSON.stringify(m)); break; }
+    if (!done) { const wr = []; for (let s = 49; s < 70; s++) { let w = 0; for (let t = 0; t < 12; t++) if ((await fight(st, K.STAGES[s], d)) === 'win') w++; wr.push((s + 1) + ':' + Math.round(w / 12 * 100)); } log('   win % per stage (' + K.DIFFS[d].name + '): ' + wr.join(' ')); break; }
+  }
+  const gear = st.inv.filter(i => i.owner).map(i => K.RARITIES[i.rar][0] + i.lvl).join(' ');
+  log(`   final team ${st.team.join(', ')} · gear ${gear}`);
+}
+log('TUNE ' + JSON.stringify(K.TUNE) + ' f ' + K.DIFFS.map(x => x.f).join(',') + ' base ' + K.DIFFS.map(x => x.base).join(',') + ' slope ' + K.DIFFS.map(x => x.slope).join(',') + ' spread ' + K.DIFFS.map(x => x.spread).join(','));
+(async () => { for (const s of (Q.get('only') ? Q.get('only').split(',') : K.STARTERS)) await run(s); window.DONE = true; log('DONE'); })();
+</script>
