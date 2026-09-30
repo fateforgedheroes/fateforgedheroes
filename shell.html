@@ -675,6 +675,17 @@ button, a, input { touch-action: manipulation; }
 .hz-badge { position: absolute; pointer-events: none; transform: translateX(-50%); }
 .hz-badge.lock { display: flex; align-items: center; background: #120e14; color: var(--gold); border: .15cqw solid var(--gold-dim); padding: .15cqw .5cqw; font-family: var(--font-tag); font-weight: 700; font-size: .95cqw; letter-spacing: .05em; box-shadow: 0 0 0 .1cqw #000; }
 .hz-badge.dot { width: 1.1cqw; height: 1.1cqw; background: var(--ember); box-shadow: 0 0 0 .15cqw #000, 0 0 .8cqw var(--ember); }
+/* first steps: only the Campaign is lit (see firstSteps in app.js) */
+.tut-shade { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(circle at var(--x) var(--y), transparent 0 11cqw, rgba(6,4,10,.55) 14cqw, rgba(6,4,10,.8) 22cqw); }
+.hz.tut-go { z-index: 2; }
+.hz.tut-go::after { opacity: 1; background: radial-gradient(ellipse at 50% 55%, rgba(255,214,130,.35), rgba(255,214,130,.1) 55%, transparent 72%); animation: tutglow 1.6s ease-in-out infinite alternate; }
+@keyframes tutglow { from { opacity: .55; } to { opacity: 1; } }
+.tut-call { position: absolute; z-index: 3; transform: translate(-50%, -100%); pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: .2cqw; text-align: center; animation: tutbob 1.4s ease-in-out infinite alternate; }
+.tut-call b { font-family: var(--font-display); font-size: max(15px, 2.4cqw); color: var(--gold); text-shadow: 0 .2cqw 0 #000, 0 0 1.4cqw rgba(0,0,0,.9); letter-spacing: .04em; white-space: nowrap; }
+.tut-call span { font-size: max(12px, 1.25cqw); color: var(--fg); background: rgba(10,7,12,.85); border: .12cqw solid var(--gold-dim); padding: .25cqw .8cqw; white-space: nowrap; }
+.tut-call i { width: 0; height: 0; border-left: max(8px, 1.1cqw) solid transparent; border-right: max(8px, 1.1cqw) solid transparent; border-top: max(10px, 1.4cqw) solid var(--gold); filter: drop-shadow(0 .2cqw 0 #000); }
+@keyframes tutbob { from { margin-top: 0; } to { margin-top: .8cqw; } }
+@media (prefers-reduced-motion: reduce) { .tut-call, .hz.tut-go::after { animation: none; } }
 @media (max-width: 760px) {
   /* phones: the map fills the screen height and scrolls sideways */
   .home-map { margin: 0 -12px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }

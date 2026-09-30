@@ -336,14 +336,21 @@
     { box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
   ];
   let homeScroll = null;
+  // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
+  // every other building (and the profile) opens after the first campaign battle, won or lost.
+  const firstSteps = () => !S.needStarter && S.cleared < 0 && !(S.p.st.won + S.p.st.lost);
+  const CAMP_AT = [1025, 735]; // centre of the Campaign building in image pixels
   function homeHtml() {
     const pc = (v, d) => (v / d * 100).toFixed(3) + '%';
     const at = ([x, y, w, h]) => `left:${pc(x, HOME_W)};top:${pc(y, HOME_H)};width:${pc(w, HOME_W)};height:${pc(h, HOME_H)}`;
     const shardsReady = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const tut = firstSteps();
     const zones = HOME_ZONES.map(z => {
       // one button covers the building and its plate
       const [bx, by, bw, bh] = z.box, [px, py, pw, ph] = z.plate, x0 = Math.min(bx, px), y0 = Math.min(by, py);
       const area = [x0, y0, Math.max(bx + bw, px + pw) - x0, Math.max(by + bh, py + ph) - y0];
+      if (tut && z.go && z.go !== 'campagne') return `<button type="button" class="hz" style="${at(area)}" data-act="tutlock" aria-label="${z.label} (opens after your first battle)"></button>`;
+      if (tut && z.go === 'campagne') return `<button type="button" class="hz tut-go" style="${at(area)}" data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"></button>`;
       if (!z.go) return `<button type="button" class="hz soon" style="${at(area)}" data-act="soon" aria-label="Coming soon"></button>
         <span class="hz-plate" style="${at(z.plate)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
       const need = PLAYER_UNLOCK[z.go], locked = need && !unlocked(z.go);
@@ -351,7 +358,10 @@
         : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>` : '';
       return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (unlocks at player level ${need})` : ''}" title="${z.label}"></button>${badge}`;
     }).join('');
-    return `<div class="home-map"><div class="home-img"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}</div></div>`;
+    // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
+    const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
+      <div class="tut-call" style="left:${pc(CAMP_AT[0], HOME_W)};top:${pc(575, HOME_H)}"><b>Start here</b><span>Your adventure begins in the Campaign</span><i aria-hidden="true"></i></div>` : '';
+    return `<div class="home-map"><div class="home-img ${tut ? 'tut' : ''}"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}${spot}</div></div>`;
   }
   // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
   function backBar() {
@@ -372,7 +382,7 @@
       el.innerHTML = homeHtml();
       // phones: the map scrolls sideways; start in the middle, later keep where the player left it
       const map = el.querySelector('.home-map');
-      map.scrollLeft = homeScroll ?? (map.scrollWidth - map.clientWidth) / 2;
+      map.scrollLeft = firstSteps() ? CAMP_AT[0] / HOME_W * map.scrollWidth - map.clientWidth / 2 : homeScroll ?? (map.scrollWidth - map.clientWidth) / 2;
       map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
       return;
     }
@@ -713,8 +723,9 @@
   }
   function pickStarter(id) {
     S.roster[id] = newHero(id); S.team = [id]; delete S.needStarter; starterSel = null;
-    tab = 'campagne'; save(); render();
-    toast(`${C[id].name} joins you. Clear Chapter I to gather your team.`, false, 4000);
+    tab = 'home'; homeScroll = null; save(); render();
+    const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    toast(`${C[id].name} joins you. Tap the Campaign to begin your adventure.`, false, 4500);
   }
 
   // ----- player profile -----
@@ -895,7 +906,7 @@
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
     if (e.target.closest('.brand') && !B && !S.needStarter) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
-    if (e.target.closest('#account')) { if (B) return; SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
@@ -909,6 +920,7 @@
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
     else if (act === 'go') { invSlot = null; setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
+    else if (act === 'tutlock') toast('Fight your first campaign battle to open the rest of your homebase.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
@@ -1719,6 +1731,8 @@
   // unlock messages (S.seen remembers which were shown): speed 3× and 5×, Fate Altar, Boss Hall
   function newUnlocks() {
     const out = [];
+    // the homebase opens after the first campaign battle (see firstSteps)
+    if (!S.seen.home && !S.needStarter && !firstSteps()) { S.seen.home = true; out.push({ k: 'home', title: 'Your homebase is open', text: 'Explore the buildings: Heroes & Gear to manage your team and gear, the Town Hall for your profile. More buildings open as your player level rises.' }); }
     for (const [sp, at] of SPEED_UNLOCK) if (sp > 2 && !S.seen['spd' + sp] && S.cleared + 1 >= at) {
       S.seen['spd' + sp] = true;
       out.push({ k: 'spd', title: `Speed ${sp}× unlocked`, text: sp === 5 ? 'Battles can now run at 5× when you replay a stage you already cleared or a Boss Hall level you already beat.' : `Tap the speed button in battle to switch to ${sp}×.` });

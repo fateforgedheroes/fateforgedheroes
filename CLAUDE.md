@@ -38,7 +38,7 @@ Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…)
 
 ## Navigation (app.js)
 
-There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab = 'home'`): the homebase map with clickable buildings (`HOME_ZONES`: building box + name plate in image pixels). Active: Campaign, Boss Halls, Summon Altar (Fate Altar), Heroes & Gear, Town Hall (profile), Arena (`tab = arena`). Zones without `go` show a "Coming soon" plate that covers the painted name, so those buildings (forge, arena, research, ship, market, challenge gate) can become any future mode: give the zone a `go`. Every other screen starts with `backBar()` ("‹ Home"; Heroes and Team share a switch). The logo also leads home.
+There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab = 'home'`): the homebase map with clickable buildings (`HOME_ZONES`: building box + name plate in image pixels). Active: Campaign, Boss Halls, Summon Altar (Fate Altar), Heroes & Gear, Town Hall (profile), Arena (`tab = arena`). Zones without `go` show a "Coming soon" plate that covers the painted name, so those buildings (forge, arena, research, ship, market, challenge gate) can become any future mode: give the zone a `go`. Every other screen starts with `backBar()` ("‹ Home"; Heroes and Team share a switch). The logo also leads home. **First steps:** after picking a starter the player lands on Home with only the Campaign lit (`firstSteps()`: no campaign battle yet; a shade with a spotlight and a "Start here" marker, `CAMP_AT`); every other building and the profile button answer with a toast until the first campaign battle (won or lost), which shows the "Your homebase is open" unlock (`S.seen.home`).
 
 ## Game systems (engine.js)
 
