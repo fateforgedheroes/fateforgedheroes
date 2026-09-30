@@ -20,6 +20,7 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 | `heroes.js enemies.js bosses.js` | Battle sprites as data URLs (`HERO_ART`, `ENEMY_ART`, `BOSS_ART`). Per hero: `body` (battle sprite, ~75 px tall, transparent), `full` (2×, detail/summon), `face` (64 px, used until `HERO_POR` has a portrait). |
 | `portraits.js` | `HERO_POR` painted portraits for heroes, enemies and bosses (128 px JPEG). |
 | `shards.js logo.js stone.js sigil.js` | Fate Shard art (`SHARD_ART.<type><0-2>`), `LOGO_URL`, `STONE_ART`, `SIGIL_ART` (currency icon). |
+| `home.js` | `HOME_ART`: the homebase map (1536×1024 WebP) used as the main menu. |
 | `privacy.html favicon.png` | Copied into `dist/`. |
 | `0001_saves.sql` | Supabase table `saves` (one row per user, RLS own-row only) + `delete_my_account()`. |
 | `campaign-sim.cjs` | Test: for each of the 4 starters, a simulated new player (farms lower stages after a loss, upgrades gear, ascends, buys and summons shards, picks the best team per essence) must finish the campaign within 8,000 battles. Must print PASS 4×; the battle count shows how long the grind is. |
@@ -27,6 +28,10 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 The currency is called **Sigils** in the game but stored as `S.silver` (and `winSilver`, `rankCost().silver`, `TUNE.silver` in the engine); keep those names, saves depend on them. Show it with `ic('coin')` / `sigils(n)` in app.js.
 
 Internal ids are partly Dutch (legacy): enemy ids (`botkrijger`, `hellehond`…), gear slots (`wapen helm schild handschoenen borstpantser laarzen`), set ids (`krijger`, `levensbron`…), tabs (`campagne kerkers altaar`). Display names are English. Do not rename ids: saves depend on them.
+
+## Navigation (app.js)
+
+There is no tab bar (`#tabs` is hidden by CSS). The main menu is **Home** (`tab = 'home'`): the homebase map with clickable buildings (`HOME_ZONES`: building box + name plate in image pixels). Active: Campaign, Boss Halls, Summon Altar (Fate Altar), Heroes & Gear, Town Hall (profile). Zones without `go` show a "Coming soon" plate that covers the painted name, so those buildings (forge, arena, research, ship, market, challenge gate) can become any future mode: give the zone a `go`. Every other screen starts with `backBar()` ("‹ Home"; Heroes and Team share a switch). The logo also leads home.
 
 ## Game systems (engine.js)
 

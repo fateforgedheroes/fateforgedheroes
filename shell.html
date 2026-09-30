@@ -533,6 +533,34 @@ button, a, input { touch-action: manipulation; }
 .prof-acc p { margin: 0 0 8px; }
 .prof-acc .row { display: flex; gap: 8px; flex-wrap: wrap; }
 
+/* Home: the homebase map is the main menu (the tab bar is gone) */
+#tabs { display: none !important; }
+.backbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 2px 0 14px; }
+.home-map { margin-top: 4px; }
+.home-img { position: relative; width: 100%; aspect-ratio: 1536 / 1024; container-type: inline-size; border: 2px solid var(--line); box-shadow: 0 0 0 2px #000, 0 14px 40px rgba(0,0,0,.55); overflow: hidden; background: #0b0a10; }
+.home-img > img { display: block; width: 100%; height: 100%; object-fit: cover; user-select: none; -webkit-user-drag: none; }
+.hz { position: absolute; background: transparent; border: 0; padding: 0; margin: 0; cursor: pointer; border-radius: 3cqw; }
+.hz::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: radial-gradient(ellipse at 50% 45%, rgba(255,214,130,.30), rgba(255,214,130,.08) 55%, transparent 72%); opacity: 0; transition: opacity .18s; pointer-events: none; }
+.hz:hover::after, .hz:focus-visible::after, .hz:active::after { opacity: 1; }
+.hz:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+.hz.soon { background: radial-gradient(ellipse at 50% 45%, rgba(8,6,12,.5), rgba(8,6,12,.28) 60%, transparent 78%); }
+.hz.soon::after { background: radial-gradient(ellipse at 50% 45%, rgba(200,190,230,.12), transparent 70%); }
+.hz-plate { position: absolute; display: flex; align-items: center; justify-content: center; gap: .5cqw; pointer-events: none;
+  background: linear-gradient(180deg, #1c171f, #0d0a10); border: .18cqw solid #b08a3e; border-radius: .5cqw; box-shadow: 0 0 0 .12cqw #000, 0 .3cqw .8cqw rgba(0,0,0,.6);
+  color: #cfc4d6; font-family: var(--font-display); font-weight: 700; font-size: 1.15cqw; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
+.hz-plate svg { width: 1.2cqw; height: 1.2cqw; fill: none; stroke: var(--gold); stroke-width: 1.6; flex: none; }
+.hz-badge { position: absolute; pointer-events: none; transform: translateX(-50%); }
+.hz-badge.lock { display: flex; align-items: center; background: #120e14; color: var(--gold); border: .15cqw solid var(--gold-dim); padding: .15cqw .5cqw; font-family: var(--font-tag); font-weight: 700; font-size: .95cqw; letter-spacing: .05em; box-shadow: 0 0 0 .1cqw #000; }
+.hz-badge.dot { width: 1.1cqw; height: 1.1cqw; background: var(--ember); box-shadow: 0 0 0 .15cqw #000, 0 0 .8cqw var(--ember); }
+@media (max-width: 760px) {
+  /* phones: the map fills the screen height and scrolls sideways */
+  .home-map { margin: 0 -12px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .home-map::-webkit-scrollbar { display: none; }
+  .home-img { width: auto; height: calc(100svh - 62px - env(safe-area-inset-top, 0px)); max-height: 820px; border-inline: 0; }
+  .home-img > img { width: auto; height: 100%; }
+  .backbar { margin-top: 10px; }
+}
+
 /* team filters */
 .tfilter { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--panel); border: 2px solid var(--line); padding: 8px 10px; margin-bottom: 10px; }
 .tf-ess { display: flex; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
@@ -628,7 +656,7 @@ button, a, input { touch-action: manipulation; }
 /* phones: sticky compact header, app-style tab bar at the bottom, full-width battlefield */
 @media (max-width: 760px) {
   body { font-size: 16px; -webkit-tap-highlight-color: transparent; }
-  #app { padding-inline: 12px; padding-block: 0 calc(76px + env(safe-area-inset-bottom, 0px)); }
+  #app { padding-inline: 12px; padding-block: 0 calc(16px + env(safe-area-inset-bottom, 0px)); }
   h2 { font-size: 1.35rem; }
   .lede { font-size: .95rem; }
 
@@ -663,7 +691,7 @@ button, a, input { touch-action: manipulation; }
   .tabs button[aria-selected="true"] { background: transparent; color: var(--gold); box-shadow: inset 0 3px 0 var(--gold); }
   .tabs .dot { top: 6px; right: calc(50% - 17px); }
   #screen { padding-top: 12px; }
-  .toast { bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .toast { bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 
   .btn { min-height: 40px; }
   .btn.small { min-height: 36px; }

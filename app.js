@@ -233,7 +233,47 @@
   }
 
   // ---------- tabs ----------
-  let tab = 'campagne', selChamp = 'draelyn', invSlot = null, champTab = 'stats';
+  let tab = 'home', selChamp = 'draelyn', invSlot = null, champTab = 'stats';
+
+  // ----- Home: the homebase map is the main menu. Boxes are image pixels of HOME_ART (1536x1024): the building and
+  // its name plate. Zones without `go` are "Coming soon": their names are covered, so the buildings can become any mode later.
+  const HOME_W = 1536, HOME_H = 1024;
+  const HOME_ZONES = [
+    { go: 'kerkers', label: 'Boss Hall', box: [20, 0, 450, 330], plate: [150, 243, 222, 44] },
+    { box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
+    { go: 'profiel', label: 'Town Hall: your profile', box: [830, 20, 320, 265], plate: [864, 283, 214, 50] },
+    { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
+    { box: [90, 320, 380, 215], plate: [206, 533, 178, 50] },
+    { go: 'champions', label: 'Heroes & Gear', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
+    { box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
+    { box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
+    { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
+    { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
+    { box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
+  ];
+  let homeScroll = null;
+  function homeHtml() {
+    const pc = (v, d) => (v / d * 100).toFixed(3) + '%';
+    const at = ([x, y, w, h]) => `left:${pc(x, HOME_W)};top:${pc(y, HOME_H)};width:${pc(w, HOME_W)};height:${pc(h, HOME_H)}`;
+    const shardsReady = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const zones = HOME_ZONES.map(z => {
+      // one button covers the building and its plate
+      const [bx, by, bw, bh] = z.box, [px, py, pw, ph] = z.plate, x0 = Math.min(bx, px), y0 = Math.min(by, py);
+      const area = [x0, y0, Math.max(bx + bw, px + pw) - x0, Math.max(by + bh, py + ph) - y0];
+      if (!z.go) return `<button type="button" class="hz soon" style="${at(area)}" data-act="soon" aria-label="Coming soon"></button>
+        <span class="hz-plate" style="${at(z.plate)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
+      const need = PLAYER_UNLOCK[z.go], locked = need && !unlocked(z.go);
+      const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 6, HOME_W)};top:${pc(py - 14, HOME_H)}">Lv ${need}</span>`
+        : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>` : '';
+      return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (unlocks at player level ${need})` : ''}" title="${z.label}"></button>${badge}`;
+    }).join('');
+    return `<div class="home-map"><div class="home-img"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}</div></div>`;
+  }
+  // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
+  function backBar() {
+    const sw = tab === 'champions' || tab === 'team' ? `<div class="seg" role="group" aria-label="Heroes or team"><button type="button" data-act="tab" data-tab="champions" aria-pressed="${tab === 'champions'}">Heroes</button><button type="button" data-act="tab" data-tab="team" aria-pressed="${tab === 'team'}">Team</button></div>` : '';
+    return `<div class="backbar"><button type="button" class="btn small" data-act="tab" data-tab="home">‹ Home</button>${sw}</div>`;
+  }
   function setTab(t) {
     tab = t;
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
@@ -242,9 +282,16 @@
   function render() {
     hud();
     const el = $('#screen');
-    $('#tabs').hidden = !!S.needStarter;
     if (S.needStarter) { el.innerHTML = starterHtml(); paintDungeonArt(); return; }
-    el.innerHTML = tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml();
+    if (tab === 'home') {
+      el.innerHTML = homeHtml();
+      // phones: the map scrolls sideways; start in the middle, later keep where the player left it
+      const map = el.querySelector('.home-map');
+      map.scrollLeft = homeScroll ?? (map.scrollWidth - map.clientWidth) / 2;
+      map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
+      return;
+    }
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (tab === 'altaar') paintAltar();
     // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
@@ -625,6 +672,7 @@
     const tb = e.target.closest('#tabs button');
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
+    if (e.target.closest('.brand') && !B && !S.needStarter) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#account')) { if (B) return; SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
     if (!a || a.closest('#battle')) return;
@@ -636,7 +684,9 @@
     else if (act === 'starterchoose') { if (starterSel) confirmStarter(); }
     else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
     else if (act === 'startercancel') $('#modal').hidden = true;
-    else if (act === 'tab') setTab(a.dataset.tab);
+    else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
+    else if (act === 'go') { invSlot = null; setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+    else if (act === 'soon') toast('Coming soon.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
