@@ -1040,6 +1040,67 @@ button, a, input { touch-action: manipulation; }
 @media (max-width: 480px) {
   #sound, .wallet .res:has(#ic-stone) { display: none; }
 }
+/* damage meter in the battle result */
+.meter { margin: 10px 0 4px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); text-align: left; }
+.meter > summary { cursor: pointer; padding: 8px 12px; font-family: var(--font-tag); font-size: .85rem; letter-spacing: .04em; color: var(--gold); }
+.meter > summary small { font-family: var(--font-body); color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+.mt-row { border-top: 1px solid var(--line); }
+.mt-row > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 36px minmax(70px, 110px) 1fr; gap: 8px; align-items: center; padding: 6px 10px; }
+.mt-row > summary::-webkit-details-marker { display: none; }
+.mt-row > summary img.spr { width: 36px; height: 36px; border-radius: 6px; }
+.mt-nm { font-weight: 600; font-size: .92rem; line-height: 1.1; }
+.mt-nm small { color: var(--bad); font-weight: 400; }
+.mt-bars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.mt-l { display: grid; grid-template-columns: auto 1fr; column-gap: 4px; font-size: .8rem; line-height: 1.2; }
+.mt-l em { font-style: normal; color: var(--muted); }
+.mt-l b { text-align: right; font-variant-numeric: tabular-nums; }
+.mt-bar { grid-column: 1 / -1; display: block; height: 5px; border-radius: 3px; margin-top: 2px; background: var(--ember); }
+.mt-bar.heal { background: var(--good); }
+.mt-bar.taken { background: var(--muted); opacity: .6; }
+.mt-src { list-style: none; margin: 0 10px 8px 54px; padding: 0; font-size: .85rem; }
+.mt-src li { display: grid; grid-template-columns: 1fr auto 3.2em; gap: 8px; padding: 1px 0; }
+.mt-src li small { color: var(--muted); text-align: right; }
+.mt-src li.mt-h { display: block; color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.mt-src li.dot span { color: var(--bad); font-weight: 600; }
+@media (max-width: 480px) {
+  .mt-row > summary { grid-template-columns: 32px 1fr; }
+  .mt-bars { grid-column: 1 / -1; }
+  .mt-src { margin-left: 10px; }
+}
+/* team roles check (Team screen) */
+.roles-chk { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; }
+.roles-chk li { font-size: .85rem; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); cursor: help; }
+.roles-chk li.ok { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.roles-chk li.miss { color: var(--muted); border-style: dashed; }
+.roles-tip { margin: 4px 0 0; }
+/* boss enrage chips */
+.fxc.rage { background: #8c1d12; color: #ffd9c8; border-color: #ff6a3d; animation: ragepulse 1s ease-in-out infinite; }
+.fxc.clock { background: #2a2230; color: var(--gold); }
+@keyframes ragepulse { 50% { box-shadow: 0 0 6px #ff6a3d; } }
+@media (prefers-reduced-motion: reduce) { .fxc.rage { animation: none; } }
+/* in-battle guide: pauses the battle */
+.guide-pop { z-index: 12; }
+.gp-box { width: min(760px, 100%); max-height: calc(100% - 24px); padding: 14px 16px; gap: 8px; }
+.gp-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; position: sticky; top: -14px; background: var(--panel); padding: 4px 0 8px; z-index: 1; border-bottom: 1px solid var(--line); }
+.gp-body .guide .section-head { display: none; }
+/* first steps: the campaign's Fight button is the only thing to press (fightSpot) */
+.spot-wrap { position: relative; z-index: 21; display: inline-flex; flex-direction: column; align-items: center; }
+.cn-go.spot-go { position: relative; box-shadow: 0 0 0 3px var(--gold), 0 0 22px 4px rgba(255,214,130,.7), 0 0 0 200vmax rgba(6,4,10,.78); animation: spotpulse 1.4s ease-in-out infinite alternate; }
+.spot-call { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap; pointer-events: none; font-size: .95rem; color: var(--fg); background: rgba(10,7,12,.92); border: 1px solid var(--gold-dim); padding: 3px 10px; animation: tutbob 1.4s ease-in-out infinite alternate; }
+.spot-call b { color: var(--gold); }
+.spot-block { position: fixed; inset: 0; z-index: 20; }
+@keyframes spotpulse { from { filter: brightness(1); } to { filter: brightness(1.18); } }
+@media (max-width: 640px) { .spot-wrap { flex: 1 1 100%; } .spot-wrap .cn-go { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .cn-go.spot-go, .spot-call { animation: none; } }
+/* homebase tour */
+.home-img.touring .hz { pointer-events: none; }
+.tour-card { position: fixed; z-index: 15; left: 0; right: 0; margin-inline: auto; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: min(460px, calc(100% - 32px)); background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 2px #000, 0 12px 40px rgba(0,0,0,.7); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; animation: pop .25s ease-out; }
+.tour-card h3 { margin: 0; font-family: var(--font-display); color: var(--gold); }
+.tour-card p { margin: 0; }
+.tc-open { color: var(--good); font-size: .9rem; }
+.tc-lock { color: var(--muted); font-size: .9rem; display: inline-flex; gap: 4px; align-items: center; }
+.tc-lock svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.tc-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 </style>
 
 <div id="app">
@@ -1068,6 +1129,7 @@ button, a, input { touch-action: manipulation; }
     <div class="order" id="order" aria-label="Turn order"></div>
     <div class="stage-wrap"><canvas id="bc" width="480" height="270"></canvas><div id="ov"></div><div id="flash"></div><div id="banner" hidden></div><div id="coach-pop" class="coach-pop" hidden></div>
       <div class="b-ctl">
+        <button class="rb" id="b-help" type="button" aria-label="Guide (pauses the battle)" title="Guide (pauses the battle)"><b style="font-size:15px">?</b></button>
         <button class="rb" id="b-auto" type="button" aria-label="Auto battle" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 1.6l3.9.4-.9 3.8z" fill="currentColor"/><path d="M6.4 11 8 5.2 9.6 11M6.9 9.3h2.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
         <button class="rb" id="b-speed" type="button" aria-label="Battle speed"><b>1×</b></button>
         <button class="rb danger" id="b-quit" type="button" aria-label="Give up"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13.5" stroke="currentColor" stroke-width="1.6"/><path d="M4.3 2.2h8.2l-2 3.2 2 3.2H4.3z" fill="currentColor"/></svg></button>
@@ -1081,6 +1143,7 @@ button, a, input { touch-action: manipulation; }
     <ol id="b-log" aria-live="polite"></ol>
   </section>
 </div>
+<div id="guide-pop" class="modal guide-pop" hidden><div class="modal-box gp-box" role="dialog" aria-modal="true" aria-label="Guide"><div class="gp-head"><span class="tag">Battle paused</span><button class="btn primary small" type="button" id="gp-close">Resume battle</button></div><div class="gp-body"></div></div></div>
 <div id="modal" class="modal" hidden></div>
 <div id="toast" class="toast" hidden></div>
 <script>

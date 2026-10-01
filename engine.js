@@ -29,8 +29,10 @@ const K = (function () {
   // index 5 (Mythical) exists for gear only (Nightmare campaign); heroes go up to Legendary
   const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythical'];
   const CRIT_CAP = 75; // crit rate never goes above this, also with buffs
-  const RAR_MULT = [0.85, 0.92, 1, 1.12, 1.4];
-  const RAR_CAP = [40, 40, 50, 60, 60];
+  // Common and Uncommon heroes reach level 50 like Rares (5 stars) and stay a little weaker (90% / 95% stats), so a
+  // well-built one is a real team member, not just food
+  const RAR_MULT = [0.9, 0.95, 1, 1.12, 1.4];
+  const RAR_CAP = [50, 50, 50, 60, 60];
   const ROLES = {
     Tank: { hp: 1250, atk: 72, def: 105, spd: 96, crit: 0, cdmg: 0, acc: 0, res: 15 },
     Warrior: { hp: 1050, atk: 98, def: 80, spd: 100, crit: 0, cdmg: 0, acc: 0, res: 5 },
@@ -53,6 +55,8 @@ const K = (function () {
     immune: { n: 'Immunity', s: 'IMM', buff: true, d: 'Blocks new debuffs' },
     counter: { n: 'Counterattack', s: 'CTR', buff: true, d: '50% chance to strike back when hit' },
     burrow: { n: 'Burrowed', s: 'BUR', buff: true, d: 'Untargetable and immune to damage' },
+    enrage: { n: 'Enrage', s: 'RGE', buff: true, d: 'The boss took too long to beat: +25% Attack per stack, one more stack every 2 of its turns' },
+    blight: { n: 'Blight Aura', s: 'BLT', buff: true, d: 'Each of its turns every enemy loses part of its max HP, whatever its Defense: only healing and shields keep a team standing' },
     atkDown: { n: 'Attack Down', s: 'ATK-', buff: false, d: '-50% Attack' },
     defDown: { n: 'Defense Down', s: 'DEF-', buff: false, d: '-60% Defense' },
     spdDown: { n: 'Speed Down', s: 'SPD-', buff: false, d: '-30% Speed' },
@@ -69,6 +73,17 @@ const K = (function () {
     broken: { n: 'Affinity Break', s: 'BRK', buff: false, d: 'Stunned, takes 15% more damage' },
   };
   const SKIP = ['stun', 'freeze', 'broken'];
+  // Enrage (Boss Hall bosses only, u.hall): a boss that is still standing after ENRAGE.at of its own turns gets an Attack stack, and another one every
+  // ENRAGE.every turns after that, so a team that cannot kill it in time is worn down. Counted per battle (phase).
+  // blightAt: bosses with a Blight Aura fight longer (more HP, and a team needs time to out-heal the aura), so they enrage later
+  const ENRAGE = { at: 14, blightAt: 22, every: 2, atk: 0.25 };
+  // Blight Aura (Boss Hall only, campaign bosses stay as they are): Boss Hall bosses from level BLIGHT.bh on hit the whole
+  // enemy team each of their turns for a share of max HP (pct per campaign difficulty) that Defense does not reduce.
+  // A team without healing (heal, shield, revive) wears down before it can win, so from there a healer is needed.
+  // A stunned, frozen or broken boss skips its aura, so control helps too.
+  // hp / atk: a blighted boss has more HP and hits less hard itself, so the fight lasts long enough for the aura to matter
+  const BLIGHT = { bh: 3, pct: [0.1, 0.11, 0.12, 0.13, 0.14], hp: 2.2, atk: 0.5 };
+  const blighted = (u, d) => { if (u.isBoss) { u.blight = BLIGHT.pct[d || 0]; u.maxHp = u.hp = Math.round(u.maxHp * BLIGHT.hp); u.atk = Math.round(u.atk * BLIGHT.atk); } return u; };
   const DOT = { poison: 0.05, burn: 0.04, bleed: 0.04 };
   const STAT_NAMES = { hp: 'HP', atk: 'Attack', def: 'Defense', spd: 'Speed', crit: 'Crit Rate', cdmg: 'Crit Damage', acc: 'Accuracy', res: 'Resistance', hpP: 'HP', atkP: 'Attack', defP: 'Defense' };
   const PCT_STATS = ['crit', 'cdmg', 'hpP', 'atkP', 'defP'];
@@ -425,6 +440,22 @@ const K = (function () {
         SK('Lightning Volley', 'random', 'ranged', 'arrow', 3, 'Four arrows of 50% on random enemies.', [D(0.5)], { hits: 4 }),
         SK('Thunder Arrow', 'enemy', 'ranged', 'arrow', 4, 'Arrow of 180% that drains 30% Turn Meter. 40% chance of Speed Down for 2 turns.', [D(1.8), TMD(0.3), DB('spdDown', 2, 0.4)]),
       ] },
+    // gift-only (dev: true, like J3DUIN): no summon, unlock, capture or bot gives him; any player may use him in the arena
+    dio: { name: 'Dio', faction: 'Mistspawn', role: 'Tank', rar: 4, aff: 'Frost', dev: true,
+      passive: 'frozencore', passiveName: 'Polar Hide', passiveDesc: 'Attackers have a 25% chance to receive Speed Down.',
+      skills: [
+        SK('Glacier Hammer', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 40% chance of Speed Down for 2 turns.', [D(1.0), DB('spdDown', 2, 0.4)]),
+        SK('Chill Vibes', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 18% of Dio’s max HP and Defense Up for 2 turns.', [SH(0.18, 2), BF('defUp', 2)]),
+        SK('Avalanche Party', 'enemies', 'slam', 'quake', 5, 'Attack of 70% on all enemies. 70% chance to Taunt them for 2 turns and 35% chance to Freeze them for 1 turn.', [D(0.7), DB('taunt', 2, 0.7), DB('freeze', 1, 0.35)]),
+      ] },
+    // gift-only like Dio
+    malvek: { name: 'Malvek', faction: 'Grey Flame', role: 'Warrior', rar: 4, aff: 'Ember', dev: true,
+      passive: 'kindling', passiveName: 'Burning Faith', passiveDesc: 'Burn applied by Malvek deals 50% more damage.',
+      skills: [
+        SK('Solar Edge', 'enemy', 'melee', 'slash', 0, 'Strike of 110%. 40% chance of Burn for 2 turns.', [D(1.1), DB('burn', 2, 0.4)]),
+        SK('Purging Flame', 'enemy', 'melee', 'fire', 3, 'Strike of 220%, 40% more against a target below 50% HP. 60% chance of Burn for 2 turns.', [D(2.2, { execute: [0.5, 0.4] }), DB('burn', 2, 0.6)]),
+        SK('The Light Within', 'enemies', 'magic', 'fire', 5, 'Attack of 120% on all enemies. 75% chance of Burn for 2 turns. Malvek gains Attack Up for 2 turns.', [D(1.2), DB('burn', 2, 0.75), BF('atkUp', 2, 'self')]),
+      ] },
     celesthyr: { name: 'Celesthyr', faction: 'Grey Flame', role: 'Mage', role2: 'Controller', rar: 4, aff: 'Radiant',
       passive: 'seduction', passiveName: 'Celestial Will', passiveDesc: '+15% chance for his debuffs to land.',
       skills: [
@@ -544,7 +575,8 @@ const K = (function () {
   // Feeding gives a fixed amount of XP by the food's rarity and level. It does not depend on the hero that eats it:
   // it used to be a share of the eater's next level, so every feed was worth the same part of a level at any level
   // and feeding a high-level hero gave several levels at once. heroLvl is kept in the signature but unused.
-  const FEED_BASE = [1000, 1800, 3200, 5500, 9000];
+  // Uncommon food gives 500 XP at level 1: a meal, not a shortcut past battles
+  const FEED_BASE = [250, 500, 1000, 2000, 4000];
   const feedXp = (foodId, heroLvl, foodLvl) => Math.round(FEED_BASE[CHAMPS[foodId].rar] * (1 + ((foodLvl || 1) - 1) / 10));
   const breakStones = fodderId => CHAMPS[fodderId].rar + 1;
 
@@ -729,15 +761,18 @@ const K = (function () {
     const up = hi === 5 ? 0.06 + st.chapter * 0.015 + (st.n === 6 ? 0.06 : 0) : 0.15 + st.chapter * 0.035 + (st.n === 6 ? 0.15 : 0);
     return { rars: D.rars, up: Math.min(0.6, up) };
   }
-  // Boss Hall gear: Rare/Epic on levels 1-4, Epic/Legendary on 5-8, only Legendary on 9-10 (never Mythical)
-  const bossLoot = n => ({ rars: n <= 4 ? [2, 3] : n <= 8 ? [3, 4] : [4], up: 0.25 + (n - 1) % 4 * 0.05 });
+  // Boss Hall gear: the loot of the level's campaign difficulty (bossDiff): levels 1-2 Easy (Uncommon/Rare),
+  // 3-4 Normal (Rare/Epic), 5-6 Hard (Epic/Legendary), 7-8 Brutal (Legendary), 9-10 Nightmare (Legendary/Mythical).
+  // The higher rarity is a bit likelier on the second level of a pair.
+  const bossDiff = n => Math.min(DIFFS.length - 1, Math.floor((n - 1) / 2));
+  const bossLoot = n => { const D = DIFFS[bossDiff(n)], hi = D.rars[D.rars.length - 1]; return { rars: D.rars, up: (hi === 5 ? 0.06 : 0.2) + (n - 1) % 2 * (hi === 5 ? 0.04 : 0.1) }; };
   // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter,
   // squeezed by each difficulty's spread), chBoss scales the chapter boss itself, bossWall the whole boss stage.
   // Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs (Easy) and balance-sim.html (all difficulties):
   // Easy takes a new player ~1,400-2,900 battles; all five difficulties together ~5,000-16,000 for most players, and
   // unlucky rosters hit a wall on Nightmare that only better heroes (Ancient+ summons) and Mythical upgrades get past.
   // Late chapters need summoned Epic/Legendary heroes and upgraded gear; levels alone are not enough.
-  const TUNE = { chDiff: 0.15, bossWall: 1, chBoss: 0.7, xp: 1, silver: 1 };
+  const TUNE = { chDiff: 0.15, bossWall: 1, chBoss: 0.7, wall: 1.4, hit: 0.75, foeHp: 1.5, hitFrom: 2, rest: 0.15, xp: 1, silver: 1 };
   // Chapters I-II play at the base level; from Chapter III on every chapter adds chDiff
   // strength factor of a stage on difficulty d: chapters I-II at the base, from Chapter III on +chDiff per chapter
   // (squeezed by the difficulty's spread), times the difficulty's f and bossWall on the boss stage
@@ -751,12 +786,21 @@ const K = (function () {
   // correction is applied). It removes the spikes (4-foe elite stages, chapter bosses) that were walls, and keeps a
   // chapter's boss a bit harder than its first stage.
   const STAGE_PW = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1.34, 1.04, 1.07, 0.78, 0.92, 0.77, 0.77, 1.46, 1.19, 1.04, 0.87, 1, 0.85, 0.85, 1.59, 1.17, 1.04, 0.87, 0.95, 0.85, 0.83, 1.36, 1.03, 1.04, 0.84, 1.01, 0.85, 0.87, 1.36, 1.09, 0.98, 0.85, 1, 0.86, 0.82, 1.35, 1.06, 1.05, 0.89, 1.11, 0.87, 0.79, 1.45, 1.18, 1.14, 0.89, 0.96, 0.81, 0.9, 1.4, 1.07, 1.08, 0.85, 1.03, 0.95, 0.93];
-  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (BOSSES[f] ? TUNE.chBoss : 1)));
+  // Walls: two stages per chapter (from Chapter II on, never the boss stage) are a clear step up (TUNE.wall), so the
+  // player has to go back and farm earlier stages for gear and levels. Spread over the chapter by hand so they differ.
+  const WALLS = [[], [2, 4], [1, 4], [3, 5], [2, 5], [1, 3], [3, 4], [2, 5], [1, 4], [3, 5]];
+  const isWall = st => WALLS[st.chapter].includes(st.n);
+  // Attrition: from Chapter III (TUNE.hitFrom) on, regular campaign enemies (not the chapter bosses) hit softer (TUNE.hit)
+  // but have more HP (TUNE.foeHp). Fights last longer and the damage comes as a steady stream, which healing absorbs and a
+  // team without healing does not: measured, a team without a healer then needs ~1.4x the power, one with a healer about
+  // the same as before. (Harder hits did the opposite: burst kills heroes before a healer can help.)
+  const attrition = (u, st) => { if (!u.isBoss && st.chapter >= TUNE.hitFrom) { u.atk = Math.round(u.atk * TUNE.hit); u.maxHp = u.hp = Math.round(u.maxHp * TUNE.foeHp); } return u; };
+  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (isWall(st) ? TUNE.wall : 1) * (BOSSES[f] ? TUNE.chBoss : 1)), st));
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
       if (!u.alive) continue;
-      u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * 0.15));
+      u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * TUNE.rest));
       u.effects = []; u.tm = rnd() * 20;
       for (const s of u.skills) s.cdLeft = 0;
     }
@@ -774,18 +818,19 @@ const K = (function () {
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
   // Every Boss Hall level plays like a campaign stage, so the Boss Hall is never a shortcut to better gear:
-  // boss i belongs to chapter floor(i × 10 / 25); level 1-4 is Normal, 5-8 Hard and 9-10 Brutal (the same difficulties
-  // whose loot bossLoot hands out), each level a later stage of that chapter. Enemies get that stage's level and
+  // boss i belongs to chapter floor(i × 10 / 25); every two levels are one campaign difficulty (bossDiff: 1-2 Easy,
+  // 3-4 Normal, 5-6 Hard, 7-8 Brutal, 9-10 Nightmare, whose loot bossLoot hands out), the first level of a pair like
+  // that chapter's third stage, the second like its boss stage. Enemies get that stage's level and
   // strength, times BOSS_ROOM for the boss room.
   const BOSS_ROOM = 1.1;
   function bossRoom(i, n) {
     const c = Math.min(CHAPTERS.length - 1, Math.floor(i * CHAPTERS.length / BOSS_ORDER.length));
-    const d = n <= 4 ? 1 : n <= 8 ? 2 : 3, st = STAGES[c * 7 + [0, 2, 4, 6][(n - 1) % 4]];
+    const d = bossDiff(n), st = STAGES[c * 7 + [2, 6][(n - 1) % 2]];
     return { lvl: diffLvl(st, d), f: stageDiff(st, d) * BOSS_ROOM, d };
   }
   const bossLvl = (i, n) => bossRoom(i, n).lvl;
   // the enemies of phase p of Boss Hall level n (minions, minions, boss), toughened like the matching campaign stage
-  function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => toughen(enemyUnit(f, r.lvl), r.f)); }
+  function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => { const u = toughen(enemyUnit(f, r.lvl), r.f); if (u.isBoss) u.hall = true; return n >= BLIGHT.bh ? blighted(u, r.d) : u; }); }
   const SET_GROUPS = [['vlammenhart', 'scherpte', 'nachtscherf'], ['woede', 'asvloek', 'vampierbloed'], ['wilgenbast', 'levensbron', 'wraak'], ['windloper', 'scherpte', 'vlammenhart']];
   const bossSets = i => SET_GROUPS[i % SET_GROUPS.length];
   function bossFoes(id, n) { return [id]; }
@@ -997,6 +1042,8 @@ const K = (function () {
       this.h = Object.assign({}, NOHOOKS, hooks || {});
       this.turns = 0; this.auto = !this.h.chooseAction; this.over = null; this.active = null; this.aborted = false;
       this.stats = { dmg: {}, crits: 0, maxHit: 0 };
+      // damage meter: per unit uid, damage dealt and healing done by source (skill or effect name), and damage taken
+      this.meter = {};
       this.deaths = 0;
     }
     allies(u) { return u.side === 'hero' ? this.heroes : this.enemies; }
@@ -1059,14 +1106,16 @@ const K = (function () {
       let ticked = false;
       for (const e of u.effects.filter(e => DOT[e.k])) {
         if (!u.alive) break;
-        this.damage(u, Math.round(u.maxHp * DOT[e.k] * (e.v || 1)), null, { kind: e.k }); ticked = true;
+        this.damage(u, Math.round(u.maxHp * DOT[e.k] * (e.v || 1)), null, { kind: e.k, from: e.src }); ticked = true;
       }
-      if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1); ticked = true; }
-      if (u.alive && u.passive === 'deeproots') { this.heal(u, u.maxHp * 0.05); ticked = true; }
-      if (u.alive && u.passive === 'beacon') { const l = lowest(this.living(this.allies(u))); if (l.hp < l.maxHp) { this.heal(l, l.maxHp * 0.05); ticked = true; } }
-      if (u.alive && u.passive === 'harmony') for (const a of this.living(this.allies(u))) if (a.hp < a.maxHp) { this.heal(a, a.maxHp * 0.04); ticked = true; }
+      if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1, u, 'Regeneration'); ticked = true; }
+      if (u.alive && u.passive === 'deeproots') { this.heal(u, u.maxHp * 0.05, u, 'Passive'); ticked = true; }
+      if (u.alive && u.passive === 'beacon') { const l = lowest(this.living(this.allies(u))); if (l.hp < l.maxHp) { this.heal(l, l.maxHp * 0.05, u, 'Passive'); ticked = true; } }
+      if (u.alive && u.passive === 'harmony') for (const a of this.living(this.allies(u))) if (a.hp < a.maxHp) { this.heal(a, a.maxHp * 0.04, u, 'Passive'); ticked = true; }
       if (ticked) await this.h.pause(360);
       if (!u.alive || this.check()) { this.endTurn(u, null); return; }
+      if (u.hall) this.rage(u);
+      if (u.blight && u.alive && !SKIP.some(k => this.has(u, k))) { await this.aura(u); if (this.check()) { this.endTurn(u, null); return; } }
       let used = null;
       const skip = SKIP.find(k => this.has(u, k));
       if (skip) {
@@ -1093,6 +1142,29 @@ const K = (function () {
       if (u.alive && u.passive === 'deathmark') { u.stacks.mark = (u.stacks.mark || 0) + 1; if (u.stacks.mark % 2 === 0) { const t = pick(this.living(this.foes(u))); if (t) this.addEffect(t, { k: 'mark', n: 2 }); } }
       this.endTurn(u, used);
     }
+    note(u, kind, label, amt) {
+      if (!amt) return;
+      const m = this.meter[u.uid] || (this.meter[u.uid] = { dmg: {}, heal: {}, taken: 0 });
+      if (kind === 'taken') m.taken += amt; else m[kind][label] = (m[kind][label] || 0) + amt;
+    }
+    // a boss's own turns count towards its enrage (see ENRAGE); the stack count lives in the effect's v
+    rage(u) {
+      const t = u.stacks.bossTurns = (u.stacks.bossTurns || 0) + 1, at = u.blight ? ENRAGE.blightAt : ENRAGE.at;
+      if (t < at) return;
+      const v = 1 + Math.floor((t - at) / ENRAGE.every), e = u.effects.find(x => x.k === 'enrage'), old = e ? e.v : 0;
+      if (e) e.v = v; else u.effects.push({ k: 'enrage', n: 999, v });
+      if (v === old) return;
+      this.h.float(u, v === 1 ? 'ENRAGED!' : `Enrage ×${v}`, 'debuff');
+      this.h.log(v === 1 ? `${u.name} is ENRAGED: its Attack keeps rising until it falls.` : `${u.name}'s rage grows (+${Math.round(ENRAGE.atk * v * 100)}% Attack).`, 'enemy');
+      if (this.h.enrage) this.h.enrage(u, v);
+    }
+    // Blight Aura (see BLIGHT): the boss's foes lose u.blight of their max HP; shields absorb it, Defense does not
+    async aura(u) {
+      if (!u.effects.some(e => e.k === 'blight')) u.effects.push({ k: 'blight', n: 999 });
+      for (const t of this.living(this.foes(u))) this.damage(t, Math.max(1, Math.round(t.maxHp * u.blight)), null, { kind: 'blight', from: u.uid });
+      await this.h.pause(300);
+    }
+    enrageIn(u) { const t = u.stacks.bossTurns || 0; return Math.max(0, (u.blight ? ENRAGE.blightAt : ENRAGE.at) - t); }
     endTurn(u, used) {
       for (const s of u.skills) s.cdLeft = s === used ? s.cd : Math.max(0, s.cdLeft - 1);
       for (const e of u.effects) { if (e.fresh) e.fresh = false; else e.n--; }
@@ -1176,9 +1248,9 @@ const K = (function () {
               this.h.impact && this.h.impact(u, skill, t, i);
               const dealt = this.damage(t, r.dmg, u, r);
               if (r.crit) { u.flags.crit = true; if (u.passive === 'eagleeye') t.tm = Math.max(0, t.tm - 10); }
-              if (fx.steal) this.heal(u, dealt * fx.steal);
-              if (u.sets.lifesteal) this.heal(u, dealt * 0.3);
-              if (u.passive === 'bloodfeast') this.heal(u, dealt * 0.25);
+              if (fx.steal) this.heal(u, dealt * fx.steal, u, 'Lifesteal');
+              if (u.sets.lifesteal) this.heal(u, dealt * 0.3, u, 'Lifesteal');
+              if (u.passive === 'bloodfeast') this.heal(u, dealt * 0.25, u, 'Lifesteal');
               if (u.passive === 'frozencurse' && t.alive && rnd() < 0.3) this.addEffect(t, { k: 'spdDown', n: 2 });
               if (u.passive === 'staticcharge') u.stacks.charge = (u.stacks.charge || 0) >= 3 ? 0 : (u.stacks.charge || 0) + 1;
               if (was && !t.alive) killed++;
@@ -1208,7 +1280,7 @@ const K = (function () {
           for (const t of (list.length ? list : [u]).filter(t => t.alive)) this.addEffect(t, { k: fx.k, n: fx.n });
         } else if (fx.t === 'heal') {
           const list = fx.to === 'lowestAlly' ? [lowest(this.living(this.allies(u)))] : targets.filter(t => t.side === u.side);
-          for (const t of list.filter(t => t.alive)) this.heal(t, t.maxHp * fx.pct * lvMult * (u.passive === 'bloom' ? 1.2 : 1));
+          for (const t of list.filter(t => t.alive)) this.heal(t, t.maxHp * fx.pct * lvMult * (u.passive === 'bloom' ? 1.2 : 1), u, skill.name);
         } else if (fx.t === 'shield') {
           for (const t of targets.filter(t => t.alive && t.side === u.side)) this.addEffect(t, { k: 'shield', n: fx.n, v: Math.round(u.maxHp * fx.pct * lvMult) });
         } else if (fx.t === 'cleanse') {
@@ -1233,7 +1305,7 @@ const K = (function () {
       if (killed) {
         if (u.passive === 'bloodfrenzy') u.stacks.smids = Math.min(3, (u.stacks.smids || 0) + killed);
         if (u.passive === 'killingspree' && u.alive) u.tm = Math.min(100, u.tm + 50);
-        if (u.passive === 'sanguine') this.heal(u, u.maxHp * 0.05 * killed);
+        if (u.passive === 'sanguine') this.heal(u, u.maxHp * 0.05 * killed, u, 'Passive');
         if (u.passive === 'warlord') this.addEffect(u, { k: 'atkUp', n: 2 });
       }
       await this.h.after(u, skill, targets, this);
@@ -1263,6 +1335,7 @@ const K = (function () {
       let atk = a.atk;
       if (this.has(a, 'atkUp')) atk *= 1.5;
       if (this.has(a, 'atkDown')) atk *= 0.5;
+      const rg = a.isBoss && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
       if (a.stacks.smids) atk *= 1 + 0.1 * a.stacks.smids;
       if (a.passive === 'bloodlust' && a.hp < a.maxHp * 0.5) atk *= 1.3;
       if (a.passive === 'soulharvest') atk *= 1 + 0.1 * Math.min(5, this.deaths);
@@ -1311,8 +1384,12 @@ const K = (function () {
       if (this.has(t, 'burrow')) { this.h.float(t, 'Immune', 'resist'); return 0; }
       let left = amount;
       const sh = t.effects.find(e => e.k === 'shield');
+      const hpBefore = t.hp;
       if (sh) { const ab = Math.min(sh.v, left); sh.v -= ab; left -= ab; if (sh.v <= 0) t.effects = t.effects.filter(e => e !== sh); }
       t.hp -= left;
+      const real = amount - left + Math.min(left, Math.max(0, hpBefore)), by = src || (info && info.from && this.all().find(x => x.uid === info.from));
+      if (by) this.note(by, 'dmg', info && info.skill ? info.skill.name : info && info.kind ? EFFECTS[info.kind].n : 'Other', real);
+      this.note(t, 'taken', null, real);
       if (src) { this.stats.dmg[src.uid] = (this.stats.dmg[src.uid] || 0) + amount; if (info && info.crit) this.stats.crits++; this.stats.maxHit = Math.max(this.stats.maxHit, amount); }
       this.h.hit(t, amount, info || {}, left < amount);
       // break meter
@@ -1362,12 +1439,14 @@ const K = (function () {
         this.h.phase(t, t.phase + 1);
       }
     }
-    heal(t, amt) {
+    // by + label: who healed and with what, for the damage meter
+    heal(t, amt, by, label) {
       if (!t.alive) return;
       if (this.has(t, 'healRed')) amt *= 0.4;
       amt = Math.round(Math.min(amt, t.maxHp - t.hp));
       if (amt <= 0) return;
       t.hp += amt;
+      this.note(by || t, 'heal', label || 'Healing', amt);
       this.h.healed(t, amt);
     }
     ai(u) {
@@ -1506,7 +1585,7 @@ const K = (function () {
   return {
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,

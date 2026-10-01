@@ -201,10 +201,44 @@ const SPR = (function () {
   const heroCv = {};
   const isHero = id => !!ART[id];
   function up2(s) { const c = canvas(s.width * 2, s.height * 2), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return c; }
+  // The battle art comes from different sources: some figures have much less local contrast than others and look
+  // blurry next to them on the battlefield. sharpen() lifts a soft figure towards the common crispness (CRISP = mean
+  // colour step between neighbouring opaque pixels) with an unsharp mask that ignores transparent pixels (no halos).
+  const CRISP = 110;
+  function crispness(d, w, h) {
+    let s = 0, n = 0;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w - 1; x++) {
+      const p = (y * w + x) * 4, q = p + 4;
+      if (d[p + 3] > 200 && d[q + 3] > 200) { s += Math.abs(d[p] - d[q]) + Math.abs(d[p + 1] - d[q + 1]) + Math.abs(d[p + 2] - d[q + 2]); n++; }
+    }
+    return n ? s / n : CRISP;
+  }
+  function unsharp(src, w, h, a) {
+    const out = new Uint8ClampedArray(src);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const p = (y * w + x) * 4; if (src[p + 3] < 8) continue;
+      for (let ch = 0; ch < 3; ch++) {
+        let s = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = x + dx, yy = y + dy; if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+          const q = (yy * w + xx) * 4; if (src[q + 3] < 8) continue; s += src[q + ch]; n++;
+        }
+        out[p + ch] = src[p + ch] + a * (src[p + ch] - s / n);
+      }
+    }
+    return out;
+  }
+  function sharpen(c) {
+    const g = c.getContext('2d'), im = g.getImageData(0, 0, c.width, c.height), w = c.width, h = c.height, g0 = crispness(im.data, w, h);
+    if (g0 >= CRISP * 0.9) return;
+    const g1 = crispness(unsharp(im.data, w, h, 1), w, h);
+    const a = Math.min(2, Math.max(0, (CRISP - g0) / Math.max(1, g1 - g0)));
+    im.data.set(unsharp(im.data, w, h, a)); g.putImageData(im, 0, 0);
+  }
   function preload() {
     return Promise.all(Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
-      img.onload = () => { const c = canvas(img.width, img.height); c.getContext('2d').drawImage(img, 0, 0); heroCv[id] = c; res(); };
+      img.onload = () => { const c = canvas(img.width, img.height); c.getContext('2d').drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
       img.onerror = () => res();
       img.src = ART[id].body;
     })));

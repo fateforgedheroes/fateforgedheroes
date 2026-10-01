@@ -49,6 +49,9 @@ function reward(st, S, first, d) {
   const edge = id => { const a = K.CHAMPS[id].aff; return 1 + 0.2 * (foes.filter(e => K.BEATS[a] === e).length - foes.filter(e => K.BEATS[e] === a).length) / foes.length; };
   const byPow = Object.keys(st.roster).filter(id => !K.CHAMPS[id].captured).sort((a, b) => power(st, b) * edge(b) - power(st, a) * edge(a));
   st.team = byPow.slice(0, 4);
+  // a sensible player brings a healer once fights get long (Chapter IV on): the best one replaces the fourth attacker
+  const heals = id => K.CHAMPS[id].skills.some(s => s.fx.some(f => f.t === 'heal' || f.t === 'shield' || f.t === 'revive'));
+  if (next.chapter >= 3 && st.team.length === 4 && !st.team.some(heals)) { const h = byPow.find(heals); if (h && power(st, h) >= 0.5 * power(st, st.team[3])) st.team[3] = h; }
   for (const it of st.inv) if (it.owner && !st.team.includes(it.owner)) it.owner = null;
   for (const id of st.team) for (const slot of K.SLOTS) { const cur = st.inv.find(i => i.owner === id && i.slot === slot); const best = st.inv.filter(i => i.slot === slot && (!i.owner || i.owner === id)).sort((a, b) => score(b) - score(a))[0]; if (best && best !== cur) { if (cur) cur.owner = null; best.owner = id; } }
   for (const id of [...st.team, ...byPow.slice(4, 10)]) { const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones >= c.stones && st.silver >= c.silver) { st.stones -= c.stones; st.silver -= c.silver; h.stars++; } }

@@ -121,7 +121,9 @@ grant execute on function public.friend_list() to authenticated;
 --   to one player:  ... (user_id, title, body, rewards) values ('<user id>', 'Sorry!', 'For the bug yesterday.', '{"silver": 2000}');
 --   find a player:  select id, email from auth.users where email = 'player@example.com';
 -- rewards keys the game understands: silver (Sigils), stones (Ascension Stones),
--- fs: { fate, greater, ancient, mythic, legendary } (Fate Shards)
+-- fs: { fate, greater, ancient, mythic, legendary } (Fate Shards), hero: a hero id (gift-only heroes: "dio", "malvek";
+-- a player who already has the hero gets a spare copy). One player by friend code:
+--   insert into public.mail (user_id, title, body, rewards) select id, 'A gift: Dio', '', '{"hero": "dio"}' from auth.users where id::text ilike '6c7ea9be%';
 create table if not exists public.mail (
   id         bigint generated always as identity primary key,
   user_id    uuid references auth.users (id) on delete cascade,   -- null = every player
