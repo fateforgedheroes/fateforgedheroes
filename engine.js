@@ -441,12 +441,12 @@ const K = (function () {
         SK('Thunder Arrow', 'enemy', 'ranged', 'arrow', 4, 'Arrow of 180% that drains 30% Turn Meter. 40% chance of Speed Down for 2 turns.', [D(1.8), TMD(0.3), DB('spdDown', 2, 0.4)]),
       ] },
     // gift-only (dev: true, like J3DUIN): no summon, unlock, capture or bot gives him; any player may use him in the arena
-    dio: { name: 'Dio', faction: 'Mistspawn', role: 'Tank', rar: 4, aff: 'Frost', dev: true,
+    dio: { name: 'Dio', faction: 'Mistspawn', role: 'Support', rar: 4, aff: 'Frost', dev: true,
       passive: 'frozencore', passiveName: 'Polar Hide', passiveDesc: 'Attackers have a 25% chance to receive Speed Down.',
       skills: [
         SK('Glacier Hammer', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 40% chance of Speed Down for 2 turns.', [D(1.0), DB('spdDown', 2, 0.4)]),
-        SK('Chill Vibes', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 18% of Dio’s max HP and Defense Up for 2 turns.', [SH(0.18, 2), BF('defUp', 2)]),
-        SK('Avalanche Party', 'enemies', 'slam', 'quake', 5, 'Attack of 70% on all enemies. 70% chance to Taunt them for 2 turns and 35% chance to Freeze them for 1 turn.', [D(0.7), DB('taunt', 2, 0.7), DB('freeze', 1, 0.35)]),
+        SK('Dio, Can You Hear Me?', 'allies', 'buff', 'heal', 3, 'Heals all allies for 22% of their max HP and removes all debuffs.', [HEAL(0.22), { t: 'cleanse' }]),
+        SK('Chill Vibes', 'allies', 'buff', 'shield', 5, 'All allies gain a shield of 20% of Dio’s max HP, Defense Up and Regeneration for 2 turns.', [SH(0.2, 2), BF('defUp', 2), BF('regen', 2)]),
       ] },
     // gift-only like Dio
     malvek: { name: 'Malvek', faction: 'Grey Flame', role: 'Warrior', rar: 4, aff: 'Ember', dev: true,
