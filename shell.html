@@ -1101,6 +1101,37 @@ button, a, input { touch-action: manipulation; }
 .tc-lock { color: var(--muted); font-size: .9rem; display: inline-flex; gap: 4px; align-items: center; }
 .tc-lock svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .tc-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+/* campaign: the set this chapter drops */
+.set-banner { display: flex; align-items: center; gap: 12px; margin: -4px 0 12px; padding: 8px 12px; background: linear-gradient(90deg, color-mix(in srgb, var(--rc, var(--r2)) 16%, var(--panel)), var(--panel) 70%); border: 1px solid color-mix(in srgb, var(--rc, var(--r2)) 45%, var(--line)); border-left: 3px solid var(--rc, var(--r2)); }
+.set-banner.rar-1 { --rc: var(--r1); } .set-banner.rar-2 { --rc: var(--r2); } .set-banner.rar-3 { --rc: var(--r3); } .set-banner.rar-4 { --rc: var(--r4); } .set-banner.rar-5 { --rc: var(--r5); }
+.sb-ic { width: 40px; height: 40px; flex: none; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--rc) 60%, transparent)); }
+.sb-main { display: flex; flex-direction: column; min-width: 0; flex: 1; line-height: 1.25; }
+.sb-tag { font-family: var(--font-tag); font-size: .62rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sb-name { font-family: var(--font-display); color: var(--rc); font-size: 1.02rem; }
+.sb-bonus { font-size: .92rem; }
+.sb-bonus i { font-style: normal; color: var(--muted); }
+.sb-side { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: .85rem; text-align: right; flex: none; }
+.sb-side small { color: var(--muted); }
+@media (max-width: 480px) { .set-banner { flex-wrap: wrap; } .sb-side { flex-direction: row; gap: 8px; width: 100%; justify-content: space-between; } }
+/* cleared stage tile: Replay and Auto ×10 */
+div.stage { cursor: default; color: inherit; font: inherit; }
+.st-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; padding-top: 6px; }
+.st-acts .btn { padding-inline: 4px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.st-acts .lock-ic { width: 11px; height: 11px; }
+.rep-bar { padding: 8px 10px; border: 1px solid var(--violet); background: color-mix(in srgb, var(--violet) 14%, var(--panel)); font-size: .92rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rep-bar b { color: var(--violet); }
+.rep-bar .btn { margin-left: auto; }
+/* stage tiles: drop icons per rarity from the gear sheet */
+.st-dic:has(.gt-ic) { width: auto; height: auto; background: none; border: 0; display: flex; gap: 3px; overflow: visible; }
+.gt-ic { width: 30px; height: 30px; display: block; border: 1px solid var(--rc); box-shadow: 0 0 6px -1px var(--rc); }
+.cn-drop .st-dic:has(.gt-ic) { width: auto; height: auto; }
+.cn-drop .gt-ic { width: 20px; height: 20px; box-shadow: none; }
+@media (max-width: 640px) { .gt-ic { width: 26px; height: 26px; } }
+/* essence chart (guide + campaign help) */
+.ess-art { display: block; width: 100%; height: auto; border: 1px solid var(--gold-dim); box-shadow: 0 0 0 2px #000; margin: 4px 0 6px; }
+.gl-item.gl-art { display: block; }
+.gl-item.gl-art .gl-text { display: block; }
+.help .help-ess { grid-column: 1 / -1; }
 </style>
 
 <div id="app">

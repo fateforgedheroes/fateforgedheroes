@@ -43,6 +43,7 @@
   // S.seen: unlock messages already shown (speed 3×/5×, Fate Altar, Boss Hall); existing players don't get old ones again.
   function fixup(s) {
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
+    if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the homebase tour (TOUR) is for new players; anyone past the first stage has found their way already
     if (s.seen && s.seen.tour == null && s.cleared > 0) s.seen.tour = true;
     if (!s.dcl) { s.dcl = [null, s.clearedHard ?? -1, -1, -1, -1]; s.diff = 0; delete s.hard; delete s.clearedHard; }
@@ -57,7 +58,7 @@
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
   // A new save has no heroes yet: the player first picks one of K.STARTERS (needStarter), the rest is earned in Chapter I.
   function fresh() {
-    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, dcl: [null, -1, -1, -1, -1], diff: 0, seen: {}, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true };
+    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, dcl: [null, -1, -1, -1, -1], diff: 0, seen: {}, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true, music: true };
     for (let i = 0; i < 4; i++) s.inv.push(K.genGear({ il: 1 }, s.nid++));
     return s;
   }
@@ -217,6 +218,110 @@
       };
     }
     return api;
+  })();
+
+  // ---------- music ----------
+  // 8-bit background music made live with WebAudio, like an old console sound chip: a pulse-wave lead (25% duty), a
+  // square arpeggio, a triangle bass and noise drums. Tracks are written as notes per eighth note ('-' holds the note
+  // before, '.' is a rest); bass and arpeggio follow the chord of each bar. A Web Worker tick schedules ahead, so the
+  // music keeps time in a hidden tab too. S.music switches it on or off (separate from the sound effects).
+  const MUSIC = (() => {
+    const TRACKS = {
+      home: {
+        bpm: 100,
+        chords: 'C G Am F C G F G Am F C G Am F G C',
+        lead: [
+          'E5 - G5 - C6 - B5 A5', 'G5 - - - D5 - G5 -', 'A5 - B5 C6 B5 - A5 G5', 'A5 - - - F5 - . .',
+          'E5 - G5 - C6 - D6 E6', 'D6 - B5 - G5 - B5 -', 'C6 - A5 - F5 - A5 C6', 'B5 - - - G5 - - -',
+          'A4 - C5 - E5 - A5 -', 'G5 F5 E5 - F5 - C5 -', 'E5 - G5 - E5 - C5 -', 'D5 - - - B4 - D5 -',
+          'C5 - E5 - A5 - C6 -', 'B5 A5 G5 - A5 - F5 -', 'G5 - A5 B5 D6 - B5 -', 'C6 - - - - - . .',
+        ],
+        // drums per bar: k kick, s snare, h hi-hat (first half calm, second half with snare)
+        drums: ['k . h . k . h .', 'k h s h k h s h'],
+        drumBars: [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
+      },
+    };
+    const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
+    const freq = n => { const m = /^([A-G]#?)(\d)$/.exec(n); return 440 * Math.pow(2, (NOTE[m[1]] + (+m[2] + 1) * 12 - 69) / 12); };
+    const CHORD = { C: ['C', 'E', 'G'], G: ['G', 'B', 'D'], Am: ['A', 'C', 'E'], F: ['F', 'A', 'C'], Dm: ['D', 'F', 'A'], Em: ['E', 'G', 'B'], E: ['E', 'G#', 'B'] };
+    // a track as a list of events per channel: { step, f, len } in eighth notes
+    function build(t) {
+      const ev = { lead: [], arp: [], bass: [], drum: [] }, chords = t.chords.split(' ');
+      t.lead.forEach((bar, b) => bar.split(' ').forEach((tok, i) => {
+        const step = b * 8 + i;
+        if (tok === '-') { const last = ev.lead[ev.lead.length - 1]; if (last) last.len++; } else if (tok !== '.') ev.lead.push({ step, f: freq(tok), len: 1 });
+      }));
+      chords.forEach((c, b) => {
+        const [r, th, fi] = CHORD[c], low = fi + (NOTE[fi] < NOTE[r] ? 3 : 2);
+        // bass: root, fifth below, and a pickup on the last eighth
+        ev.bass.push({ step: b * 8, f: freq(r + 3), len: 3 }, { step: b * 8 + 4, f: freq(low), len: 3 }, { step: b * 8 + 7, f: freq(r + 3), len: 1 });
+        [r, th, fi, th].forEach((n, k) => { const oct = NOTE[n] < NOTE[r] ? 5 : 4; ev.arp.push({ step: b * 8 + k, f: freq(n + oct), len: 1 }, { step: b * 8 + 4 + k, f: freq(n + oct), len: 1 }); });
+        t.drums[t.drumBars[b]].split(' ').forEach((d, i) => { if (d !== '.') ev.drum.push({ step: b * 8 + i, d }); });
+      });
+      return { ev, steps: chords.length * 8, spb: 60 / t.bpm / 2 };
+    }
+    let ctx = null, out = null, pulse = null, noiseBuf = null, cur = null, want = null, startAt = 0, next = 0, timer = null;
+    function init() {
+      if (ctx) return ctx;
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        out = ctx.createGain(); out.gain.value = 0; out.connect(ctx.destination);
+        const N = 32, re = new Float32Array(N), im = new Float32Array(N);
+        for (let n = 1; n < N; n++) re[n] = 2 * Math.sin(n * Math.PI * 0.25) / (n * Math.PI);
+        pulse = ctx.createPeriodicWave(re, im);
+        noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 100);'], { type: 'text/javascript' })));
+        w.onmessage = () => schedule();
+      } catch (e) { ctx = null; }
+      return ctx;
+    }
+    function note(f, t, dur, wave, vol) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      if (wave === 'pulse') o.setPeriodicWave(pulse); else o.type = wave;
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.linearRampToValueAtTime(vol * 0.6, t + 0.08);
+      g.gain.setValueAtTime(vol * 0.6, t + Math.max(0.09, dur - 0.03)); g.gain.linearRampToValueAtTime(0, t + dur);
+      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.02);
+    }
+    function drum(d, t) {
+      if (d === 'k') { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.16); return; }
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), len = d === 's' ? 0.12 : 0.035;
+      s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = d === 's' ? 1200 : 7000;
+      g.gain.setValueAtTime(d === 's' ? 0.22 : 0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+      s.connect(f); f.connect(g); g.connect(out); s.start(t, Math.random() * 0.5); s.stop(t + len + 0.01);
+    }
+    // schedules every eighth note that starts within the look-ahead window
+    function schedule() {
+      if (!cur || !ctx) return;
+      const ahead = ctx.currentTime + 1.2;
+      while (startAt + next * cur.spb < ahead) {
+        const step = next % cur.steps, t = startAt + next * cur.spb;
+        for (const e of cur.ev.lead) if (e.step === step) note(e.f, t, e.len * cur.spb * 0.95, 'pulse', 0.1);
+        for (const e of cur.ev.arp) if (e.step === step) note(e.f, t, cur.spb * 0.6, 'square', 0.025);
+        for (const e of cur.ev.bass) if (e.step === step) note(e.f, t, e.len * cur.spb * 0.9, 'triangle', 0.22);
+        for (const e of cur.ev.drum) if (e.step === step) drum(e.d, t);
+        next++;
+      }
+    }
+    const built = {};
+    function apply() {
+      const on = S && S.music && want;
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+      out.gain.cancelScheduledValues(now); out.gain.setValueAtTime(out.gain.value, now);
+      if (!on) { out.gain.linearRampToValueAtTime(0, now + 0.6); cur = null; return; }
+      if (cur && cur.name === want) { out.gain.linearRampToValueAtTime(0.5, now + 0.4); return; }
+      cur = Object.assign(built[want] || (built[want] = build(TRACKS[want])), { name: want });
+      startAt = now + 0.1; next = 0;
+      out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(0.5, now + 1.5);
+    }
+    return {
+      // play a track ('home') or null for silence; starts for real after the first click (browser rule)
+      play(name) { want = name && TRACKS[name] ? name : null; apply(); },
+      unlock() { if (S && S.music && init()) apply(); },
+      refresh() { if (S && S.music) init(); apply(); },
+    };
   })();
 
   // ---------- helpers ----------
@@ -423,6 +528,7 @@
     }
   }
   function renderScreen() {
+    if (!B) MUSIC.play('home');
     hud();
     const el = $('#screen');
     if (S.needStarter) { el.innerHTML = starterHtml(); paintDungeonArt(); return; }
@@ -447,13 +553,21 @@
   const isStageCfg = cfg => cfg.type === 'stage';
   const stageName = i => { const st = K.STAGES[i]; return `Chapter ${ROMAN[st.chapter]} · Stage ${st.n + 1}`; };
   const dropName = st => st.slot ? K.SLOT_NAMES[st.slot] : 'Random gear';
+  // the set a chapter drops: name, bonus, rarities on this difficulty and how many pieces the player already owns
+  function setBanner(k, D) {
+    const set = K.SETS[k], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === k).length, hi = D.rars[D.rars.length - 1];
+    return `<div class="set-banner rar-${hi}"><img class="sb-ic" src="${gearArt('borstpantser', hi, 0)}" alt="">
+      <div class="sb-main"><span class="sb-tag">Set drops in this chapter</span><b class="sb-name">${esc(set.name)}</b><span class="sb-bonus"><i>${esc(need)}</i> ${esc(bonus)}</span></div>
+      <div class="sb-side"><span>${rarsHtml(D.rars)}</span><small>${own ? `${own} ${own === 1 ? 'piece' : 'pieces'} owned` : 'none owned yet'}</small></div></div>`;
+  }
   function campaignHtml() {
     const d = S.diff || 0, D = K.DIFFS[d], hard = d > 0, cleared = clearedOn(d), next = cleared + 1;
     const strip = S.team.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
     const chap = Math.min(S.chap ?? maxChap, maxChap);
     const foeImgs = st => st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('');
-    const dropIc = st => st.slot ? `<img class="gear-ic" src="${gearArt(st.slot, D.rars[D.rars.length - 1], 0)}" alt="">` : '<b>?</b>';
+    // drop icons from the gear sheet (GEAR_TILE), one per rarity that can drop on this difficulty, in that rarity's colours
+    const dropIc = st => D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="${K.RARITIES[r]}" title="${K.RARITIES[r]} ${esc(dropName(st).toLowerCase())}">`).join('');
     const firstRewards = (st, i) => {
       if (i <= cleared) return [];
       const rw = [];
@@ -465,15 +579,20 @@
     const tile = (st, i) => {
       const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
       const rw = firstRewards(st, i);
-      const go = state === 'next' ? 'Fight ›' : state === 'cleared' ? 'Replay' : `${LOCK_SVG} Locked`;
-      return `<button class="stage ${state} ${st.boss ? 'bossst' : ''}" data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}>
+      const go = state === 'next' ? 'Fight ›' : `${LOCK_SVG} Locked`;
+      // a cleared stage has two buttons: Replay, and Auto ×10 once the whole chapter is cleared on this difficulty
+      const chapDone = clearedOn(d) >= st.chapter * 7 + 6, tag = state === 'cleared' ? 'div' : 'button';
+      const foot = state === 'cleared'
+        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
+        : `<span class="st-go">${go}</span>`;
+      return `<${tag} class="stage ${state} ${st.boss ? 'bossst' : ''}" ${tag === 'button' ? `data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}` : ''}>
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span>${state === 'cleared' ? '<span class="st-state tag">✓</span>' : ''}</div>
         <div class="st-foes">${foeImgs(st)}</div>
         <div class="st-meta"><span class="st-ess">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')}</span><span class="pill">Lv ${K.diffLvl(st, d)}</span></div>
         ${st.boss ? `<div class="st-boss">Boss: ${esc(st.boss)}</div>` : ''}
         <div class="st-drop"><span class="st-dic">${dropIc(st)}</span><span class="st-dtx"><b>${dropName(st)}</b></span></div>
         ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}
-        <span class="st-go">${go}</span></button>`;
+        ${foot}</${tag}>`;
     };
     const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
     const chapBtns = K.CHAPTERS.map((ch, c) => {
@@ -498,14 +617,14 @@
       ${cont}
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
-      <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared · ${K.SETS[K.CHAPTERS[chap].set].name}</span></div>
+      <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared</span></div>
+      ${setBanner(K.CHAPTERS[chap].set, D)}
       <div class="stages">${idx.slice(0, 6).map(i => tile(K.STAGES[i], i)).join('')}</div>
       <div class="stages boss-row">${tile(K.STAGES[idx[6]], idx[6])}</div>
       <details class="camp-info"><summary>How the campaign works</summary>
         <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
-        <p class="chap-set"><b>${K.SETS[K.CHAPTERS[chap].set].name}</b> (this chapter's set): ${K.SETS[K.CHAPTERS[chap].set].desc}</p>
         <div class="help">
-        <div><h3>Essences</h3><div class="tri">${['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'Ember'].map(affChip).join('<span class="arr">›</span>')}</div>
+        <div class="help-ess"><h3>Essences</h3><img class="ess-art" src="${ESSENCE_ART}" alt="Essences: Ember beats Verdant, Verdant beats Storm, Storm beats Frost, Frost beats Radiant, Radiant beats Umbral, Umbral beats Ember; Aether is neutral">
         <p><b>Strong Hit</b>: +20% damage, stronger debuffs, 2 Break damage. <b>Weak Hit</b>: −25% damage, no crits, half debuff chance, no Break damage. ${affChip('Aether')} Aether is neutral and always lands a Normal Hit.</p></div>
         <div><h3>Speed and bosses</h3><p>Every unit fills its turn meter by its Speed; faster champions act more often. Bosses have a <b>Break Meter</b>: hit them with Strong Hits to cause an <b>Affinity Break</b>, stunning them for 2 turns while they take 15% more damage.</p></div>
         <div><h3>Getting stronger</h3><p>Level your champions to their maximum and ascend them with Ascension Stones for an extra star. Duplicate heroes from the Fate Altar upgrade their skills. Legendary heroes are far stronger, and only the Fate Altar has them.</p></div>
@@ -942,7 +1061,7 @@
         row('Formation', 'Tanks and warriors stand in the front line, everyone else behind them.'),
       ]),
       sec('essences', 'Essences', [
-        row('Essence', `Every hero and enemy has one. ${beats}. ${affChip('Aether')} Aether is neutral: it always lands a Normal Hit.`),
+        `<li class="gl-item gl-art"><img class="ess-art" src="${ESSENCE_ART}" alt="Essences: Ember beats Verdant, Verdant beats Storm, Storm beats Frost, Frost beats Radiant, Radiant beats Umbral, Umbral beats Ember; Aether is neutral"><span class="gl-text">Every hero and enemy has one. ${beats}. Aether is neutral: it always lands a Normal Hit.</span></li>`,
       ]),
       sec('stats', 'Stats', [
         row('HP', 'Health. At 0 the unit falls.'), row('ATK', 'Attack: how hard a unit hits.'), row('DEF', 'Defense: reduces damage taken.'),
@@ -1156,7 +1275,7 @@
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
-      <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button></div></section>
+      <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button><button class="btn small" data-act="musictoggle" aria-pressed="${S.music}">Music: ${S.music ? "on" : "off"}</button></div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
       ${startOverHtml()}
       ${backupsHtml()}
@@ -1193,7 +1312,7 @@
     S.p.name = name; editName = false; save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} Sigils.` : 'Name saved.');
   });
   document.addEventListener('click', e => {
-    SFX.unlock();
+    SFX.unlock(); MUSIC.unlock();
     const tb = e.target.closest('#tabs button');
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
@@ -1227,6 +1346,7 @@
     else if (act === 'arclaim') claimArena().then(socialLoad);
     else if (act === 'soctab') { SO.tab = a.dataset.t; render(); }
     else if (act === 'soundtoggle') { S.sound = !S.sound; save(); hud(); render(); if (S.sound) SFX.click(); }
+    else if (act === 'musictoggle') { S.music = !S.music; save(); render(); MUSIC.refresh(); }
     else if (act === 'glnav') { e.preventDefault(); const s = document.getElementById('gl-' + a.dataset.id); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (act === 'socreload') socialLoad();
     else if (act === 'copycode') { const c = SO.code; navigator.clipboard.writeText(c).then(() => toast('Friend code copied.'), () => toast('Your friend code: ' + c, false, 5000)); }
@@ -1239,6 +1359,7 @@
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
+    else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
     else if (act === 'spotblock') toast('Tap the glowing Fight button to start.');
     else if (act === 'tournext') { if (tourStep < TOUR.length - 1) { tourStep++; render(); } else { S.seen.tour = true; tourStep = 0; save(); spotFight = true; setTab('campagne'); window.scrollTo({ top: 0 }); } }
     else if (act === 'tourskip') { S.seen.tour = true; tourStep = 0; save(); render(); }
@@ -2013,10 +2134,11 @@
   });
 
   // ----- start / intro / finish -----
-  function startCampaign(i) {
+  // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
+  function startCampaign(i, rep) {
     const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
     S.chap = st.chapter;
-    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
+    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n) {
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
@@ -2040,7 +2162,7 @@
     updateOverlay();
   }
   async function runBattle(cfg) {
-    SFX.unlock();
+    SFX.unlock(); MUSIC.play(null);
     // Arena: a replay of the fight the server already played. Both teams come from the server's snapshots and the dice
     // from its seed (K.arenaSetup), so this plays out exactly like on the server; both sides play on auto.
     const arena = cfg.type === 'arena', nPh = arena ? 1 : K.PHASES;
@@ -2060,7 +2182,7 @@
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
-    b.auto = arena || (S.auto && autoOk());
+    b.auto = arena || !!cfg.rep || (S.auto && autoOk());
     B = { b, cfg, ph: 0, nPh };
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
@@ -2085,7 +2207,7 @@
       if (p) {
         enemies = phaseUnits(cfg, p);
         await nextPhase(heroes, enemies, p);
-        b = new K.Battle(heroes, enemies, hooks); b.auto = S.auto && autoOk();
+        b = new K.Battle(heroes, enemies, hooks); b.auto = !!cfg.rep || (S.auto && autoOk());
         B.b = b; B.ph = p;
         const boss = enemies.find(u => u.isBoss);
         await showBanner(boss ? boss.name : `Phase ${p + 1} / ${K.PHASES}`, boss ? `Boss fight · ${boss.aff} · ${boss.nPhases} boss phases` : `${enemies.length} enemies`, 'big', 800);
@@ -2250,6 +2372,7 @@
     m.hidden = false;
     const f = m.querySelector('.btn'); if (f) f.focus();
     setTimeout(() => showUnlocks(unlocks), 500);
+    if (cfg.rep) repStep(cfg, win);
   }
   // damage meter: the engine's per-battle meter (uid -> dealt by source, healed by source, taken) added up over the phases
   function addMeter(into, m) {
@@ -2279,8 +2402,29 @@
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
   }
+  // Auto ×10: after a win the next battle starts by itself after a short countdown (Stop keeps the result open);
+  // a defeat or the tenth battle ends the run with a summary line
+  let repTimer = null;
+  function repStep(cfg, win) {
+    const r = cfg.rep, won = r.won + (win ? 1 : 0), more = win && r.k < r.n, box = $('#modal .modal-box');
+    const el = document.createElement('div'); el.className = 'rep-bar';
+    el.innerHTML = more ? `<b>Auto ×${r.n}</b> · battle ${r.k} of ${r.n} won · next battle in <span>3</span>s <button class="btn small" type="button">Stop</button>`
+      : `<b>Auto ×${r.n} finished</b> · ${won} of ${r.k} ${r.k === 1 ? 'battle' : 'battles'} won${win ? '' : ' (stopped after a defeat)'}`;
+    box.insertBefore(el, box.querySelector('.rewards'));
+    clearInterval(repTimer);
+    if (!more) return;
+    let left = 3;
+    repTimer = setInterval(() => {
+      if ($('#modal').hidden) { clearInterval(repTimer); return; }
+      if (document.querySelector('.unlock-pop')) return; // wait while an unlock message is open
+      left--; const s = el.querySelector('span'); if (s) s.textContent = left;
+      if (left <= 0) { clearInterval(repTimer); $('#modal').hidden = true; endBattleView(); B = null; startCampaign(cfg.i, { n: r.n, k: r.k + 1, won }); }
+    }, 1000);
+    el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; });
+  }
   function modalAction(go) {
     $('#modal').hidden = true;
+    clearInterval(repTimer);
     if (go === 'summon1') { doSummon(1); return; }
     if (go === 'summon10') { doSummon(10); return; }
     if (go === 'close') { render(); return; }
