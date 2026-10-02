@@ -1672,7 +1672,7 @@
   const W = 480, H = 270;
   const HERO_POS = [[162, 196], [96, 212], [170, 252], [104, 266]];
   const ENEMY_POS = { 1: [[356, 236]], 2: [[326, 204], [332, 256]], 3: [[322, 196], [390, 218], [330, 258]], 4: [[322, 194], [390, 208], [318, 250], [386, 266]] };
-  const BOSS_POS = [374, 244], ADD_POS = [[296, 198], [300, 262], [270, 232]];
+  const BOSS_POS = [374, 244], GBOSS_POS = [372, 266], ADD_POS = [[296, 198], [300, 262], [270, 232]];
   const R = { running: false, units: [], projs: [], parts: [], fx: [], ash: [], shake: 0, area: 0, hl: new Set(), hlKind: 'bad', active: null, dim: 0 };
   let B = null, pending = null, selSkill = 0, quitArm = 0;
   // battle speed: S.speed is the player's preferred speed, spd the speed this battle actually runs at.
@@ -1777,6 +1777,8 @@
     const pos = formation(heroes);
     heroes.forEach(u => place(u, HERO_POS[pos.get(u)], -220));
     const boss = enemies.find(u => u.big || u.id === 'morwenna');
+    // the guild boss is huge: further right and lower, so it towers over the field and spills past the edge
+    if (boss && boss.immortal) { place(boss, GBOSS_POS, 220); return; }
     if (boss) {
       let a = 0;
       enemies.forEach(u => { if (u === boss) place(u, BOSS_POS, 220); else place(u, ADD_POS[a++ % ADD_POS.length], 220); });
@@ -2108,7 +2110,7 @@
     const rs = u._rs, dir = u.side === 'hero' ? 1 : -1, v = skill.vfx || '';
     if (skill.anim === 'melee') {
       SFX.swing();
-      const tx = targets.reduce((s, t) => s + t._rs.x, 0) / targets.length - dir * ((u.big ? 30 : 22) + (targets.some(t => t.big) ? 20 : 8));
+      const tx = targets.reduce((s, t) => s + t._rs.x, 0) / targets.length - dir * ((u.big ? 30 : 22) + Math.max(...targets.map(t => t.immortal ? Math.round(t._rs.m.cw * 0.38) : t.big ? 20 : 8)));
       const ty = targets.reduce((s, t) => s + t._rs.y, 0) / targets.length;
       const dx = tx - rs.x, dy = ty - rs.y;
       await tween(200, k => { const e = ease(k); rs.ox = dx * e; rs.oy = dy * e - Math.sin(k * Math.PI) * 8; });
