@@ -274,6 +274,10 @@ const SPR = (function () {
     if (!kind) {
       if (f === 'idle0') c = base(id);
       else if (f === 'burrow') c = id === 'uthrak' ? up2(worm(true)) : base(id);
+      else if (f === 'dim') { // darkened figure, blended in as a fallen unit settles (app.js pose())
+        const s = base(id); c = canvas(s.width, s.height); const g = c.getContext('2d'); g.drawImage(s, 0, 0);
+        const oi = g.getImageData(0, 0, c.width, c.height); for (let i = 0; i < oi.data.length; i += 4) { oi.data[i] *= 0.45; oi.data[i + 1] *= 0.42; oi.data[i + 2] *= 0.48; } g.putImageData(oi, 0, 0);
+      }
       else if (f === 'dead') {
         const s = base(id); c = canvas(s.width, s.height); const g = c.getContext('2d');
         if (CUSTOM[id] && id !== 'pop') {

@@ -1811,14 +1811,63 @@
       else g.fillRect(cx - w, cy + dy, w * 2, 1);
     }
   }
-  function frameName(u, now) {
-    const rs = u._rs;
-    if (!u.alive) return 'dead';
-    if (rs.pose && now < rs.poseUntil) return rs.pose;
-    if (u.effects.some(e => e.k === 'burrow')) return 'burrow';
-    return (Math.floor(now / (rs.walking ? 140 : 520) + rs.phase) % 2) ? 'idle1' : 'idle0';
+  // ----- unit animation -----
+  // Every battle figure is one picture; pose() works out how it is held this frame (tilt around the feet, squash and
+  // stretch, a small shift, darkening when dead) and frame() draws it that way. One set of curves animates all heroes,
+  // enemies and bosses: idle (a slow one-pixel bob; hunched and quicker below 30% HP; wobbling when stunned), walk (bobbing),
+  // attack 1 (basic: wind-up, strike, recover), attack 2 (skills: crouch, leap, smash), cast (magic and buffs: charge,
+  // release), injured (recoil with a damped spring back) and death (stagger, fall backwards, settle, darken).
+  // rot > 0 leans forward (towards the enemy); dx > 0 moves forward.
+  const lerp = (a, b, k) => a + (b - a) * k, eo = k => 1 - (1 - k) ** 3, ei = k => k * k;
+  function pose(u, now) {
+    const rs = u._rs, P = { rot: 0, sx: 1, sy: 1, dx: 0, dy: 0, dim: 0 }, t = now / 1000 + rs.phase;
+    if (!u.alive) {
+      const k = rs.deadAt ? Math.min(1, (now - rs.deadAt) / (780 / spd)) : 1, wide = rs.m.w > rs.m.fy * 1.05;
+      if (k < 0.18) { const q = k / 0.18; P.rot = -0.12 * Math.sin(q * Math.PI / 2); P.sy = 1 - 0.04 * q; return P; }
+      const q = Math.min(1, (k - 0.18) / 0.5), f = ei(q);
+      if (wide) { P.sy = lerp(0.96, 0.45, f); P.sx = lerp(1, 1.18, f); P.rot = -0.12 * (1 - f); } // beasts sink down
+      else { P.rot = lerp(-0.12, -Math.PI / 2, f); P.dx = f * rs.m.fy * 0.45; } // humanoids fall backwards
+      if (k > 0.68) { const s = (k - 0.68) / 0.32; P.dy = -2.5 * Math.sin(s * Math.PI) * (1 - s); }
+      P.dim = Math.max(0, (k - 0.55) / 0.45);
+      return P;
+    }
+    const active = rs.pose && now < rs.poseUntil, k = active ? Math.min(1, (now - rs.poseAt) / Math.max(1, rs.poseUntil - rs.poseAt)) : 0;
+    if (active && rs.pose === 'atk') {
+      if (k < 0.18) { const q = eo(k / 0.18); Object.assign(P, { rot: -0.1 * q, sx: 1 - 0.05 * q, sy: 1 + 0.05 * q, dx: -2 * q }); }
+      else if (k < 0.36) { const q = eo((k - 0.18) / 0.18); Object.assign(P, { rot: lerp(-0.1, 0.22, q), sx: lerp(0.95, 1.08, q), sy: lerp(1.05, 0.93, q), dx: lerp(-2, 5, q) }); }
+      else { const q = eo((k - 0.36) / 0.64); Object.assign(P, { rot: lerp(0.22, 0, q), sx: lerp(1.08, 1, q), sy: lerp(0.93, 1, q), dx: lerp(5, 0, q) }); }
+      return P;
+    }
+    if (active && rs.pose === 'atk2') {
+      if (k < 0.28) { const q = eo(k / 0.28); Object.assign(P, { sx: 1 + 0.08 * q, sy: 1 - 0.1 * q, rot: -0.05 * q }); }
+      else if (k < 0.5) { const q = (k - 0.28) / 0.22; Object.assign(P, { dy: -12 * Math.sin(q * Math.PI / 2), sx: lerp(1.08, 0.94, q), sy: lerp(0.9, 1.1, q), rot: lerp(-0.05, -0.15, q) }); }
+      else if (k < 0.64) { const q = (k - 0.5) / 0.14; Object.assign(P, { dy: lerp(-12, 0, ei(q)), rot: lerp(-0.15, 0.3, eo(q)), sx: lerp(0.94, 1.12, q), sy: lerp(1.1, 0.88, q), dx: 6 * q }); }
+      else { const q = eo((k - 0.64) / 0.36); Object.assign(P, { rot: lerp(0.3, 0, q), sx: lerp(1.12, 1, q), sy: lerp(0.88, 1, q), dx: lerp(6, 0, q) }); }
+      return P;
+    }
+    if (active && rs.pose === 'cast') {
+      if (k < 0.45) { const q = eo(k / 0.45); Object.assign(P, { sy: 1 + 0.07 * q, sx: 1 - 0.04 * q, dy: -4 * q, rot: -0.06 * q }); }
+      else if (k < 0.6) { const q = (k - 0.45) / 0.15; Object.assign(P, { sy: lerp(1.07, 0.94, q), sx: lerp(0.96, 1.07, q), dy: lerp(-4, 0, q), rot: lerp(-0.06, 0.1, q) }); }
+      else { const q = eo((k - 0.6) / 0.4); Object.assign(P, { sy: lerp(0.94, 1, q), sx: lerp(1.07, 1, q), rot: lerp(0.1, 0, q) }); }
+      return P;
+    }
+    if (active && rs.pose === 'hit') {
+      if (k < 0.2) { const q = eo(k / 0.2); Object.assign(P, { rot: -0.18 * q, sx: 1 + 0.06 * q, sy: 1 - 0.06 * q, dx: -4 * q }); }
+      else { const q = (k - 0.2) / 0.8, d = (1 - q) ** 2; Object.assign(P, { rot: -0.18 * d * Math.cos(q * 7), sx: 1 + 0.06 * d, sy: 1 - 0.06 * d, dx: -4 * d }); }
+      return P;
+    }
+    if (rs.walking) { const s = Math.sin(t * Math.PI / 0.3); P.dy = -2.2 * Math.abs(s); P.rot = 0.06 + 0.03 * s; return P; }
+    // idle: breathing, hunched and panting when low, wobbling when stunned, still when frozen
+    if (u.effects.some(e => e.k === 'freeze')) return P;
+    // breathing is a whole-pixel bob (stretching pixel art makes its rows crawl): one pixel up and down, slow;
+    // faster when low on HP
+    const low = u.hp / u.maxHp < 0.3, br = Math.sin(t * Math.PI * 2 / (low ? 0.9 : 2.4));
+    P.dy = br > 0.35 ? -1 : 0;
+    if (low) P.rot = 0.07;
+    if (u.effects.some(e => e.k === 'stun' || e.k === 'broken')) P.rot += 0.05 * Math.sin(t * 9);
+    return P;
   }
-  function setPose(u, pose, ms) { u._rs.pose = pose; u._rs.poseUntil = performance.now() + ms / spd; }
+  function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
@@ -1840,13 +1889,14 @@
     for (const u of sorted) {
       const rs = u._rs, m = rs.m;
       if (!u.alive && rs.gone && !R.hl.has(u)) continue; // fell in an earlier phase: stays behind unless it can be revived
-      const fr = frameName(u, now), flip = u.side === 'enemy';
-      const img = SPR.frame(u.id, fr, flip ? 'flip' : '');
-      const x = Math.round(rs.x + rs.ox - m.w / 2) + sh, y = Math.round(rs.y + rs.oy - m.fy - rs.jump) + shy;
-      g.globalAlpha = u.alive ? rs.alpha : 0.75;
-      if (u.id === 'nevelgeest' && u.alive) g.globalAlpha = 0.9;
-      g.drawImage(img, x, y);
-      if (rs.flash > 0.02 && u.alive) { g.globalAlpha = Math.min(1, rs.flash); g.drawImage(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), x, y); rs.flash *= 0.8; }
+      // the figure is drawn around its feet with this frame's pose (see pose())
+      const flip = u.side === 'enemy', dir = flip ? -1 : 1, fr = u.effects.some(e => e.k === 'burrow') ? 'burrow' : 'idle0', P = pose(u, now);
+      const px = Math.round(rs.x + rs.ox + P.dx * dir) + sh, py = Math.round(rs.y + rs.oy - rs.jump + P.dy) + shy;
+      const draw = (img, a) => { g.globalAlpha = a; g.save(); g.translate(px, py); if (P.rot) g.rotate(P.rot * dir); if (P.sx !== 1 || P.sy !== 1) g.scale(P.sx, P.sy); g.drawImage(img, -Math.round(m.w / 2), -m.fy); g.restore(); };
+      const a = (u.alive ? rs.alpha : 0.85) * (u.id === 'nevelgeest' && u.alive ? 0.9 : 1);
+      draw(SPR.frame(u.id, fr, flip ? 'flip' : ''), a);
+      if (P.dim > 0) draw(SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim);
+      if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= 0.8; }
       if (rs.glow > 0.02) { g.globalAlpha = rs.glow * 0.8; pxEllipse(Math.round(rs.x + rs.ox) + sh, Math.round(rs.y - m.top / 2), Math.round(m.cw / 2) + 4, Math.round(m.top / 2) + 3, AFF_COL[u.aff], true); }
       g.globalAlpha = 1;
       if (R.active === u && u.alive && !rs.walking) {
@@ -1883,8 +1933,8 @@
       const ty = targets.reduce((s, t) => s + t._rs.y, 0) / targets.length;
       const dx = tx - rs.x, dy = ty - rs.y;
       await tween(200, k => { const e = ease(k); rs.ox = dx * e; rs.oy = dy * e - Math.sin(k * Math.PI) * 8; });
-      setPose(u, 'atk', 360);
-      await tween(70, k => { rs.ox = dx + dir * 5 * Math.sin(k * Math.PI); });
+      // attack 1 (basic) or attack 2 (skill, a leap and smash); wait for the strike so the damage lands on it
+      if (skill.cd > 0) { setPose(u, 'atk2', 560); await sleep(560 * 0.55); } else { setPose(u, 'atk', 360); await sleep(360 * 0.3); }
     } else if (skill.anim === 'slam') {
       setPose(u, 'cast', 400);
       await tween(260, k => { rs.jump = 20 * Math.sin(k * Math.PI); });
@@ -1906,7 +1956,7 @@
       await tween(340, k => { rs.glow = Math.sin(k * Math.PI); for (const t of list) if (t !== u) t._rs.glow = Math.sin(k * Math.PI) * 0.7; });
       rs.glow = 0; for (const t of list) t._rs.glow = 0;
     } else {
-      setPose(u, skill.anim === 'ranged' ? 'atk' : 'cast', 520);
+      setPose(u, skill.anim === 'ranged' ? (skill.cd > 0 ? 'atk2' : 'atk') : 'cast', 520);
       await tween(120, k => { rs.ox = -dir * 3 * Math.sin(k * Math.PI); rs.glow = skill.anim === 'magic' ? Math.sin(k * Math.PI) : 0; });
       rs.ox = 0; rs.glow = 0;
       const list = skill.random ? [targets[0]] : targets;
@@ -1966,7 +2016,7 @@
       else {
         if (info.hit === 'strong') popup(t, 'STRONG HIT', 'strong'); else if (info.hit === 'weak') popup(t, 'WEAK HIT', 'weak');
         popup(t, String(amt), info.crit ? 'crit' : 'dmg');
-        setPose(t, 'hit', 240);
+        setPose(t, 'hit', 340);
         if (info.crit) { SFX.crit(); flash(); R.shake = Math.max(R.shake, 5); } else SFX.hit();
       }
       if (info.armored === true) popup(t, 'Armor', 'resist');
@@ -1977,8 +2027,8 @@
     },
     healed: (t, amt) => { popup(t, '+' + amt, 'heal'); rise(t._rs.x, t._rs.y - 10, ['#9be070', '#d8ffb0'], 6, 18); updateOverlay(); },
     float: (t, txt, kind) => popup(t, txt, kind),
-    death: t => { SFX.death(); burst(t._rs.x, t._rs.y - t._rs.m.top / 2, ['#6a5a58', '#3a3036', '#8a7a78'], 18, 1.6, 2, 0.08); updateOverlay(); },
-    revive: t => { popup(t, 'Revived!', 'heal'); rise(t._rs.x, t._rs.y - 8, ['#ffe8a0', '#aef08a'], 18, 22); updateOverlay(); },
+    death: t => { t._rs.deadAt = performance.now(); SFX.death(); burst(t._rs.x, t._rs.y - t._rs.m.top / 2, ['#6a5a58', '#3a3036', '#8a7a78'], 18, 1.6, 2, 0.08); updateOverlay(); },
+    revive: t => { t._rs.deadAt = 0; popup(t, 'Revived!', 'heal'); rise(t._rs.x, t._rs.y - 8, ['#ffe8a0', '#aef08a'], 18, 22); updateOverlay(); },
     spawn: (u, respawn) => {
       if (!respawn) {
         const used = R.units.filter(x => x.side === 'enemy' && x.alive && x !== u).map(x => x._rs && x._rs.hx + ',' + x._rs.y);

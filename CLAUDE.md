@@ -15,7 +15,7 @@ Live: https://www.fateforgedheroes.com (Vercel, auto-deploys from `main`). Accou
 | `engine.js` | Global `K`. Combat engine and all game data. No DOM; also runs in Node for simulations. |
 | `app.js` | Screens, battle view (480×270 canvas + DOM overlay), VFX, WebAudio SFX, saves, migrations. |
 | `cloud.js` | Supabase auth (email/password, Google if enabled) and cloud save via plain `fetch` to the REST API. |
-| `sprites.js`, `bgs.js` | Sprite frames (`SPR`), backgrounds. Soft battle art is sharpened on load (`sharpen`, unsharp mask up to the common crispness `CRISP`). |
+| `sprites.js`, `bgs.js` | Sprite frames (`SPR`), backgrounds. Battle animation is procedural (app.js `pose()`): every figure is drawn from one picture around its feet with this frame's tilt, squash/stretch, shift and darkening; curves for idle (a one-pixel bob, no stretching; hunched below 30% HP, stun wobble), walk, attack 1 (`atk`, basics), attack 2 (`atk2`, skills: leap and smash), cast, injured (`hit`) and death (fall backwards, or sink for wide beasts, then the `dim` frame blends in). A future per-hero sprite sheet could replace the curves for that hero. Soft battle art is sharpened on load (`sharpen`, unsharp mask up to the common crispness `CRISP`). |
 | `shell.html` | Layout + all CSS (tokens on `:root`, fonts Cinzel / Crimson Pro). Placeholders `/*ASSETS*/ /*ENGINE*/ /*SPRITES*/ /*APP*/`. |
 | `heroes.js enemies.js bosses.js` | Battle sprites as data URLs (`HERO_ART`, `ENEMY_ART`, `BOSS_ART`). Per hero: `body` (battle sprite, ~75 px tall, transparent), `full` (2×, detail/summon), `face` (64 px, used until `HERO_POR` has a portrait). |
 | `portraits.js` | `HERO_POR` painted portraits for heroes, enemies and bosses (128 px JPEG). |
