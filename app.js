@@ -23,12 +23,12 @@
 
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
-  const UNLOCKS = { altaar: { lvl: 5 }, arena: { ch: 2 }, kerkers: { ch: 3 } };
+  const UNLOCKS = { altaar: { lvl: 5 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
   const PLAYER_UNLOCK = { altaar: 5 }; // the player-level ones (level-up messages)
   const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? s.p.lvl >= u.lvl : s.cleared >= u.ch * 7 - 1); };
   const needTxt = t => { const u = UNLOCKS[t]; return u.lvl ? `player level ${u.lvl}` : `clearing Chapter ${ROMAN[u.ch - 1]}`; };
   const needTag = t => { const u = UNLOCKS[t]; return u.lvl ? `Lv ${u.lvl}` : `Ch ${ROMAN[u.ch - 1]}`; };
-  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena' };
+  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena', guild: 'Guilds' };
   // player XP per level: steeper than before (level 10, the Boss Hall, now takes ~75-130 battles instead of ~25)
   const pxNeed = l => 60 * l + 12 * l * l;
   // per cleared stage / Boss Hall level
@@ -44,6 +44,8 @@
   function fixup(s) {
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
+    // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
+    if (!s.starter && !s.needStarter) s.starter = K.STARTERS.find(id => s.roster[id]) || null;
     // the homebase tour (TOUR) is for new players; anyone past the first stage has found their way already
     if (s.seen && s.seen.tour == null && s.cleared > 0) s.seen.tour = true;
     if (!s.dcl) { s.dcl = [null, s.clearedHard ?? -1, -1, -1, -1]; s.diff = 0; delete s.hard; delete s.clearedHard; }
@@ -402,7 +404,8 @@
     paintAccount();
   }
   const unlocked = t => isOpen(S, t);
-  const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.team[0]);
+  // the portrait a player shows: the avatar they picked, else their starter hero, else their first team member
+  const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.starter && S.roster[S.starter] ? S.starter : S.team[0]);
   function paintAccount() {
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
@@ -925,7 +928,7 @@
     m.hidden = false; m.querySelector('.btn').focus();
   }
   function pickStarter(id) {
-    S.roster[id] = newHero(id); S.team = [id]; delete S.needStarter; starterSel = null;
+    S.roster[id] = newHero(id); S.team = [id]; S.starter = id; delete S.needStarter; starterSel = null;
     tab = 'home'; homeScroll = null; save(); render();
     const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
     toast(`${C[id].name} joins you. Tap the Campaign to begin your adventure.`, false, 4500);
@@ -1035,6 +1038,157 @@
     const got = [...(silver ? [`+${silver.toLocaleString('en-US')} Sigils`] : []), ...Object.keys(fs).map(k => `+${fs[k]} ${K.SHARD[k].name}`)].join(' · ');
     toast(got ? `${best ? `Top 5 of the week (#${best})! ` : ''}Weekly arena rewards: ${got}.` : 'No rewards to claim.', false, 5000);
   }
+  // ================= GUILDS =================
+  // Guilds live in Supabase (0006_guilds.sql): name, tag, info (the guildmaster writes it, max 250 characters), up to
+  // 25 members with roles. The guild boss is played by the server (Edge Function `arena`, action 'gboss') and
+  // replayed here like an arena fight; the weekly Guild Chest arrives as mail. The Guild Shop is not built yet.
+  const GUILD_COST = 5000, GUILD_MAX = 25;
+  const GD = { mine: undefined, list: null, q: '', err: '', busy: false, view: 'home', editInfo: false, d: 0, who: null };
+  async function guildLoad() {
+    if (!signedIn()) return;
+    const who = cloud().info().email;
+    if (GD.who !== who) Object.assign(GD, { who, mine: undefined, list: null, view: 'home' });
+    GD.busy = true;
+    try {
+      GD.mine = (await cloud().rpc('guild_mine')) || null;
+      if (!GD.mine) GD.list = (await cloud().rpc('guild_list', { q: GD.q })) || [];
+      GD.err = '';
+    } catch (e) { GD.err = 'Could not reach the server. Check your connection and try again.'; if (GD.mine === undefined) GD.mine = null; }
+    GD.busy = false;
+    if (tab === 'social' && SO.tab === 'guild' && !B) render();
+  }
+  async function guildAct(fn, body, msgs, after) {
+    let r;
+    try { r = await cloud().rpc(fn, body); } catch (e) { toast('That did not work. Try again in a moment.', true); return null; }
+    const m = msgs && msgs[r]; if (m) toast(m, r !== 'ok');
+    if (after && r === 'ok') after();
+    await guildLoad();
+    return r;
+  }
+  // the guild's emblem: its tag on a shield in a colour picked from the name
+  const guildHue = s => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+  const emblem = g => `<span class="g-emb" style="--h:${guildHue(g.name)}"><b>${esc(g.tag)}</b></span>`;
+  const ROLE_NAME = { leader: 'Guildmaster', officer: 'Officer', member: 'Member' };
+  const roleChip = r => `<span class="g-role ${r}">${ROLE_NAME[r]}</span>`;
+  // time left until a moment, as "2d 5h" / "5h 20m"; keys reset at midnight UTC, the chest every Monday 00:00 UTC
+  function untilUtc(ms) { const s = Math.max(0, Math.round((ms - Date.now()) / 1000)), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; }
+  const today = () => Math.floor(Date.now() / 86400000);
+  const nextMidnight = () => (today() + 1) * 86400000;
+  const nextMonday = () => { const day = today(), dow = (day + 3) % 7; return (day + (7 - dow)) * 86400000; }; // day 0 (1970-01-01) was a Thursday
+  // a guild boss difficulty is open when that campaign difficulty is (the server checks the same)
+  const gbOpen = d => d === 0 || (d === 1 ? S.cleared >= K.STAGES.length - 1 : clearedOn(d - 1) >= K.STAGES.length - 1);
+  const myGuildRow = () => (GD.mine && GD.mine.members.find(m => m.me)) || { points: 0, hits: 0 };
+  function guildHtml() {
+    if (!signedIn()) return needAccount('Guilds');
+    if (!unlocked('guild')) return `<div class="lockbox">${LOCK_SVG}<div><h3>Guilds open after ${needTxt('guild')}</h3><p class="empty-note">Campaign (Easy): ${S.cleared + 1} of ${UNLOCKS.guild.ch * 7} stages cleared.</p></div></div>`;
+    if (GD.mine === undefined) { if (!GD.busy) guildLoad(); return '<p class="empty-note">Loading your guild…</p>'; }
+    const err = GD.err ? `<p class="ar-err">${esc(GD.err)}</p>` : '';
+    if (!GD.mine) return err + guildBrowseHtml();
+    if (GD.view === 'boss') return err + gbossHtml();
+    if (GD.view === 'chest') return err + gchestHtml();
+    return err + guildHomeHtml();
+  }
+  function guildBrowseHtml() {
+    const rows = (GD.list || []).map(g => `<li class="g-row">${emblem(g)}<span class="g-main"><b>${esc(g.name)}</b> <span class="tag">[${esc(g.tag)}]</span><small class="empty-note">${g.members} / ${GUILD_MAX} members · Guildmaster ${esc(g.leader_name || '?')}</small>${g.info ? `<span class="g-info-s">${esc(g.info)}</span>` : ''}</span>
+      <span class="fr-acts">${!g.open ? '<span class="tag">Closed</span>' : g.members >= GUILD_MAX ? '<span class="tag">Full</span>' : `<button class="btn primary small" data-act="gjoin" data-id="${g.id}" ${GD.busy ? 'disabled' : ''}>Join</button>`}</span></li>`).join('');
+    const can = S.silver >= GUILD_COST;
+    return `<div class="soc-top">
+        <section class="soc-card g-create"><span class="tag">Found a guild</span>
+          <form class="g-form" data-form="gcreate">
+            <label>Name<input name="gname" id="g-name" maxlength="20" minlength="3" required autocomplete="off" placeholder="e.g. Ashen Vanguard"></label>
+            <label>Tag<input name="gtag" id="g-tag" maxlength="4" minlength="2" required autocomplete="off" autocapitalize="characters" placeholder="AV"></label>
+            <button class="btn primary small" type="submit" ${can ? '' : 'disabled'}>Found · ${ic('coin')} ${GUILD_COST.toLocaleString('en-US')}</button>
+          </form>
+          <small class="empty-note">${can ? 'You become its Guildmaster. Name 3-20 characters, tag 2-4 letters or numbers.' : `You need ${GUILD_COST.toLocaleString('en-US')} Sigils to found a guild.`}</small></section>
+        <section class="soc-card"><span class="tag">Find a guild</span><form class="fr-add" data-form="gsearch"><input name="q" id="g-q" value="${esc(GD.q)}" maxlength="20" autocomplete="off" placeholder="Name or tag" aria-label="Search guilds"><button class="btn small" type="submit">Search</button></form><small class="empty-note">Join an open guild to fight the guild boss together.</small></section>
+      </div>
+      <section class="fr-sec"><h3>Guilds</h3>${GD.list === null ? '<p class="empty-note">Loading…</p>' : rows ? `<ul class="fr-list">${rows}</ul>` : '<p class="empty-note">No guilds found. Found the first one!</p>'}</section>`;
+  }
+  function guildHomeHtml() {
+    const g = GD.mine, me = g.role, leader = me === 'leader', gm = g.members.find(m => m.role === 'leader');
+    const mine = myGuildRow(), myPts = Number(mine.points) || 0, tier = K.gchestTier(myPts);
+    const info = GD.editInfo && leader
+      ? `<form class="g-edit" data-form="ginfo"><textarea name="ginfo" id="g-info" maxlength="250" rows="4" placeholder="Tell players what your guild is about: goals, activity, rules.">${esc(g.info)}</textarea>
+          <div class="row"><small class="empty-note"><span id="g-count">${g.info.length}</span> / 250</small><label class="g-check"><input type="checkbox" name="gopen" id="g-open" ${g.open ? 'checked' : ''}> Open to new members</label><button class="btn small" type="button" data-act="ginfocancel">Cancel</button><button class="btn primary small" type="submit">Save</button></div></form>`
+      : `<p class="g-info">${g.info ? esc(g.info) : `<span class="empty-note">${leader ? 'No guild info yet. Write a few lines about your guild.' : 'The Guildmaster has not written anything yet.'}</span>`}</p>${leader ? '<button class="btn small" data-act="ginfoedit">Edit guild info</button>' : ''}`;
+    const memberRow = m => {
+      const acts = [];
+      if (!m.me && leader) acts.push(m.role === 'member' ? `<button class="btn small" data-act="grole" data-id="${m.user_id}" data-r="officer">Make officer</button>` : `<button class="btn small" data-act="grole" data-id="${m.user_id}" data-r="member">Make member</button>`, `<button class="btn small" data-act="grole" data-id="${m.user_id}" data-r="leader" data-name="${esc(m.name)}">Make Guildmaster</button>`);
+      if (!m.me && (leader || (me === 'officer' && m.role === 'member'))) acts.push(`<button class="btn small danger" data-act="gkick" data-id="${m.user_id}" data-name="${esc(m.name)}">Remove</button>`);
+      // portrait with a level badge, name and role, then the numbers in their own small frames
+      const st = m.cleared != null && m.cleared >= 0 && K.STAGES[m.cleared], camp = st ? `Ch ${ROMAN[st.chapter]} · ${st.n + 1}` : 'Starting';
+      const cell = (label, value, cls) => `<span class="gm-stat ${cls || ''}"><small>${label}</small><b>${value}</b></span>`;
+      return `<li class="gm-row ${m.me ? 'me' : ''}"><span class="gm-av">${m.avatar && C[m.avatar] ? por(m.avatar) : ''}${m.lvl ? `<span class="gm-lv">${m.lvl}</span>` : ''}</span>
+        <span class="gm-id"><b>${esc(m.name)}${m.me ? ' <small>(you)</small>' : ''}</b>${roleChip(m.role)}</span>
+        <span class="gm-stats">${cell('Level', m.lvl || '?')}${cell('Campaign', esc(camp))}${cell('Boss points', Number(m.points).toLocaleString('en-US'), 'gold')}${cell('Fights', `${m.hits}`)}</span>
+        ${acts.length ? `<span class="fr-acts gm-acts">${acts.join('')}</span>` : ''}</li>`;
+    };
+    const keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
+    return `<section class="g-card">${emblem(g)}<div class="g-head"><h3>${esc(g.name)} <span class="tag">[${esc(g.tag)}]</span></h3>
+        <small class="empty-note">${g.members.length} / ${GUILD_MAX} members · Guildmaster ${esc(gm ? gm.name : '?')} · ${g.open ? 'open to new members' : 'closed'} · you: ${ROLE_NAME[me]}</small>
+        ${info}</div></section>
+      <div class="g-tiles">
+        <button type="button" class="g-tile" data-act="gview" data-v="boss"><img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt=""><b>Guild Boss</b><small>${keysLeft} / ${K.GBOSS.keys} keys left today</small></button>
+        <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
+        <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
+      </div>
+      <section class="fr-sec"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section>
+      <div class="row g-leave"><button class="btn small danger" data-act="gleave">Leave guild</button></div>`;
+  }
+  const guildBack = '<button class="btn small" data-act="gview" data-v="home">‹ Guild</button>';
+  function gbossHtml() {
+    const g = GD.mine, ess = K.gbossEss(today()), art = K.GBOSS.art[ess], keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
+    if (!gbOpen(GD.d)) GD.d = 0;
+    const diffs = K.DIFFS.map((x, i) => `<button type="button" class="${i === GD.d ? 'sel' : ''}" data-act="gbd" data-n="${i}" ${gbOpen(i) ? '' : 'disabled title="Clear the previous campaign difficulty first"'}>${gbOpen(i) ? '' : LOCK_SVG}${esc(x.name)}<small>×${K.GBOSS.mult[i]} points</small></button>`).join('');
+    const beaten = K.ESSENCES.filter(e => K.BEATS[e] === ess);
+    return `<div class="section-head" style="margin:0">${guildBack}<span class="tag">Keys reset in ${untilUtc(nextMidnight())}</span></div>
+      <section class="gb-card"><div class="gb-art"><img class="spr" src="${SPR.url(art, 2)}" alt="${esc(K.BOSSES[art].name)}"></div>
+        <div class="gb-main"><span class="tag">Today's guild boss · a new one every day</span><h3>${esc(K.BOSSES[art].name)} ${affChip(ess)}</h3>${K.BOSSES[art].title ? `<span class="gb-title">${esc(K.BOSSES[art].title)}</span>` : ''}
+          <p class="empty-note">It cannot be killed: deal as much damage as you can before your team falls or the boss has taken ${K.GBOSS.turns} turns. It enrages after ${K.ENRAGE.at} of its turns. ${ess === 'Aether' ? 'No essence has the advantage today.' : `Strong against it today: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
+          <div class="gb-keys">${Array.from({ length: K.GBOSS.keys }, (_, i) => `<i class="${i < keysLeft ? 'on' : ''}"></i>`).join('')}<span>${keysLeft} / ${K.GBOSS.keys} keys left today</span></div>
+        </div></section>
+      <div class="gb-diffs" role="group" aria-label="Difficulty">${diffs}</div>
+      <div class="section-head" style="margin:0"><span class="empty-note">Your team: power ${K.teamPower(snapTeam(S.team)).toLocaleString('en-US')} · <button class="linkbtn" data-act="tab" data-tab="team">change</button></span>
+        <button class="btn primary" data-act="gbfight" ${keysLeft && !GD.busy ? '' : 'disabled'}>${GD.busy ? 'Fighting…' : 'Attack · 1 key'}</button></div>`;
+  }
+  function gchestHtml() {
+    const me = myGuildRow(), pts = Number(me.points) || 0, tier = K.gchestTier(pts);
+    const next = K.GCHEST.find(c => c.min > pts), prevMin = tier ? tier.min : 0;
+    const reward = c => [`${ic('coin')} ${c.silver.toLocaleString('en-US')}`, `${ic('stone')} ${c.stones}`, ...Object.keys(c.fs).map(k => `${shardIc(k)} ${c.fs[k]}`)].join(' ');
+    const rows = K.GCHEST.map(c => `<tr class="${tier === c ? 'cur' : ''}"><td>${esc(c.name)}</td><td class="num">${c.min === 1 ? 'any damage' : c.min.toLocaleString('en-US') + '+'}</td><td>${reward(c)}</td></tr>`).join('');
+    return `<div class="section-head" style="margin:0">${guildBack}<span class="tag">Opens in ${untilUtc(nextMonday())}</span></div>
+      <section class="gb-card chest"><span class="g-chest-ic big">${svgIcon('gift')}</span><div class="gb-main"><span class="tag">Your Guild Chest this week</span><h3>${tier ? esc(tier.name) : 'No chest yet'}</h3>
+        <p class="empty-note">${pts.toLocaleString('en-US')} points from ${me.hits || 0} guild boss ${me.hits === 1 ? 'fight' : 'fights'} this week.${next ? ` ${(next.min - pts).toLocaleString('en-US')} more for the ${esc(next.name)}.` : ' The best chest!'}</p>
+        ${next ? `<div class="xpbar"><i style="width:${Math.round((pts - prevMin) / (next.min - prevMin) * 100)}%"></i></div>` : ''}
+        <small class="empty-note">Points = damage × the difficulty's multiplier. Every Monday (UTC) your chest arrives in your Mail.</small></div></section>
+      <div class="tbl-wrap"><table class="g-tiers"><tr><th>Chest</th><th>Points</th><th>Reward</th></tr>${rows}</table></div>`;
+  }
+  async function gbossFight() {
+    if (GD.busy) return;
+    GD.busy = true; render();
+    let r;
+    try { r = await cloud().fn('arena', { action: 'gboss', d: GD.d, name: S.p.name, avatar: avatarId(), team: snapTeam(S.team) }); }
+    catch (e) { r = { error: 'No connection to the server. Check your internet and try again.' }; }
+    GD.busy = false;
+    if (r.error || !r.gboss) { toast(r.error || 'The fight could not start.', true); guildLoad(); return; }
+    const f = r.gboss;
+    runBattle({ type: 'gboss', team: f.team, d: f.d, ess: f.ess, seed: f.seed, fight: f, area: AREA_OF[f.ess] ?? 1, title: `Guild boss · ${K.BOSSES[K.GBOSS.art[f.ess]].name}` });
+  }
+  // the guild info counter while the Guildmaster types
+  document.addEventListener('input', e => { if (e.target.id === 'g-info') { const c = $('#g-count'); if (c) c.textContent = e.target.value.length; } });
+  function finishGboss(cfg, b) {
+    const f = cfg.fight, m = $('#modal');
+    SFX.win();
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><h2>Guild boss</h2><p class="tag">${esc(cfg.title)} · ${K.DIFFS[f.d].name}</p>
+      <ul class="rewards"><li><span class="aff" style="--c:var(--ember)">D</span><span>Damage dealt: <b>${f.dmg.toLocaleString('en-US')}</b></span></li>
+        <li><span class="aff" style="--c:var(--gold)">P</span><span>+${f.points.toLocaleString('en-US')} points for your Guild Chest (×${K.GBOSS.mult[f.d]})</span></li>
+        <li><span class="aff" style="--c:var(--info)">K</span><span>Keys left today: ${f.keysLeft} / ${K.GBOSS.keys}</span></li></ul>
+      ${meterHtml(b)}
+      <div class="modal-actions"><button class="btn primary" data-act="modal" data-go="gboss">Back to the guild boss</button></div></div>`;
+    m.hidden = false; m.querySelector('.btn').focus();
+    guildLoad();
+  }
+
   // ================= GUIDE =================
   // Every term and abbreviation in the game, in groups with a search box. Lists (status effects, sets, shards,
   // difficulties, arena tiers) come straight from the engine data, so the guide stays right when numbers change.
@@ -1161,9 +1315,9 @@
   }
   function socialHtml() {
     const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
-    const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">${LOCK_SVG} Guild</button></div>`;
+    const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">Guild</button></div>`;
     const head = `<div class="section-head"><div><h2>Social</h2><p class="lede">Add friends with their friend code and see how far they are.</p></div></div>${tabs}`;
-    if (SO.tab === 'guild') return head + `<div class="lockbox">${LOCK_SVG}<div><h3>Guilds are coming soon</h3><p class="empty-note">Team up with other players, chat together and fight a guild boss for shared rewards.</p></div></div>`;
+    if (SO.tab === 'guild') return head + guildHtml();
     if (!signedIn()) return head + needAccount('Friends');
     if (!SO.friends) return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p><button class="btn" data-act="socreload">Try again</button>` : '<p class="empty-note">Loading your friends…</p>');
     const friends = SO.friends.filter(f => f.kind === 'friend'), out = SO.friends.filter(f => f.kind === 'outgoing');
@@ -1300,6 +1454,17 @@
     const none = document.querySelector('.gl-none'); if (none) none.hidden = shown > 0;
   });
   document.addEventListener('submit', e => {
+    const gc = e.target.closest('[data-form="gcreate"]');
+    if (gc) {
+      e.preventDefault();
+      if (S.silver < GUILD_COST) { toast(`You need ${GUILD_COST.toLocaleString('en-US')} Sigils to found a guild.`, true); return; }
+      guildAct('guild_create', { gname: gc.gname.value, gtag: gc.gtag.value, ginfo: '' }, { ok: 'Your guild is founded!', name_taken: 'That name is taken.', tag_taken: 'That tag is taken.', bad_name: 'Use 3-20 letters, numbers, spaces, - or \'.', bad_tag: 'The tag needs 2-4 letters or numbers.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.' },
+        () => { S.silver -= GUILD_COST; save(); hud(); });
+      return;
+    }
+    const gs = e.target.closest('[data-form="gsearch"]'); if (gs) { e.preventDefault(); GD.q = gs.q.value.trim(); GD.list = null; render(); guildLoad(); return; }
+    const gi = e.target.closest('[data-form="ginfo"]');
+    if (gi) { e.preventDefault(); GD.editInfo = false; guildAct('guild_set', { ginfo: gi.ginfo.value.trim().slice(0, 250), gopen: gi.gopen.checked }, { ok: 'Guild info saved.', not_leader: 'Only the Guildmaster can change this.' }); return; }
     const af = e.target.closest('[data-form="addfriend"]'); if (af) { e.preventDefault(); addFriend(af.fcode.value); af.fcode.value = ''; return; }
     const f = e.target.closest('[data-form="pname"]'); if (!f) return;
     e.preventDefault();
@@ -1344,7 +1509,20 @@
     else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) startArena(r.fight); });
     else if (act === 'arlb') loadBoard(a.dataset.kind);
     else if (act === 'arclaim') claimArena().then(socialLoad);
-    else if (act === 'soctab') { SO.tab = a.dataset.t; render(); }
+    else if (act === 'soctab') { SO.tab = a.dataset.t; if (SO.tab === 'guild') { GD.view = 'home'; guildLoad(); } render(); }
+    else if (act === 'gjoin') guildAct('guild_join', { gid: +id }, { ok: 'Welcome to the guild!', full: 'That guild is full.', closed: 'That guild is closed.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.', not_found: 'That guild no longer exists.' });
+    else if (act === 'gleave') confirmBox('Leave guild?', `Leave <b>${esc(GD.mine ? GD.mine.name : '')}</b>? ${GD.mine && GD.mine.role === 'leader' ? 'The lead passes to the longest-serving officer or member. ' : ''}Your guild boss points of this week still count for your own chest.`, 'Leave', () => guildAct('guild_leave', {}, { ok: 'You left the guild.' }, () => { GD.view = 'home'; }));
+    else if (act === 'ginfoedit') { GD.editInfo = true; render(); const t = $('#g-info'); if (t) t.focus(); }
+    else if (act === 'ginfocancel') { GD.editInfo = false; render(); }
+    else if (act === 'grole') {
+      const r = a.dataset.r;
+      if (r === 'leader') confirmBox('Hand over the guild?', `Make <b>${esc(a.dataset.name)}</b> the Guildmaster? You become an officer.`, 'Hand over', () => guildAct('guild_set_role', { other: id, new_role: 'leader' }, { ok: 'You handed over the guild.' }));
+      else guildAct('guild_set_role', { other: id, new_role: r }, { ok: r === 'officer' ? 'Promoted to officer.' : 'Now a member again.' });
+    }
+    else if (act === 'gkick') confirmBox('Remove member?', `Remove <b>${esc(a.dataset.name)}</b> from the guild?`, 'Remove', () => guildAct('guild_kick', { other: id }, { ok: 'Member removed.', not_allowed: 'You cannot remove this member.' }));
+    else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
+    else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
+    else if (act === 'gbfight') gbossFight();
     else if (act === 'soundtoggle') { S.sound = !S.sound; save(); hud(); render(); if (S.sound) SFX.click(); }
     else if (act === 'musictoggle') { S.music = !S.music; save(); render(); MUSIC.refresh(); }
     else if (act === 'glnav') { e.preventDefault(); const s = document.getElementById('gl-' + a.dataset.id); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -1502,7 +1680,7 @@
   const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
   let spd = 1, speeds = [1];
   // arena fights are replays of a fight already decided, so every unlocked speed (also 5×) may be used
-  const beatenBefore = cfg => cfg.type === 'arena' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
+  const beatenBefore = cfg => cfg.type === 'arena' || cfg.type === 'gboss' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
   function speedsFor(cfg) {
     const reached = S.cleared + 1, replay = beatenBefore(cfg);
     return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
@@ -1657,6 +1835,7 @@
         bk.querySelector('i').style.width = (broken ? 100 : u.brk / u.breakMax * 100) + '%';
         bk.querySelector('span').textContent = broken ? 'BROKEN' : `${Math.ceil(u.brk)}/${u.breakMax}`;
         rs.el.querySelector('.ph').textContent = `· Phase ${u.phase + 1}/${u.nPhases}`;
+        if (u.immortal && B) { const m = B.b.meter[u.uid]; rs.el.querySelector('.ph').textContent = `· ${Math.round(m ? m.taken : 0).toLocaleString('en-US')} damage`; }
       }
       rs.el.querySelector('.fxrow').innerHTML = chips.join('');
       rs.hb.classList.toggle('valid', R.hl.has(u));
@@ -1731,7 +1910,7 @@
   function drawFx(now) {
     R.fx = R.fx.filter(f => now - f.t0 < f.dur);
     for (const f of R.fx) {
-      const k = (now - f.t0) / f.dur;
+      const k = Math.max(0, (now - f.t0) / f.dur); // the frame time can be a hair before the effect started
       g.globalAlpha = 1 - k * 0.6;
       if (f.kind === 'slash') {
         g.fillStyle = f.col;
@@ -1780,7 +1959,7 @@
   }
   function drawProjs(now) {
     for (const p of R.projs) {
-      const k = Math.min(1, (now - p.t0) / p.dur);
+      const k = Math.max(0, Math.min(1, (now - p.t0) / p.dur));
       const arc = p.straight ? 0 : p.kind === 'cannon' ? 26 : p.kind === 'arrow' ? 12 : 5;
       const x = p.sx + (p.tx - p.sx) * k, y = p.sy + (p.ty - p.sy) * k - Math.sin(k * Math.PI) * arc;
       const d = Math.sign(p.tx - p.sx) || 1, X = Math.round(x), Y = Math.round(y);
@@ -2118,7 +2297,7 @@
     res({ skill: s, target });
   }
   // on auto (not in the arena, whose fights are replays) tapping an enemy makes it every hero's focus; tap it again to clear
-  const canFocus = () => B && B.b.auto && B.cfg.type !== 'arena';
+  const canFocus = () => B && B.b.auto && B.cfg.type !== 'arena' && B.cfg.type !== 'gboss';
   function clickUnit(u) {
     if (!pending && canFocus() && u.side === 'enemy' && u.alive) {
       const b = B.b; b.focus = b.focus === u ? null : u; SFX.click();
@@ -2150,7 +2329,7 @@
   function setAutoBtn() { const b = $('#b-auto'), on = S.auto && autoOk(); b.classList.toggle('on', on); b.classList.toggle('locked', !autoOk()); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = autoOk() ? 'Auto battle: ' + (on ? 'on' : 'off') : 'Auto battle unlocks when you clear Chapter I · Stage 1'; }
   function setSpeedBtn() { const b = $('#b-speed'); b.innerHTML = `<b>${spd}×</b>`; b.classList.toggle('on', spd > 1); b.title = 'Battle speed ' + spd + '×' + (speedHint() ? '. ' + speedHint() : ''); b.setAttribute('aria-label', b.title); SFX.calm = calm(); }
   $('#b-auto').addEventListener('click', () => {
-    if (B && B.cfg.type === 'arena') { toast('Arena fights always play on auto.'); return; }
+    if (B && (B.cfg.type === 'arena' || B.cfg.type === 'gboss')) { toast(B.cfg.type === 'gboss' ? 'Guild boss fights always play on auto.' : 'Arena fights always play on auto.'); return; }
     if (!autoOk()) { toast('Auto battle unlocks when you clear Chapter I · Stage 1.'); return; }
     S.auto = !S.auto; save(); setAutoBtn();
     if (B) B.b.auto = S.auto;
@@ -2174,7 +2353,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGuidePop(); });
   $('#b-quit').addEventListener('click', () => {
     // arena: the result is already known, so this skips ahead (fast forward) instead of surrendering
-    if (B && B.cfg.type === 'arena') { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
+    if (B && (B.cfg.type === 'arena' || B.cfg.type === 'gboss')) { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
     const btn = $('#b-quit');
     if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to give up'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up'); }, 3000); return; }
     quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up');
@@ -2215,9 +2394,11 @@
     SFX.unlock(); MUSIC.play(null);
     // Arena: a replay of the fight the server already played. Both teams come from the server's snapshots and the dice
     // from its seed (K.arenaSetup), so this plays out exactly like on the server; both sides play on auto.
-    const arena = cfg.type === 'arena', nPh = arena ? 1 : K.PHASES;
+    // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
+    const gb = cfg.type === 'gboss', arena = cfg.type === 'arena' || gb, nPh = arena ? 1 : K.PHASES;
     let heroes, enemies;
-    if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
+    if (gb) ({ heroes, enemies } = K.gbossSetup(cfg.team, cfg.d, cfg.ess, cfg.seed));
+    else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
     else { heroes = S.team.map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false;
     $('#toast').hidden = true;
@@ -2233,6 +2414,7 @@
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
     b.auto = arena || !!cfg.rep || (S.auto && autoOk());
+    if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
     B = { b, cfg, ph: 0, nPh };
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
@@ -2244,7 +2426,7 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, arena ? 'Arena · both teams fight on auto' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? 'Arena · both teams fight on auto' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
@@ -2273,6 +2455,7 @@
     if (arena) K.setRng(null);
     b.stats = tot; b.turns = tot.turns; b.meterAll = meter;
     // arena: the server's result counts (the replay should always agree; warn if it ever does not)
+    if (gb) { finishGboss(cfg, b); return; }
     if (arena && (res === 'win') !== cfg.win) console.warn('Arena replay differs from the server result', cfg.seed);
     const win = arena ? cfg.win : res === 'win' && !b.aborted;
     if (win) {
@@ -2324,7 +2507,7 @@
     }
     for (const k in UNLOCKS) if (!S.seen[k] && unlocked(k)) {
       S.seen[k] = true;
-      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Found or join a guild in the Social building, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
     }
     // the homebase message comes last: its button leads there
     return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));
@@ -2486,6 +2669,7 @@
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'champs') setTab('champions');
     else if (cfg.type === 'arena') setTab('arena');
+    else if (cfg.type === 'gboss') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
     else setTab(cfg.type === 'stage' ? 'campagne' : 'kerkers');
   }
 

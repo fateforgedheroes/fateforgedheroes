@@ -1089,6 +1089,7 @@ const K = (function () {
       await this.start();
       while (!this.check()) {
         if (this.turns > 300) { this.over = 'lose'; break; }
+        if (this.capUnit && (this.capUnit.stacks.bossTurns || 0) >= this.cap) { this.over = 'done'; break; }
         const u = this.nextActor();
         if (!u) break;
         u.tm -= 100; if (u.tm < 0) u.tm = 0;
@@ -1106,7 +1107,7 @@ const K = (function () {
       let ticked = false;
       for (const e of u.effects.filter(e => DOT[e.k])) {
         if (!u.alive) break;
-        this.damage(u, Math.round(u.maxHp * DOT[e.k] * (e.v || 1)), null, { kind: e.k, from: e.src }); ticked = true;
+        this.damage(u, Math.round((u.baseHp || u.maxHp) * DOT[e.k] * (e.v || 1)), null, { kind: e.k, from: e.src }); ticked = true;
       }
       if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1, u, 'Regeneration'); ticked = true; }
       if (u.alive && u.passive === 'deeproots') { this.heal(u, u.maxHp * 0.05, u, 'Passive'); ticked = true; }
@@ -1387,6 +1388,7 @@ const K = (function () {
       const hpBefore = t.hp;
       if (sh) { const ab = Math.min(sh.v, left); sh.v -= ab; left -= ab; if (sh.v <= 0) t.effects = t.effects.filter(e => e !== sh); }
       t.hp -= left;
+      if (t.immortal) t.hp = Math.max(1, t.hp);
       const real = amount - left + Math.min(left, Math.max(0, hpBefore)), by = src || (info && info.from && this.all().find(x => x.uid === info.from));
       if (by) this.note(by, 'dmg', info && info.skill ? info.skill.name : info && info.kind ? EFFECTS[info.kind].n : 'Other', real);
       this.note(t, 'taken', null, real);
@@ -1486,6 +1488,66 @@ const K = (function () {
     }
   }
 
+  // ---------- Guild boss (shared by the game and the server) ----------
+  // Like a clan boss: it cannot die. A fight lasts until the boss has taken GBOSS.turns of its own turns (or the team
+  // falls); the damage dealt counts. Its essence changes every day (UTC) and it enrages like a Boss Hall boss
+  // (u.hall), so every team eventually falls. Five difficulties like the campaign; damage on a harder one is worth
+  // more points (mult). Each player has GBOSS.keys fights a day; the weekly Guild Chest pays out by points (GCHEST).
+  const GBOSS = {
+    keys: 3, turns: 30,
+    ess: ['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'Aether'],
+    // the boss of each essence: five guild bosses of their own (art in bosses.js), Storm and Radiant borrow a Boss Hall boss
+    art: { Ember: 'zaroth', Verdant: 'blightedtitan', Storm: 'stormbehemoth', Frost: 'frostborn', Radiant: 'celestial', Umbral: 'seraphimfallen', Aether: 'endlessoracle' },
+    lvl: [18, 34, 48, 60, 72], f: [1, 1.5, 2.1, 2.4, 2.9], mult: [1, 2.5, 5, 9, 16],
+    skills: [
+      SK('Rending Sweep', 'enemies', 'slam', 'quake', 0, 'Attack of 70% on all enemies. 50% chance of Defense Down for 2 turns.', [D(0.7), DB('defDown', 2, 0.5)]),
+      SK('Crushing Grip', 'enemy', 'melee', 'smash', 2, 'Strike of 160%. 60% chance to Stun for 1 turn.', [D(1.6), DB('stun', 1, 0.6)]),
+      SK('Cataclysm', 'enemies', 'magic', 'dark', 3, 'Attack of 110% on all enemies. 60% chance of Speed Down for 2 turns.', [D(1.1), DB('spdDown', 2, 0.6)]),
+    ],
+  };
+  // the guild bosses: stats from a Boss Hall boss of the same essence (the guild boss gets its own skills anyway);
+  // registered in BOSSES and ALL_UNITS but not in BOSS_ORDER, so the Boss Hall does not show them
+  const GUILD_BOSSES = {
+    zaroth: { name: 'Zaroth', title: 'The Ashen Devourer', aff: 'Ember', base: 'overlord' },
+    frostborn: { name: 'Frostborn Sovereign', title: 'The Eternal Lich King', aff: 'Frost', base: 'stonedragon' },
+    seraphimfallen: { name: 'Seraphim Fallen', title: 'The Void Ascended', aff: 'Umbral', base: 'voidtitan' },
+    blightedtitan: { name: 'The Blighted Titan', title: 'Heart of Decay', aff: 'Verdant', base: 'treant' },
+    endlessoracle: { name: 'The Endless Oracle', title: 'Lord of Forgotten Knowledge', aff: 'Aether', base: 'crystaltitan' },
+  };
+  for (const id in GUILD_BOSSES) { const g = GUILD_BOSSES[id]; BOSSES[id] = ALL_UNITS[id] = Object.assign({}, BOSSES[g.base], { name: g.name, title: g.title, aff: g.aff, guild: true }); }
+  // essence of the day: day number since 1970 (UTC)
+  const gbossEss = day => GBOSS.ess[((day % 7) + 7) % 7];
+  function gbossUnit(d, ess) {
+    const id = GBOSS.art[ess], u = enemyUnit(id, GBOSS.lvl[d]);
+    toughen(u, GBOSS.f[d]);
+    Object.assign(u, { aff: ess, immortal: true, hall: true, nPhases: 1, thresholds: [], skills: mkSkills(GBOSS.skills), passive: null });
+    // it cannot die: a huge HP pool, but effects that work on max HP (Burn, Poison, Bleed) use its real HP (baseHp)
+    u.baseHp = u.maxHp; u.maxHp = u.hp = 1e9;
+    return u;
+  }
+  // sets the seeded dice and builds the fight; the caller runs it with b.auto, b.capUnit = boss, b.cap = GBOSS.turns
+  function gbossSetup(team, d, ess, seed) { setRng(seeded(seed)); return { heroes: arenaUnits(team, 'hero'), enemies: [gbossUnit(d, ess)] }; }
+  const gbossPoints = (dmg, d) => Math.round(dmg * GBOSS.mult[d]);
+  async function gbossFight(team, d, ess, seed) {
+    try {
+      const { heroes, enemies } = gbossSetup(team, d, ess, seed), b = new Battle(heroes, enemies);
+      b.auto = true; b.capUnit = enemies[0]; b.cap = GBOSS.turns;
+      await b.run();
+      const dmg = (b.meter[enemies[0].uid] || { taken: 0 }).taken;
+      return { dmg, points: gbossPoints(dmg, d), turns: b.turns };
+    } finally { setRng(null); }
+  }
+  // weekly Guild Chest by points (personal damage × difficulty mult, summed over the week)
+  const GCHEST = [
+    { name: 'Wooden Chest', min: 1, silver: 2000, stones: 2, fs: {} },
+    { name: 'Bronze Chest', min: 50000, silver: 5000, stones: 4, fs: { fate: 1 } },
+    { name: 'Silver Chest', min: 150000, silver: 8000, stones: 6, fs: { fate: 2 } },
+    { name: 'Gold Chest', min: 400000, silver: 12000, stones: 10, fs: { greater: 1 } },
+    { name: 'Royal Chest', min: 1000000, silver: 18000, stones: 14, fs: { greater: 2 } },
+    { name: 'Mythic Chest', min: 2500000, silver: 26000, stones: 20, fs: { ancient: 1 } },
+  ];
+  const gchestTier = pts => GCHEST.filter(c => pts >= c.min).pop() || null;
+
   // ---------- Arena (shared by the game and the server, supabase/functions/arena) ----------
   // A team snapshot is what the server stores and fights with: [{ id, lvl, stars, sk: [..], items: [{ slot, rar, lvl, il, set, main, subs }] }].
   const power = st => Math.round(st.hp * 0.12 + st.atk * 1.8 + st.def * 1.3 + st.spd * 4 + st.crit * 5 + st.cdmg * 2 + (st.acc + st.res) * 0.8);
@@ -1583,6 +1645,7 @@ const K = (function () {
   }
 
   return {
+    GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,

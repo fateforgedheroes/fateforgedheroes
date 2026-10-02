@@ -49,6 +49,11 @@ const db = {
   },
   async log(row: Record<string, unknown>) { await rest('arena_log', { method: 'POST', body: row }); },
   async unclaimed(id: string) { return (await rest('arena_rewards?select=id&claimed=is.false&user_id=' + eq(id))).length; },
+  // guild boss (0006_guilds.sql)
+  async guildOf(id: string) { const r = await rest('guild_members?select=guild_id&user_id=' + eq(id)); return r[0] ? r[0].guild_id : null; },
+  async progress(id: string) { const r = await rest('saves?select=cleared:data->cleared,dcl:data->dcl&user_id=' + eq(id)); return r[0] || null; },
+  async keysUsed(id: string) { return rest('rpc/gboss_keys_used', { method: 'POST', body: { uid: id } }); },
+  async gbossHit(row: Record<string, unknown>) { await rest('guild_boss_hits', { method: 'POST', body: row }); },
 };
 
 Deno.serve(async (req: Request) => {

@@ -96,5 +96,23 @@ export async function handle(K, db, user, body) {
       state: await state(K, db, me),
     };
   }
+  // guild boss: one of today's keys; the server plays the fight (the boss of today's essence on difficulty d) and
+  // stores the damage. Difficulty d is open when that campaign difficulty is (Easy always, from Chapter II on).
+  if (body.action === 'gboss') {
+    if (!team) return { error: 'This team cannot be used (' + (bad || 'no team') + ').', status: 400 };
+    const d = Number(body.d);
+    if (!Number.isInteger(d) || d < 0 || d >= K.GBOSS.lvl.length) return { error: 'Unknown difficulty.', status: 400 };
+    const gid = await db.guildOf(user.id);
+    if (!gid) return { error: 'Join a guild first.', status: 403 };
+    const pr = (await db.progress(user.id)) || {}, cleared = Number(pr.cleared ?? -1), dcl = Array.isArray(pr.dcl) ? pr.dcl : [];
+    const open = d === 0 ? cleared >= 13 : d === 1 ? cleared >= K.STAGES.length - 1 : Number(dcl[d - 1] ?? -1) >= K.STAGES.length - 1;
+    if (!open) return { error: 'This difficulty is not open for you yet.', status: 403 };
+    const used = await db.keysUsed(user.id);
+    if (used >= K.GBOSS.keys) return { error: 'No keys left today. You get ' + K.GBOSS.keys + ' new keys at midnight (UTC).', status: 429 };
+    const ess = K.gbossEss(Math.floor(Date.now() / 86400000)), seed = randSeed();
+    const r = await K.gbossFight(team, d, ess, seed);
+    await db.gbossHit({ user_id: user.id, guild_id: gid, d, ess, seed, dmg: r.dmg, points: r.points });
+    return { gboss: { seed, team, d, ess, dmg: r.dmg, points: r.points, turns: r.turns, keysLeft: K.GBOSS.keys - used - 1 } };
+  }
   return { error: 'Unknown action.', status: 400 };
 }
