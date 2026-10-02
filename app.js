@@ -445,7 +445,7 @@
     { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
     { go: 'champions', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
     { go: 'social', label: 'Social: friends and guild', name: 'Social', icon: 'people', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
-    { box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
+    { go: 'guild', label: 'Guild Hall: your guild and the guild boss', name: 'Guild Hall', icon: 'banner', box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
     { box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
     { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
     { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
@@ -465,8 +465,9 @@
     { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
     { go: 'profiel', title: 'Town Hall', text: 'Your profile: name, avatar and player level, sound settings, your account and save backups. The ? Guide in the top bar explains every term.' },
-    { go: 'social', title: 'Social', text: 'Add friends with their friend code; guilds are on the way. Mail (top bar) holds friend requests, gifts and arena rewards.' },
-    { zone: 6, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
+    { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (top bar) holds friend requests, gifts and arena rewards.' },
+    { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
+    { zone: 7, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens the Arena and the Boss Hall. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
@@ -488,7 +489,7 @@
     const tut = firstSteps();
     const tour = tourOn() ? TOUR[tourStep] : null, tc = tour && zoneCentre(tourZone(tour));
     // renamed buildings get a name plate over the name painted in the image (the forge is Heroes & Gear, the campfire Social)
-    const PLATE_IC = { helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
+    const PLATE_IC = { banner: '<path d="M3 1.5h10V12l-5-3-5 3z"/><path d="M2 1.5h12" stroke="currentColor" stroke-width="1.4"/>', helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
     const namePlate = z => z.name ? `<span class="hz-plate named" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true">${PLATE_IC[z.icon] || ''}</svg></i>${esc(z.name)}</span>` : '';
     const zones = HOME_ZONES.map(z => {
       // one button covers the building and its plate
@@ -1093,16 +1094,16 @@
       <span class="fr-acts">${!g.open ? '<span class="tag">Closed</span>' : g.members >= GUILD_MAX ? '<span class="tag">Full</span>' : `<button class="btn primary small" data-act="gjoin" data-id="${g.id}" ${GD.busy ? 'disabled' : ''}>Join</button>`}</span></li>`).join('');
     const can = S.silver >= GUILD_COST;
     return `<div class="soc-top">
-        <section class="soc-card g-create"><span class="tag">Found a guild</span>
+        <section class="soc-card g-create"><span class="tag">Create a guild</span>
           <form class="g-form" data-form="gcreate">
             <label>Name<input name="gname" id="g-name" maxlength="20" minlength="3" required autocomplete="off" placeholder="e.g. Ashen Vanguard"></label>
             <label>Tag<input name="gtag" id="g-tag" maxlength="4" minlength="2" required autocomplete="off" autocapitalize="characters" placeholder="AV"></label>
-            <button class="btn primary small" type="submit" ${can ? '' : 'disabled'}>Found · ${ic('coin')} ${GUILD_COST.toLocaleString('en-US')}</button>
+            <button class="btn primary small" type="submit" ${can ? '' : 'disabled'}>Create · ${ic('coin')} ${GUILD_COST.toLocaleString('en-US')}</button>
           </form>
-          <small class="empty-note">${can ? 'You become its Guildmaster. Name 3-20 characters, tag 2-4 letters or numbers.' : `You need ${GUILD_COST.toLocaleString('en-US')} Sigils to found a guild.`}</small></section>
+          <small class="empty-note">${can ? 'You become its Guildmaster. Name 3-20 characters, tag 2-4 letters or numbers.' : `You need ${GUILD_COST.toLocaleString('en-US')} Sigils to create a guild.`}</small></section>
         <section class="soc-card"><span class="tag">Find a guild</span><form class="fr-add" data-form="gsearch"><input name="q" id="g-q" value="${esc(GD.q)}" maxlength="20" autocomplete="off" placeholder="Name or tag" aria-label="Search guilds"><button class="btn small" type="submit">Search</button></form><small class="empty-note">Join an open guild to fight the guild boss together.</small></section>
       </div>
-      <section class="fr-sec"><h3>Guilds</h3>${GD.list === null ? '<p class="empty-note">Loading…</p>' : rows ? `<ul class="fr-list">${rows}</ul>` : '<p class="empty-note">No guilds found. Found the first one!</p>'}</section>`;
+      <section class="fr-sec"><h3>Guilds</h3>${GD.list === null ? '<p class="empty-note">Loading…</p>' : rows ? `<ul class="fr-list">${rows}</ul>` : '<p class="empty-note">No guilds found. Create the first one!</p>'}</section>`;
   }
   function guildHomeHtml() {
     const g = GD.mine, me = g.role, leader = me === 'leader', gm = g.members.find(m => m.role === 'leader');
@@ -1457,8 +1458,8 @@
     const gc = e.target.closest('[data-form="gcreate"]');
     if (gc) {
       e.preventDefault();
-      if (S.silver < GUILD_COST) { toast(`You need ${GUILD_COST.toLocaleString('en-US')} Sigils to found a guild.`, true); return; }
-      guildAct('guild_create', { gname: gc.gname.value, gtag: gc.gtag.value, ginfo: '' }, { ok: 'Your guild is founded!', name_taken: 'That name is taken.', tag_taken: 'That tag is taken.', bad_name: 'Use 3-20 letters, numbers, spaces, - or \'.', bad_tag: 'The tag needs 2-4 letters or numbers.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.' },
+      if (S.silver < GUILD_COST) { toast(`You need ${GUILD_COST.toLocaleString('en-US')} Sigils to create a guild.`, true); return; }
+      guildAct('guild_create', { gname: gc.gname.value, gtag: gc.gtag.value, ginfo: '' }, { ok: 'Your guild is created!', name_taken: 'That name is taken.', tag_taken: 'That tag is taken.', bad_name: 'Use 3-20 letters, numbers, spaces, - or \'.', bad_tag: 'The tag needs 2-4 letters or numbers.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.' },
         () => { S.silver -= GUILD_COST; save(); hud(); });
       return;
     }
@@ -1496,7 +1497,7 @@
     else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
     else if (act === 'startercancel') $('#modal').hidden = true;
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
-    else if (act === 'go') { invSlot = null; setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+    else if (act === 'go') { invSlot = null; if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
     else if (act === 'tutlock') toast('Fight your first campaign battle to open the rest of your homebase.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
@@ -2509,7 +2510,7 @@
     }
     for (const k in UNLOCKS) if (!S.seen[k] && unlocked(k)) {
       S.seen[k] = true;
-      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Found or join a guild in the Social building, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Create or join a guild in the Guild Hall, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
     }
     // the homebase message comes last: its button leads there
     return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));
