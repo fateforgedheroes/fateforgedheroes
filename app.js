@@ -1137,8 +1137,34 @@
         <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
+      ${me === 'leader' || me === 'officer' ? guildInviteHtml(g) : ''}
       <section class="fr-sec"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section>
       <div class="row g-leave"><button class="btn small danger" data-act="gleave">Leave guild</button></div>`;
+  }
+  // Guildmaster and officers: invite by friend code, or one of your friends who is not in this guild yet
+  const friendCode = uid => String(uid).replace(/-/g, '').slice(0, 8).toUpperCase();
+  function guildInviteHtml(g) {
+    const inGuild = new Set(g.members.map(m => m.user_id));
+    const friends = (SO.friends || []).filter(f => f.kind === 'friend' && !inGuild.has(f.user_id));
+    const full = g.members.length >= GUILD_MAX;
+    return `<section class="fr-sec g-invite"><h3>Invite a player</h3>
+      ${full ? '<p class="empty-note">The guild is full (25 members).</p>' : `<form class="fr-add" data-form="ginvite"><input name="icode" id="g-icode" maxlength="9" autocomplete="off" spellcheck="false" placeholder="Friend code, e.g. 1A2B 3C4D" aria-label="Friend code to invite"><button class="btn primary small" type="submit">Send invite</button></form>
+      <small class="empty-note">The invite arrives in their Mail. They can join even when the guild is closed.</small>
+      ${friends.length ? `<ul class="g-inv-friends">${friends.map(f => `<li>${f.avatar && C[f.avatar] ? por(f.avatar) : ''}<b>${esc(f.name)}</b><button class="btn small" data-act="ginvf" data-code="${friendCode(f.user_id)}">Invite</button></li>`).join('')}</ul>` : ''}`}</section>`;
+  }
+  const INVITE_MSG = { sent: 'Invite sent: it is waiting in their Mail.', already: 'This player already has an invite from your guild.', in_guild: 'This player is already in a guild.', self: 'That is your own friend code.', full: 'Your guild is full.', not_found: 'No player has that friend code.', not_allowed: 'Only the Guildmaster and officers can invite.' };
+  async function sendInvite(code) {
+    const c = String(code || '').replace(/[^0-9a-f]/gi, '');
+    if (c.length !== 8) { toast('A friend code has 8 characters (letters A-F and numbers).', true); return; }
+    let r; try { r = await cloud().rpc('guild_invite', { code: c }); } catch (e) { toast('Could not send the invite. Try again.', true); return; }
+    toast(INVITE_MSG[r] || 'Could not send the invite.', r !== 'sent');
+  }
+  async function answerInvite(gid, accept) {
+    let r; try { r = await cloud().rpc('guild_invite_respond', { gid, accept }); } catch (e) { toast('That did not work. Try again in a moment.', true); return; }
+    const MSG = accept ? { ok: 'Welcome to the guild!', in_guild: 'Leave your current guild first.', full: 'That guild is full.', locked: 'Guilds open after clearing Chapter II.', not_found: 'That invite is no longer valid.' } : { ok: 'Invite declined.' };
+    toast(MSG[r] || 'That did not work.', r !== 'ok');
+    GD.mine = undefined; socialLoad();
+    if (accept && r === 'ok') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); }
   }
   const guildBack = '<button class="btn small" data-act="gview" data-v="home">‹ Guild</button>';
   function gbossHtml() {
@@ -1325,7 +1351,7 @@
     const row = (term, text, chip) => `<li class="gl-item"><span class="gl-term">${chip || ''}<b>${term}</b></span><span class="gl-text">${text}</span></li>`;
     const sec = (id, title, items) => `<section class="gl-sec" id="gl-${id}"><h3>${title}</h3><ul class="gl-list">${items.join('')}</ul></section>`;
     const pct = n => `${n}%`;
-    const fx = Object.entries(K.EFFECTS).map(([k, e]) => row(esc(e.n), esc(e.d) + (e.buff ? '.' : '.'), `<span class="fxc ${e.buff ? '' : 'bad'}">${esc(e.s)}</span>`));
+    const fx = Object.entries(K.EFFECTS).map(([k, e]) => row(esc(e.n), esc(e.d) + (e.buff ? '.' : '.'), fxBadge(k)));
     const beats = Object.entries(K.BEATS).map(([a, b]) => `${affChip(a)} ${a} beats ${b}`).join(' · ');
     const sections = [
       sec('battle', 'Battle', [
@@ -1402,7 +1428,7 @@
   // ================= SOCIAL + MAIL =================
   // Friends and mail live in Supabase (0005_social.sql): friend codes and requests, gifts from the server, and the
   // weekly arena rewards. Everything needs a signed-in account; the header's mail button shows how much is waiting.
-  const SO = { tab: 'friends', code: '', friends: null, mail: null, err: '', who: null, loading: false };
+  const SO = { tab: 'friends', code: '', friends: null, mail: null, invites: [], err: '', who: null, loading: false };
   const RW_KEYS = ['fate', 'greater', 'ancient', 'mythic', 'legendary'];
   const signedIn = () => { const cl = cloud(); return !!(cl && cl.signedIn && cl.signedIn()); };
   // fetches friends and mail; paints the header badge and re-renders an open Social or Mail screen
@@ -1412,14 +1438,15 @@
     if (SO.who !== who) Object.assign(SO, { who, code: '', friends: null, mail: null });
     SO.loading = true;
     try {
-      const [code, friends, mail] = await Promise.all([cl.rpc('my_friend_code'), cl.rpc('friend_list'), cl.rpc('mail_list')]);
-      Object.assign(SO, { code: code || '', friends: friends || [], mail: mail || [], err: '' });
+      // guild invites (0008) come with the mail; a database without them yet just shows none
+      const [code, friends, mail, invites] = await Promise.all([cl.rpc('my_friend_code'), cl.rpc('friend_list'), cl.rpc('mail_list'), cl.rpc('guild_invites').catch(() => [])]);
+      Object.assign(SO, { code: code || '', friends: friends || [], mail: mail || [], invites: invites || [], err: '' });
     } catch (e) { SO.err = 'Could not reach the server. Check your connection and try again.'; }
     SO.loading = false;
     paintMail();
     if ((tab === 'social' || tab === 'mail') && !B) render();
   }
-  const mailCount = () => (SO.friends || []).filter(f => f.kind === 'incoming').length + (SO.mail || []).filter(m => !m.claimed).length;
+  const mailCount = () => (SO.invites || []).length + (SO.friends || []).filter(f => f.kind === 'incoming').length + (SO.mail || []).filter(m => !m.claimed).length;
   function paintMail() {
     const b = $('#mail'); if (!b) return;
     const n = signedIn() ? mailCount() : 0, badge = b.querySelector('.mail-n');
@@ -1465,6 +1492,7 @@
     if (!SO.mail) return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p>` : '<p class="empty-note">Checking your mail…</p>');
     const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
     const items = [
+      ...(SO.invites || []).map(v => `<li class="ml-item new invite"><span class="ml-ic">${svgIcon('banner')}</span><span class="ml-main"><b>Guild invite: ${esc(v.name)} [${esc(v.tag)}]</b><small class="empty-note">From ${esc(v.invited_by || 'the Guildmaster')} · ${v.members} / ${GUILD_MAX} members</small></span><span class="fr-acts"><button class="btn primary small" data-act="ginvacc" data-id="${v.guild_id}">Accept</button><button class="btn small" data-act="ginvdec" data-id="${v.guild_id}">Decline</button></span></li>`),
       ...incoming.map(f => `<li class="ml-item new"><span class="ml-ic">${svgIcon('people')}</span><span class="ml-main"><b>Friend request from ${esc(f.name)}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}</small></span><span class="fr-acts"><button class="btn primary small" data-act="fraccept" data-id="${f.user_id}">Accept</button><button class="btn small" data-act="frdecline" data-id="${f.user_id}">Decline</button></span></li>`),
       ...SO.mail.map(m => {
         if (m.kind === 'arena') { const t = K.arenaTier(m.rewards.rating), top = K.ARENA_RANK_REWARDS[(m.rewards.rank || 0) - 1]; return `<li class="ml-item new"><span class="ml-ic">${svgIcon('swords')}</span><span class="ml-main"><b>Weekly arena reward</b><small class="empty-note">${t.name} tier${top ? ` · #${m.rewards.rank} of the week` : ''} · ${tierReward(t)}${top ? ' + ' + tierReward(top) : ''}</small></span><span class="fr-acts"><button class="btn primary small" data-act="arclaim">Claim</button></span></li>`; }
@@ -1478,6 +1506,7 @@
     people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>',
     gift: '<rect x="2" y="6" width="12" height="3"/><path d="M3 9v5.5h10V9M8 6v8.5M8 6c-1-2.5-4-3-4-1.2C4 6 8 6 8 6zm0 0c1-2.5 4-3 4-1.2C12 6 8 6 8 6z"/>',
     swords: '<path d="M2 2l7 7M2 2h2.5L11 8.5 8.5 11 2 4.5zM14 2l-7 7M14 2h-2.5L5 8.5 7.5 11 14 4.5zM4 12l2-2M12 12l-2-2"/>',
+    banner: '<path d="M3 1.5h10V13l-5-3-5 3z"/>',
   };
   const svgIcon = k => `<svg viewBox="0 0 16 16" aria-hidden="true">${SVG_IC[k]}</svg>`;
   async function friendAct(fn, body, okMsg) {
@@ -1593,6 +1622,7 @@
         () => { S.silver -= GUILD_COST; save(); hud(); });
       return;
     }
+    const gv = e.target.closest('[data-form="ginvite"]'); if (gv) { e.preventDefault(); sendInvite(gv.icode.value); gv.icode.value = ''; return; }
     const gs = e.target.closest('[data-form="gsearch"]'); if (gs) { e.preventDefault(); GD.q = gs.q.value.trim(); GD.list = null; render(); guildLoad(); return; }
     const gi = e.target.closest('[data-form="ginfo"]');
     if (gi) { e.preventDefault(); GD.editInfo = false; guildAct('guild_set', { ginfo: gi.ginfo.value.trim().slice(0, 250), gopen: gi.gopen.checked }, { ok: 'Guild info saved.', not_leader: 'Only the Guildmaster can change this.' }); return; }
@@ -1655,6 +1685,9 @@
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') gbossFight();
     else if (act === 'profile') openProfile(id);
+    else if (act === 'ginvf') sendInvite(a.dataset.code);
+    else if (act === 'ginvacc') answerInvite(+id, true);
+    else if (act === 'ginvdec') answerInvite(+id, false);
     else if (act === 'pfhero') { PF.sel = id; renderProfile(); }
     else if (act === 'pfclose') { PF.id = null; $('#modal').hidden = true; }
     else if (act === 'soundtoggle') { S.sound = !S.sound; save(); hud(); render(); if (S.sound) SFX.click(); }
@@ -1977,12 +2010,12 @@
       rs.el.querySelector('.hp i').style.width = w; rs.el.querySelector('.hp b').style.width = w;
       const sh = u.effects.find(e => e.k === 'shield');
       rs.el.querySelector('.hp em').style.width = sh ? Math.min(100, sh.v / u.maxHp * 100) + '%' : '0';
-      const chips = u.effects.map(e => e.k === 'enrage' ? `<span class="fxc rage" title="Enraged: +${Math.round(K.ENRAGE.atk * e.v * 100)}% Attack, growing every ${K.ENRAGE.every} of its turns">RAGE×${e.v}</span>`
-        : `<span class="fxc ${K.EFFECTS[e.k].buff ? '' : 'bad'}" title="${K.EFFECTS[e.k].n}: ${K.EFFECTS[e.k].d}">${K.EFFECTS[e.k].s}${e.n < 99 ? e.n : ''}</span>`);
+      // status badges (fxBadge): an icon per effect, turns left in the corner
+      const chips = u.effects.map(e => e.k === 'enrage' ? fxBadge('enrage', null, `Enraged: +${Math.round(K.ENRAGE.atk * e.v * 100)}% Attack, growing every ${K.ENRAGE.every} of its turns`, '×' + e.v) : fxBadge(e.k, e.n));
       // a boss shows how many of its turns are left before it enrages
-      if (u.hall && u.alive && B && B.b && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxc ${left <= 3 ? 'rage' : 'clock'}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳${left}</span>`); }
-      if (u.stacks.smids) chips.unshift(`<span class="fxc" title="Blood Frenzy: +${u.stacks.smids * 10}% Attack">FRN${u.stacks.smids}</span>`);
-      if (u.stacks.charge) chips.unshift(`<span class="fxc bad" title="Static Charge">CHG${u.stacks.charge}</span>`);
+      if (u.hall && u.alive && B && B.b && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxi clock ${left <= 3 ? 'soon' : ''}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳<i>${left}</i></span>`); }
+      if (u.stacks.smids) chips.unshift(fxBadge('atkUp', null, `Blood Frenzy: +${u.stacks.smids * 10}% Attack`, '×' + u.stacks.smids));
+      if (u.stacks.charge) chips.unshift(fxBadge('broken', null, 'Static Charge', u.stacks.charge));
       if (u.isBoss) {
         const bk = rs.el.querySelector('.brk'), broken = u.effects.some(e => e.k === 'broken');
         bk.classList.toggle('broken', broken);
@@ -2254,6 +2287,38 @@
     b.hidden = false;
     await sleep(ms || 600);
     b.hidden = true;
+  }
+
+  // ----- status icons -----
+  // Every buff and debuff on a unit is a small icon badge: a symbol per effect, green for buffs and red for debuffs
+  // (damage over time in its own colour), an arrow for stat ups and downs and the turns left in the corner.
+  const FXP = {
+    sword: 'M12.5 1.5h2v2L7 11 5 9zM4 9.5 6.5 12l-1 1-.8-.8-1.6 1.6-1.2-1.2 1.6-1.6-.8-.8z',
+    shield: 'M8 1l6 2.2v4.3c0 3.8-2.7 6.3-6 7.5-3.3-1.2-6-3.7-6-7.5V3.2z',
+    bolt: 'M9.5 1 3 9h4.2L6 15l7-8.5H8.8z',
+    target: 'M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm0 2.3a4.2 4.2 0 1 1 0 8.4 4.2 4.2 0 0 1 0-8.4zM8 6.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6z',
+    star: 'M8 1l1.9 4.3 4.6.5-3.5 3.1 1 4.6L8 11.2l-4 2.3 1-4.6L1.5 5.8l4.6-.5z',
+    plus: 'M6.3 1.5h3.4v4.8h4.8v3.4H9.7v4.8H6.3V9.7H1.5V6.3h4.8z',
+    eye: 'M8 3.5C4.3 3.5 1.5 8 1.5 8s2.8 4.5 6.5 4.5S14.5 8 14.5 8 11.7 3.5 8 3.5zm0 2.3a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4z',
+    counter: 'M1.5 5h8V2.2L14 6.2l-4.5 4V7.4h-8zM14.5 11h-8v2.8L2 9.8l4.5-4v2.8h8z',
+    down: 'M6.3 1.5h3.4v6h3.8L8 14.5 2.5 7.5h3.8z',
+    flame: 'M8 .8c1.2 3.2 4.7 4.6 4.7 8.8A4.7 4.7 0 0 1 3.3 9.6c0-2.3 1.5-3.4 2.2-5 .5 1.6 1.2 2.3 2.1 2.6C7.8 5.2 7.4 3 8 .8z',
+    drop: 'M8 1.2S3.2 7 3.2 10.2a4.8 4.8 0 0 0 9.6 0C12.8 7 8 1.2 8 1.2z',
+    skull: 'M8 1.3a5.7 5.7 0 0 0-5.7 5.7c0 2.1 1 3.4 2.1 4V13.5h2.2V12h2.8v1.5h2.2V11c1.1-.6 2.1-1.9 2.1-4A5.7 5.7 0 0 0 8 1.3zM5.6 6.4a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8zm4.8 0a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z',
+    snow: 'M7.2.8h1.6v14.4H7.2zM.8 7.2h14.4v1.6H.8zM2.4 3.5l1.1-1.1 10.1 10.1-1.1 1.1zM12.5 2.4l1.1 1.1L3.5 13.6l-1.1-1.1z',
+    stun: 'M5 .8l1.1 2.6 2.8.3-2.1 1.9.6 2.8L5 7 2.6 8.4l.6-2.8L1.1 3.7l2.8-.3zM11.5 6.8l1 2.2 2.4.3-1.8 1.6.5 2.4-2.1-1.3-2.1 1.3.5-2.4-1.8-1.6 2.4-.3z',
+    mute: 'M2 6h12v4.2H2zM1.3 13.6 13.6 1.3l1.1 1.1L2.4 14.7z',
+    heart: 'M8 14.3S1.3 10 1.3 5.6A3.4 3.4 0 0 1 8 4.2a3.4 3.4 0 0 1 6.7 1.4C14.7 10 8 14.3 8 14.3z',
+    bang: 'M6.4 1.3h3.2L9 10H7zM6.7 11.4h2.6v2.9H6.7z',
+    cross: 'M7.2.8h1.6v4.4H7.2zM7.2 10.8h1.6v4.4H7.2zM.8 7.2h4.4v1.6H.8zM10.8 7.2h4.4v1.6h-4.4zM8 5.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2z',
+  };
+  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull' };
+  const fxSvg = k => `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="${FXP[FX_ICON[k] || 'star']}"/></svg>`;
+  // one badge; n = turns left (none for lasting effects), extra = a count shown instead (stacks)
+  function fxBadge(k, n, title, extra) {
+    const E0 = K.EFFECTS[k] || {}, arrow = /Up$/.test(k) ? '▲' : /Down$|^healRed$/.test(k) ? '▼' : '';
+    const kind = k === 'enrage' ? 'rage' : E0.buff ? 'good' : 'bad';
+    return `<span class="fxi ${kind} fx-${k}" title="${esc(title || (E0.n ? `${E0.n}: ${E0.d}` : k))}">${fxSvg(k)}${arrow ? `<em>${arrow}</em>` : ''}${extra != null ? `<i>${extra}</i>` : n != null && n < 99 ? `<i>${n}</i>` : ''}</span>`;
   }
 
   // ----- battle hooks -----

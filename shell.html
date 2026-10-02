@@ -1487,6 +1487,32 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .lvls button { padding: 7px 0; }
 .gl-nav { gap: 6px; padding: 8px 0; }
 .gl-nav a { font-size: .85rem; min-height: 36px; padding: 5px 12px; }
+.g-inv-friends { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.g-inv-friends li { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: linear-gradient(180deg, #211a25, #19141d); border: 1px solid color-mix(in srgb, var(--gold) 16%, var(--line)); }
+.g-inv-friends img.spr { width: 30px; height: 30px; }
+.ml-item.invite { border-left-color: var(--info); }
+.ml-item.invite .ml-ic svg { stroke: var(--info); }
+/* ===== status badges on battle units (fxBadge) ===== */
+.fxrow { gap: 3px; margin-top: 2px; }
+.fxi {
+  --fc: #3f9a55; position: relative; display: inline-grid; place-items: center; width: clamp(16px, 1.9vw, 22px); height: clamp(16px, 1.9vw, 22px);
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--fc) 70%, #fff 10%), color-mix(in srgb, var(--fc) 55%, #000) 80%);
+  border: 1px solid #000; box-shadow: 0 0 0 1px color-mix(in srgb, var(--fc) 80%, #fff 20%), 0 2px 3px rgba(0, 0, 0, .6); border-radius: 4px; color: #fff;
+}
+.fxi svg { width: 72%; height: 72%; fill: currentColor; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .7)); }
+.fxi.bad { --fc: #b8322a; }
+.fxi.fx-burn { --fc: #e0631c; } .fxi.fx-poison, .fxi.fx-blight { --fc: #5e9e2a; } .fxi.fx-bleed { --fc: #a3122a; }
+.fxi.fx-freeze { --fc: #3a8fc4; } .fxi.fx-stun, .fxi.fx-broken { --fc: #c99a1c; } .fxi.fx-shield, .fxi.fx-immune { --fc: #3c7fb8; }
+.fxi.rage { --fc: #c0261a; animation: ragepulse 1s ease-in-out infinite; }
+.fxi.clock { --fc: #3a2f45; width: auto; padding: 0 4px; font-size: clamp(10px, 1.1vw, 13px); color: var(--gold); gap: 2px; display: inline-flex; align-items: center; }
+.fxi.clock i { position: static; background: none; border: 0; color: var(--gold); font-size: inherit; padding: 0; }
+.fxi.clock.soon { --fc: #8c1d12; color: #ffd9c8; animation: ragepulse 1s ease-in-out infinite; }
+.fxi em { position: absolute; left: -3px; top: -5px; font-style: normal; font-size: clamp(8px, .85vw, 10px); line-height: 1; color: #fff; text-shadow: 0 0 2px #000, 0 1px 0 #000; }
+.fxi.good em { color: #b9ffb0; } .fxi.bad em { color: #ffb4a8; }
+.fxi i { position: absolute; right: -4px; bottom: -4px; min-width: 11px; padding: 0 2px; font-style: normal; font-family: var(--font-tag); font-weight: 700; font-size: clamp(8px, .8vw, 10px); line-height: 11px; text-align: center; color: #fff; background: #120d10; border: 1px solid color-mix(in srgb, var(--fc) 80%, #fff 10%); border-radius: 3px; }
+@media (prefers-reduced-motion: reduce) { .fxi.rage, .fxi.clock.soon { animation: none; } }
+/* the guide's effect list uses the same badges, a bit bigger */
+.gl-term .fxi { width: 24px; height: 24px; margin-right: 6px; vertical-align: middle; }
 </style>
 
 <div id="app">
