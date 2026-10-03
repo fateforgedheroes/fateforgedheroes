@@ -23,7 +23,7 @@
 
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
-  const UNLOCKS = { altaar: { lvl: 5 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
+  const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
   const PLAYER_UNLOCK = { altaar: 5 }; // the player-level ones (level-up messages)
   const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? s.p.lvl >= u.lvl : s.cleared >= u.ch * 7 - 1); };
   const needTxt = t => { const u = UNLOCKS[t]; return u.lvl ? `player level ${u.lvl}` : `clearing Chapter ${ROMAN[u.ch - 1]}`; };
@@ -55,6 +55,7 @@
   }
   const teamIds = mode => (S.teams[S.modeTeam[mode]] || S.teams[0]).ids;
   const inAnyTeam = id => S.teams.some(t => t.ids.includes(id));
+  const teamsOf = id => S.teams.filter(t => t.ids.includes(id)).map(t => t.name);
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
@@ -463,7 +464,7 @@
     { go: 'team', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
     { go: 'social', label: 'Social: friends and guild', name: 'Social', icon: 'people', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
     { go: 'guild', label: 'Guild Hall: your guild and the guild boss', name: 'Guild Hall', icon: 'banner', box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
-    { box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
+    { go: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
     { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
     { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
     { box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
@@ -484,7 +485,8 @@
     { go: 'profiel', title: 'Town Hall', text: 'Your profile: name, avatar and player level, sound settings, your account and save backups. The ? Guide in the top bar explains every term.' },
     { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (top bar) holds friend requests, gifts and arena rewards.' },
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
-    { zone: 7, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
+    { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
+    { zone: 8, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens the Arena and the Boss Hall. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
@@ -518,7 +520,8 @@
         <span class="hz-plate" style="${at(z.plate)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
       const locked = !unlocked(z.go);
       const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 6, HOME_W)};top:${pc(py - 14, HOME_H)}">${needTag(z.go)}</span>`
-        : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>` : '';
+        : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>`
+        : z.go === 'expedition' && expDone() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}" title="The ship is back"></span>` : '';
       return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" title="${z.label}"></button>${namePlate(z)}${badge}`;
     }).join('');
     // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
@@ -565,7 +568,7 @@
       if (loginDue()) setTimeout(showLogin, 600);
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -915,8 +918,8 @@
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
     const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
     const copies = Object.keys(S.fodder).filter(f => S.fodder[f] > 0 && C[f]).sort((a, b) => (b === id) - (a === id) || C[a].rar - C[b].rar);
-    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !inAnyTeam(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
-    const release = C[id].captured && !inAnyTeam(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
+    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !inAnyTeam(x) && !onExp(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
+    const release = C[id].captured && !inAnyTeam(id) && !onExp(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
     const xpBtn = (xp, attrs) => `<button class="btn small primary" ${attrs} ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${xp.toLocaleString('en-US')} XP</button>`;
     const copyRow = f => `<div class="fd rar-${C[f].rar} ${f === id ? 'self' : ''}">${por(f)}<div><b>${esc(C[f].name)}</b> <span class="tag">×${S.fodder[f]}</span><small class="empty-note">${K.RARITIES[C[f].rar]} · spare copy</small></div>
         <div class="row">${f === id
@@ -1807,6 +1810,7 @@
     else if (act === 'toggle') {
       const i = S.team.indexOf(id);
       if (i >= 0) { if (S.team.length > 1) S.team.splice(i, 1); else toast('Your team needs at least one champion.', true); }
+      else if (onExp(id)) toast(`${C[id].short} is away on an expedition.`, true);
       else if (S.team.length < 4) S.team.push(id);
       else toast('Your team is full. Remove someone first.', true);
       save(); render();
@@ -1824,6 +1828,26 @@
         S.tsel = 0; linkTeams(S); save(); render();
       });
     }
+    else if (act === 'expsel') {
+      if (EXSEL.has(id)) { EXSEL.delete(id); render(); return; }
+      if (EXSEL.size >= K.EXP_HEROES) { toast(`A crew has at most ${K.EXP_HEROES} heroes.`, true); return; }
+      const tms = S.teams.filter(t => t.ids.includes(id));
+      if (!tms.length) { EXSEL.add(id); render(); return; }
+      const alone = tms.find(t => t.ids.length === 1);
+      if (alone) { toast(`${C[id].short} is the only hero in ${alone.name}. Add another hero to that team first.`, true, 4000); return; }
+      confirmBox(`${esc(C[id].short)} is in a team`, `${esc(C[id].short)} is in ${esc(tms.map(t => t.name).join(' and '))}. Take ${esc(C[id].short)} out of ${tms.length > 1 ? 'those teams' : 'that team'} to send ${esc(C[id].short)} on the expedition?`, 'Take out of the team', () => {
+        for (const t of tms) t.ids.splice(t.ids.indexOf(id), 1); // in place: S.team is one of these arrays
+        EXSEL.add(id); save(); render(); toast(`${C[id].short} left ${tms.map(t => t.name).join(' and ')} and joins the crew.`);
+      });
+    }
+    else if (act === 'expgo') {
+      if (S.exp || !EXSEL.size) return;
+      const k = +a.dataset.k, now = Date.now();
+      S.exp = { k, ids: [...EXSEL].filter(x => S.roster[x] && !inAnyTeam(x)), start: now, end: now + K.EXPEDITIONS[k].hours * 3600e3, lvl: expLvl() };
+      EXSEL.clear(); save(); render(); toast(`${K.EXPEDITIONS[k].name}: the ship sets sail. Back in ${K.EXPEDITIONS[k].hours} ${K.EXPEDITIONS[k].hours === 1 ? 'hour' : 'hours'}.`);
+    }
+    else if (act === 'expclaim') expClaim();
+    else if (act === 'exprecall') confirmBox('Recall the ship?', 'The crew comes home now, without any rewards.', 'Recall', () => { S.exp = null; save(); render(); });
     else if (act === 'hinfo') heroInfo(id);
     else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; invSlot = null; champTab = 'stats'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
@@ -1909,7 +1933,7 @@
       if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
     } else if (act === 'feedhero') {
       const x = id, h = S.roster[selChamp], to = selChamp;
-      if (!S.roster[x] || x === to || inAnyTeam(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
+      if (!S.roster[x] || x === to || inAnyTeam(x) || onExp(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
       const go = () => {
         if (!S.roster[x] || selChamp !== to) return;
         const gain = K.feedXp(x, h.lvl, S.roster[x].lvl), worn = itemsOf(x);
@@ -1930,7 +1954,7 @@
       const f = a.dataset.f; if (!(S.fodder[f] > 0)) return;
       S.fodder[f]--; S.stones += K.breakStones(f); save(); render(); toast(`${C[f].name} broken down into ${K.breakStones(f)} Ascension ${K.breakStones(f) === 1 ? 'Stone' : 'Stones'}.`);
     } else if (act === 'release') {
-      if (!C[id] || !C[id].captured || inAnyTeam(id)) return;
+      if (!C[id] || !C[id].captured || inAnyTeam(id) || onExp(id)) return;
       delete S.roster[id]; S.fodder[id] = (S.fodder[id] || 0) + 1;
       S.inv.forEach(x => { if (x.owner === id) x.owner = null; });
       selChamp = S.team[0]; save(); render(); toast(`${C[id].name} is now a spare copy. Capture another to use it as a hero again.`);
@@ -2813,6 +2837,65 @@
     return ups;
   }
   // returns one entry per level gained: [level, silver, shard, unlocked tab or null]
+  // ---------- Expeditions (the ship, tab `expedition`, K.EXPEDITIONS) ----------
+  // S.exp = { k, ids, start, end, lvl } while a trip is out; heroes on it are away: not addable to a team, not fed
+  const EXSEL = new Set();
+  const onExp = id => !!(S.exp && S.exp.ids.includes(id));
+  // the player's campaign level: the level of the furthest stage cleared on the hardest difficulty reached
+  function expLvl() {
+    for (let d = K.DIFFS.length - 1; d >= 1; d--) if (S.dcl && S.dcl[d] >= 0) return K.diffLvl(K.STAGES[S.dcl[d]], d);
+    return Math.max(1, K.STAGES[Math.max(0, S.cleared)].lvl);
+  }
+  const fmtLeft = ms => { const m = Math.max(0, Math.ceil(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`; };
+  const expDone = () => S.exp && Date.now() >= S.exp.end;
+  // what a trip may bring, as text (n ≥ 1: that many; below 1: a chance)
+  function expPreview(E0, lvl) {
+    const one = (ic0, name, n) => n >= 1 ? `${ic0} ${n} ${name}${n > 1 ? 's' : ''}` : `${ic0} ${Math.round(n * 100)}% chance of a ${name}`;
+    return [`<b>${Math.round(E0.xp * K.winXp(lvl)).toLocaleString('en-US')} XP</b> for each hero`, sigils(Math.round(E0.silver * K.winSilver(lvl))),
+      ...E0.fs.map(([t, n]) => one(shardIc(t), K.SHARD[t].name, n)), ...E0.st.map(([t, n]) => one(stoneIc(t), stoneName(t, 1), n))];
+  }
+  function expedHtml() {
+    const lvl = expLvl(), head = `<div class="section-head"><div><h2>Expeditions</h2><p class="lede">Send up to ${K.EXP_HEROES} heroes who are not in one of your teams on a voyage. They come back with XP, Sigils, Fate Shards and Ascension Stones. One expedition at a time; longer voyages bring more, but fighting yourself is always faster.</p></div></div>`;
+    if (S.exp) {
+      const E0 = K.EXPEDITIONS[S.exp.k], done = expDone(), pct = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100));
+      return head + `<div class="exp-out ${done ? 'done' : ''}"><div class="exp-top"><div><span class="tag">${done ? 'Back in port' : 'At sea'}</span><h3>${esc(E0.name)}</h3><p class="empty-note">${esc(E0.desc)}</p></div>
+        <div class="exp-crew">${S.exp.ids.map(id => `<span class="exp-hero rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<small>${esc(C[id].short)}</small></span>`).join('')}</div></div>
+        <div class="exp-bar"><i style="width:${pct}%"></i></div>
+        <div class="exp-foot"><span class="exp-left">${done ? 'The ship is back. Collect the rewards!' : `Back in ${fmtLeft(S.exp.end - Date.now())}`}</span>
+          ${done ? '<button class="btn primary" data-act="expclaim">Collect rewards</button>' : '<button class="btn small" data-act="exprecall">Recall the ship</button>'}</div>
+        <ul class="exp-rw">${expPreview(E0, S.exp.lvl).map(x => `<li>${x}</li>`).join('')}</ul></div>`;
+    }
+    for (const id of [...EXSEL]) if (!S.roster[id] || inAnyTeam(id)) EXSEL.delete(id);
+    // every hero can be picked; one in a team asks first whether to take it out of that team (expsel)
+    const free = Object.keys(S.roster).filter(id => C[id]).sort((a, b) => !!inAnyTeam(a) - !!inAnyTeam(b) || C[b].rar - C[a].rar || S.roster[b].lvl - S.roster[a].lvl);
+    const crew = free.length ? `<div class="grid-cards exp-pick">${free.map(id => { const r = S.roster[id], on = EXSEL.has(id), capped = r.lvl >= K.maxLvl(r.stars, id), tm = teamsOf(id); return `<button type="button" class="card rar-${C[id].rar} ${on ? 'sel inteam' : ''} ${tm.length ? 'in-team' : ''}" data-act="expsel" data-id="${id}" aria-pressed="${on}" title="${tm.length ? `In ${esc(tm.join(', '))}: picking it asks to take it out of that team` : capped ? 'At its level cap: its XP goes to the rest of the crew' : ''}">${affChip(C[id].aff)}<span class="lv">${r.lvl}</span>${por(id)}<span class="nm">${esc(C[id].short)}</span><span class="sub">${tm.length ? `In ${esc(tm.join(', '))}` : capped ? 'Level cap' : roleStr(C[id])}</span></button>`; }).join('')}</div>`
+      : '<p class="empty-note">You have no heroes yet.</p>';
+    const trips = K.EXPEDITIONS.map((E0, k) => `<div class="exp-trip"><div class="exp-th"><h3>${esc(E0.name)}</h3><span class="tag">${E0.hours} ${E0.hours === 1 ? 'hour' : 'hours'}</span></div><p class="empty-note">${esc(E0.desc)}</p>
+      <ul class="exp-rw">${expPreview(E0, lvl).map(x => `<li>${x}</li>`).join('')}</ul>
+      <button class="btn primary" data-act="expgo" data-k="${k}" ${EXSEL.size ? '' : 'disabled title="Pick heroes for the crew first"'}>Set sail</button></div>`).join('');
+    return head + `<div class="section-head"><h3 style="margin:0">Crew</h3><span class="tag">${EXSEL.size} / ${K.EXP_HEROES} chosen</span></div>${crew}
+      <div class="exp-trips">${trips}</div><p class="empty-note">Rewards follow your campaign progress (enemy level ${lvl} now). A hero at its level cap passes its XP on to the rest of the crew.</p>`;
+  }
+  function expClaim() {
+    if (!expDone()) return;
+    const x = S.exp, rw = K.expReward(x.k, x.lvl), ups = [], gain = {};
+    // the crew shares rw.xp × crew size: a hero at (or reaching) its level cap passes the rest on to the others
+    const room = id => { const h = S.roster[id], cap = K.maxLvl(h.stars, id); let r = -h.xp; for (let l = h.lvl; l < cap; l++) r += K.xpNeed(l); return Math.max(0, r); };
+    let crew = x.ids.filter(id => S.roster[id]), pool = rw.xp * crew.length, open = crew.filter(id => room(id) > 0);
+    const lv0 = Object.fromEntries(crew.map(id => [id, S.roster[id].lvl]));
+    while (pool > 0 && open.length) {
+      const share = Math.floor(pool / open.length) || pool; let used = 0;
+      for (const id of open) { const g = Math.min(share, room(id), pool - used); if (g <= 0) continue; const h = S.roster[id]; h.xp += g; used += g; gain[id] = (gain[id] || 0) + g; while (h.lvl < K.maxLvl(h.stars, id) && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } if (h.lvl >= K.maxLvl(h.stars, id)) h.xp = 0; }
+      pool -= used; open = open.filter(id => room(id) > 0); if (!used) break;
+    }
+    for (const id of crew) if (S.roster[id].lvl > lv0[id]) ups.push(`${C[id].short} → ${S.roster[id].lvl}`);
+    S.silver += rw.silver; for (const t in rw.fs) S.fs[t] = (S.fs[t] || 0) + rw.fs[t]; addStones(rw.st);
+    S.exp = null; save(); hud(); render(); SFX.up();
+    const got = [crew.map(id => `${C[id].short} +${(gain[id] || 0).toLocaleString('en-US')} XP`).join(', '), `+${rw.silver.toLocaleString('en-US')} Sigils`, ...Object.entries(rw.fs).map(([t, n]) => `+${n} ${K.SHARD[t].name}`), ...Object.entries(rw.st).map(([t, n]) => `+${n} ${stoneName(t, n)}`)];
+    toast(`The ship is back: ${got.join(' · ')}${ups.length ? `. Level up: ${ups.join(', ')}` : ''}.`, false, 6000);
+  }
+  // keep the time left on the Expeditions screen and the ship's badge on the homebase current
+  setInterval(() => { if (!S || !S.exp) return; if (tab === 'expedition' && $('#modal').hidden) { const el = document.querySelector('.exp-left'); if (el && !expDone()) { el.textContent = `Back in ${fmtLeft(S.exp.end - Date.now())}`; const b = document.querySelector('.exp-bar i'); if (b) b.style.width = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100)) + '%'; } else if (expDone() && !document.querySelector('[data-act=expclaim]')) render(); } else if (tab === 'home' && expDone() && !document.querySelector('.hz-badge.ready')) render(); }, 30000);
   // ---------- Energy (K.ENERGY): S.energy, refilled by time from S.enAt (ms) ----------
   const EN_MS = K.ENERGY.regenMin * 60000;
   const enMax = () => K.energyMax(S.p.lvl);

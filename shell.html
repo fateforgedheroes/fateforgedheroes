@@ -1571,6 +1571,29 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 /* Ascension Stone tiers: Lesser (the plain art), Greater (blue), Ancient (gold) */
 .shard-ic.st-greater { filter: hue-rotate(180deg) saturate(1.6) brightness(1.1); }
 .shard-ic.st-ancient { filter: sepia(1) saturate(3.5) hue-rotate(-12deg) brightness(1.15) drop-shadow(0 0 3px rgba(255, 200, 80, .8)); }
+/* Expeditions (the ship) */
+.exp-pick { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); margin-bottom: 14px; }
+.exp-trips { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 6px 0 10px; }
+.exp-trip, .exp-out { display: flex; flex-direction: column; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.exp-trip .btn { margin-top: auto; align-self: flex-start; }
+.exp-th { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.exp-th h3, .exp-out h3 { margin: 0; }
+.exp-trip p, .exp-out p { margin: 0; }
+.exp-rw { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: .95rem; }
+.exp-rw li { display: flex; align-items: center; gap: 6px; }
+.exp-rw .shard-ic, .exp-rw .sigil-ic { width: 18px; height: 18px; }
+.exp-top { display: flex; gap: 14px; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; }
+.exp-crew { display: flex; gap: 8px; }
+.exp-hero { display: flex; flex-direction: column; align-items: center; width: 64px; border-bottom: 3px solid var(--rc); }
+.exp-hero img { width: 56px; height: 56px; object-fit: contain; }
+.exp-hero small { font-size: .75rem; color: var(--muted); }
+.exp-bar { height: 10px; border-radius: 999px; background: rgba(0, 0, 0, .4); overflow: hidden; border: 1px solid var(--line); }
+.exp-bar i { display: block; height: 100%; background: linear-gradient(90deg, #3a7fb8, #7cc6ff); transition: width .6s; }
+.exp-out.done .exp-bar i { background: linear-gradient(90deg, #b8902a, #ffd76a); }
+.exp-out.done { border-color: var(--gold); }
+.exp-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.exp-pick .card.in-team:not(.sel) { opacity: .7; }
+.exp-pick .card.in-team .sub { color: var(--gold); }
 </style>
 
 <div id="app">

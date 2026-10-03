@@ -843,6 +843,22 @@ const K = (function () {
   const energyMax = plvl => ENERGY.base + (plvl || 1);
   const stageEnergy = (st, d) => (!d && st.chapter === 0 ? 0 : ENERGY.stage[d || 0]);
   const bossEnergy = n => ENERGY.boss + n;
+  // ---------- Expeditions (the ship): one at a time, up to EXP_HEROES heroes that are in none of the player's teams ----------
+  // Each hero gets xp × winXp(lvl) XP (a won stage gives 1×; a hero at its level cap passes its share to the rest of the crew) and the trip brings silver × winSilver(lvl) Sigils, with lvl
+  // the player's campaign level. Per hour that is 3 (1 h), 2 (12 h) and 1.5 (24 h) stages' worth: far below fighting,
+  // where a day of energy pays ~160 Easy stages for the whole team. fs / st: [kind, n]; n ≥ 1 is that many, below 1 the
+  // chance of one.
+  const EXP_HEROES = 4;
+  const EXPEDITIONS = [
+    { id: 'coast', name: 'Coastal Patrol', hours: 1, xp: 3, silver: 1.5, desc: 'A short sail along the coast to chase off raiders.', fs: [['fate', 0.15]], st: [['lesser', 1]] },
+    { id: 'ruins', name: 'The Sunken Ruins', hours: 12, xp: 24, silver: 12, desc: 'Dive for relics in a drowned city off the cliffs.', fs: [['fate', 1], ['greater', 0.3]], st: [['lesser', 4], ['greater', 0.25]] },
+    { id: 'isles', name: 'The Far Isles', hours: 24, xp: 36, silver: 20, desc: 'A long voyage to uncharted islands at the edge of the map.', fs: [['fate', 2], ['greater', 1], ['ancient', 0.05]], st: [['lesser', 8], ['greater', 1], ['ancient', 0.1]] },
+  ];
+  // the rewards of a finished expedition (rolled once, when it is collected)
+  function expReward(k, lvl) {
+    const E0 = EXPEDITIONS[k], roll = list => { const o = {}; for (const [t, n] of list) { const c = n >= 1 ? n : rnd() < n ? 1 : 0; if (c) o[t] = (o[t] || 0) + c; } return o; };
+    return { xp: Math.round(E0.xp * winXp(lvl)), silver: Math.round(E0.silver * winSilver(lvl)), fs: roll(E0.fs), st: roll(E0.st) };
+  }
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
   // Every Boss Hall level plays like a campaign stage, so the Boss Hall is never a shortcut to better gear:
@@ -1705,7 +1721,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
