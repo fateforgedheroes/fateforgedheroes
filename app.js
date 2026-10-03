@@ -23,7 +23,7 @@
 
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
-  const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
+  const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, tower: { ch: 2 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
   const PLAYER_UNLOCK = { altaar: 5 }; // the player-level ones (level-up messages)
   const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? s.p.lvl >= u.lvl : s.cleared >= u.ch * 7 - 1); };
   const needTxt = t => { const u = UNLOCKS[t]; return u.lvl ? `player level ${u.lvl}` : `clearing Chapter ${ROMAN[u.ch - 1]}`; };
@@ -59,7 +59,7 @@
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
-    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 };
+    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
@@ -467,7 +467,7 @@
     { go: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
     { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
     { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
-    { box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
+    { go: 'tower', label: 'Tower of Essence', name: 'Tower of Essence', icon: 'tower', box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
   ];
   let homeScroll = null;
   // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
@@ -486,6 +486,7 @@
     { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (top bar) holds friend requests, gifts and arena rewards.' },
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
+    { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
     { zone: 8, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens the Arena and the Boss Hall. On to the next stage!' },
   ];
@@ -508,7 +509,7 @@
     const tut = firstSteps();
     const tour = tourOn() ? TOUR[tourStep] : null, tc = tour && zoneCentre(tourZone(tour));
     // renamed buildings get a name plate over the name painted in the image (the forge is Heroes & Gear, the campfire Social)
-    const PLATE_IC = { banner: '<path d="M3 1.5h10V12l-5-3-5 3z"/><path d="M2 1.5h12" stroke="currentColor" stroke-width="1.4"/>', helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
+    const PLATE_IC = { tower: '<path d="M5 15V6h6v9z"/><path d="M4 6V3h1.6v1.4h1.6V3h1.6v1.4h1.6V3H12v3z"/>', banner: '<path d="M3 1.5h10V12l-5-3-5 3z"/><path d="M2 1.5h12" stroke="currentColor" stroke-width="1.4"/>', helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
     const namePlate = z => z.name ? `<span class="hz-plate named" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true">${PLATE_IC[z.icon] || ''}</svg></i>${esc(z.name)}</span>` : '';
     const zones = HOME_ZONES.map(z => {
       // one button covers the building and its plate
@@ -568,7 +569,7 @@
       if (loginDue()) setTimeout(showLogin, 600);
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -1476,6 +1477,7 @@
         row('Rarity', `${[0, 1, 2, 3, 4].map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' → ')}. Rarer heroes have better stats; Legendary heroes only come from the Fate Altar.`),
         row('Roles', `${Object.keys(K.ROLES).join(', ')}. Tanks protect, Warriors and Assassins deal damage, Supports heal and buff, Controllers debuff.`),
         row('Level and stars (★)', 'Level cap = stars × 10 (up to the rarity\'s cap). At the cap, ascend for another star.'),
+        row('Tower of Essence', `Seven towers of ${K.TOWER.floors} floors (homebase, opens after Chapter II): six for the essences, where only heroes of that essence may climb, and the Tower of Fate for every hero, with much tougher foes; each floor is one fight and pays once (Sigils, XP, and shards and stones on boss and milestone floors). No energy needed.`),
         row('Ascend', 'Spend Ascension Stones and Sigils for an extra star: a higher level cap and +5% stats.'),
         row('Feeding', 'Feed a hero you don\'t use, or a spare copy, to another hero for XP. Rarer and higher-level food gives more.'),
         row('Spare copy / duplicate', 'Summoning a hero you already own gives a spare copy. Feed it to the same hero to level up a skill.'),
@@ -1848,6 +1850,9 @@
     }
     else if (act === 'expclaim') expClaim();
     else if (act === 'exprecall') confirmBox('Recall the ship?', 'The crew comes home now, without any rewards.', 'Recall', () => { S.exp = null; save(); render(); });
+    else if (act === 'twsel') { S.tw.cur = a.dataset.e; save(); render(); }
+    else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
+    else if (act === 'twgo') { const e = S.tw.cur || 'Ember'; startTower(e, twProg(e) + 1); }
     else if (act === 'hinfo') heroInfo(id);
     else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; invSlot = null; champTab = 'stats'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
@@ -2727,7 +2732,7 @@
     runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
-  const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
+  const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
     const alive = heroes.filter(u => u.alive);
@@ -2748,11 +2753,11 @@
     // Arena: a replay of the fight the server already played. Both teams come from the server's snapshots and the dice
     // from its seed (K.arenaSetup), so this plays out exactly like on the server; both sides play on auto.
     // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
-    const gb = cfg.type === 'gboss', arena = cfg.type === 'arena' || gb, nPh = arena ? 1 : K.PHASES;
+    const gb = cfg.type === 'gboss', arena = cfg.type === 'arena' || gb, nPh = arena ? 1 : cfg.nPh || K.PHASES;
     let heroes, enemies;
     if (gb) ({ heroes, enemies } = K.gbossSetup(cfg.team, cfg.d, cfg.ess, cfg.seed));
     else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
-    else { heroes = S.team.map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
+    else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false;
     $('#toast').hidden = true;
     $('#b-title').textContent = cfg.title; $('#b-round').textContent = (nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
@@ -2779,11 +2784,11 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? 'Arena · both teams fight on auto' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? 'Arena · both teams fight on auto' : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
-    log(arena ? 'The arena fight begins. Speed decides the turn order.' : `The battle begins: ${K.PHASES} phases. Speed decides the turn order.`);
+    log(arena ? 'The arena fight begins. Speed decides the turn order.' : nPh > 1 ? `The battle begins: ${K.PHASES} phases. Speed decides the turn order.` : 'The battle begins. Speed decides the turn order.');
     // phases: the same hero units fight on; damage stats add up over the phases
     const tot = { dmg: {}, crits: 0, maxHit: 0, turns: 0 }, meter = {};
     const addStats = x => { addMeter(meter, x.meter); for (const k in x.stats.dmg) tot.dmg[k] = (tot.dmg[k] || 0) + x.stats.dmg[k]; tot.crits += x.stats.crits; tot.maxHit = Math.max(tot.maxHit, x.stats.maxHit); tot.turns += x.turns; };
@@ -2824,9 +2829,9 @@
     if (arena) finishArena(cfg); else finishBattle(win);
   }
 
-  function grantXp(amount) {
+  function grantXp(amount, ids) {
     const ups = [];
-    for (const id of S.team) {
+    for (const id of ids || S.team) {
       const h = S.roster[id], cap = K.maxLvl(h.stars, id);
       if (h.lvl >= cap) continue;
       const l0 = h.lvl; h.xp += amount;
@@ -2837,6 +2842,45 @@
     return ups;
   }
   // returns one entry per level gained: [level, silver, shard, unlocked tab or null]
+  // ---------- Tower of Essence (tab `tower`, K.TOWER): seven towers, one per essence, climbed one floor at a time with heroes
+  // of that essence only. S.tw = { prog: { essence: highest floor cleared }, team: { essence: [ids] }, cur } ----------
+  const twProg = e => (S.tw.prog[e] || 0);
+  const twName = e => (e === 'All' ? 'Tower of Fate' : `Tower of ${e}`);
+  const twFits = (id, e) => e === 'All' || C[id].aff === e;
+  const twChip = e => (e === 'All' ? '<span class="aff tw-all" title="Every essence">✦</span>' : affChip(e));
+  // the tower's team: owned heroes of that essence that are not away on an expedition, at most 4
+  function twTeam(e) { const t = (S.tw.team[e] || []).filter(id => S.roster[id] && twFits(id, e) && !onExp(id)).slice(0, 4); S.tw.team[e] = t; return t; }
+  function startTower(e, f) {
+    const ids = twTeam(e);
+    if (!ids.length) { toast(`Pick heroes for the ${twName(e)} first.`, true); render(); return; }
+    if (f !== twProg(e) + 1 || f > K.TOWER.floors) { render(); return; }
+    runBattle({ type: 'tower', ess: e, floor: f, ids, nPh: 1, lvl: K.towerFloor(f).lvl, area: AREA_OF[e] ?? 1, title: `${twName(e)} · floor ${f}` });
+  }
+  function twRewards(rw, withXp) {
+    return [sigils(rw.silver), ...(withXp ? [`${rw.xp.toLocaleString('en-US')} XP per hero`] : []), ...Object.entries(rw.fs).map(([t, n]) => `${shardIc(t)} ${n} ${esc(K.SHARD[t].name)}`), ...Object.entries(rw.st).map(([t, n]) => `${stoneIc(t)} ${n} ${stoneName(t, n)}`)];
+  }
+  function towerHtml() {
+    const e = K.TOWERS.includes(S.tw.cur) ? S.tw.cur : 'Ember', prog = twProg(e), next = prog + 1, done = prog >= K.TOWER.floors, team = twTeam(e);
+    const tabs = K.TOWERS.map(x => `<button type="button" class="tw-tab ${x === e ? 'on' : ''}" data-act="twsel" data-e="${x}" aria-pressed="${x === e}">${twChip(x)}<span><b>${x === 'All' ? 'Fate' : x}</b><small>${twProg(x)} / ${K.TOWER.floors}</small></span></button>`).join('');
+    let floor;
+    if (done) floor = `<div class="tw-next done"><div><span class="tag">Conquered</span><h3>The ${twName(e)} is yours</h3><p class="empty-note">All ${K.TOWER.floors} floors cleared. Few heroes ever stand here.</p></div></div>`;
+    else {
+      const F = K.towerFloor(next), foes = K.towerFoes(e, next), rw = K.towerReward(next);
+      const big = []; for (let f = next + 1; f <= K.TOWER.floors && big.length < 3; f++) { const r = K.towerReward(f); if (r.fs.greater || r.fs.ancient || r.fs.mythic || r.st.ancient) big.push(`<li><b>Floor ${f}</b> ${twRewards({ ...r, silver: 0 }).slice(1).join(' · ')}</li>`); }
+      floor = `<div class="tw-next ${F.boss ? 'boss' : ''}"><div class="tw-fl"><span class="tag">${F.boss ? 'Boss floor' : 'Next floor'}</span><h3>Floor ${next}</h3><small class="empty-note">Enemy level ${F.lvl}</small></div>
+        <div class="tw-foes">${foes.map(f => `<span class="tw-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)} · ${E[f].aff}">${por(f)}${affChip(E[f].aff)}<small>${esc(E[f].name)}</small></span>`).join('')}</div>
+        <div class="tw-rw"><span class="tag">First clear</span><ul>${twRewards(rw, true).map(x => `<li>${x}</li>`).join('')}</ul>${big.length ? `<span class="tag">Coming up</span><ul class="tw-big">${big.join('')}</ul>` : ''}</div>
+        <button class="btn primary tw-go" data-act="twgo" ${team.length ? '' : 'disabled title="Pick heroes first"'}>Climb to floor ${next}</button></div>`;
+    }
+    const mine = Object.keys(S.roster).filter(id => C[id] && twFits(id, e)).sort((a, b) => power(statsOf(b)) - power(statsOf(a)));
+    const pick = mine.length ? `<div class="grid-cards tw-pick">${mine.map(id => { const on = team.includes(id), away = onExp(id), r = S.roster[id]; return `<button type="button" class="card rar-${C[id].rar} ${on ? 'sel inteam' : ''}" data-act="twpick" data-id="${id}" aria-pressed="${on}" ${away ? 'disabled title="Away on an expedition"' : ''}>${affChip(C[id].aff)}<span class="lv">${r.lvl}</span>${por(id)}<span class="nm">${esc(C[id].short)}</span>${starStr(r.stars, K.maxStars(id))}<span class="sub">${away ? 'On expedition' : `Power ${power(statsOf(id)).toLocaleString('en-US')}`}</span></button>`; }).join('')}</div>`
+      : `<p class="empty-note">You have no ${e} heroes yet. Look for them at the Fate Altar (the Heroes screen shows every ${e} hero and where to find it).</p>`;
+    return `<div class="section-head"><div><h2>Tower of Essence</h2><p class="lede">Six towers of ${K.TOWER.floors} floors, one for every essence, where only heroes of that essence may climb, and the Tower of Fate, open to every hero but with far tougher foes. Every floor is one fight and pays once; the higher you climb, the harder it gets, and the top floors test even the strongest teams. Climbing costs no energy.</p></div></div>
+      <div class="tw-tabs" role="group" aria-label="Towers">${tabs}</div>
+      <div class="tw-prog"><div class="exp-bar"><i style="width:${prog / K.TOWER.floors * 100}%"></i></div><small class="empty-note">${twName(e)}: ${prog} of ${K.TOWER.floors} floors cleared</small></div>
+      ${floor}
+      <div class="section-head"><h3 style="margin:0">${e === 'All' ? 'Your' : e} team</h3><span class="tag">${team.length} / 4 · power ${teamPower(team).toLocaleString('en-US')}</span></div>${pick}`;
+  }
   // ---------- Expeditions (the ship, tab `expedition`, K.EXPEDITIONS) ----------
   // S.exp = { k, ids, start, end, lvl } while a trip is out; heroes on it are away: not addable to a team, not fed
   const EXSEL = new Set();
@@ -2985,6 +3029,11 @@
           else { S.fodder[cid] = (S.fodder[cid] || 0) + 1; captured = { id: cid, isNew: false }; }
         }
         if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
+      } else if (cfg.type === 'tower') {
+        // a floor pays once, on its first clear (the tower climbs one floor at a time)
+        if (cfg.floor > (S.tw.prog[cfg.ess] || 0)) { S.tw.prog[cfg.ess] = cfg.floor; first = true; }
+        const rw = K.towerReward(cfg.floor);
+        if (first) { silver = rw.silver; xp = rw.xp; for (const [t, n] of Object.entries(rw.fs)) for (let i = 0; i < n; i++) gotShards.push(t); stones = rw.st; } else { silver = 0; xp = 0; }
       } else {
         if (cfg.n > (S.bh[cfg.id] || 0)) { S.bh[cfg.id] = cfg.n; first = true; S.bhSel[cfg.id] = Math.min(K.BOSS_LEVELS, cfg.n + 1); }
         stones = K.bossStones(cfg.n, first);
@@ -2996,13 +3045,14 @@
         if (first && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length) S.bhCur = K.BOSS_ORDER[cfg.bi + 1];
       }
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
-    } else { xp = Math.round(K.winXp(lvl) * 0.25); silver = Math.round(K.winSilver(lvl) * 0.3); }
-    if (win) gotShards.push(...K.rollShards());
+    } else if (cfg.type === 'tower') { xp = 0; silver = 0; } // tower tries are free, so a defeat pays nothing
+    else { xp = Math.round(K.winXp(lvl) * 0.25); silver = Math.round(K.winSilver(lvl) * 0.3); }
+    if (win && cfg.type !== 'tower') gotShards.push(...K.rollShards());
     S.silver += silver; addStones(stones);
     for (const t of gotShards) S.fs[t] = (S.fs[t] || 0) + 1;
     loot.forEach(it => S.inv.push(it));
-    const ups = grantXp(xp);
-    const pxp = win ? playerWinXp(lvl, first, cfg.type === 'boss') : b.aborted ? 0 : Math.round(playerWinXp(lvl) * 0.25);
+    const ups = grantXp(xp, cfg.ids);
+    const pxp = win ? (first || cfg.type !== 'tower' ? playerWinXp(lvl, first, cfg.type === 'boss') : 0) : b.aborted || cfg.type === 'tower' ? 0 : Math.round(playerWinXp(lvl) * 0.25);
     const pups = grantPlayerXp(pxp); if (pups.length) paintEnergy();
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
     const unlocks = newUnlocks();
@@ -3032,12 +3082,14 @@
       : win && first && last ? `<p class="lede">You finished all ten chapters on ${K.DIFFS[cfg.diff].name}.${nd ? ` ${nd.name} difficulty is now open: tougher enemies, better gear (${rarsHtml(nd.rars)}).` : ' You beat the hardest difficulty!'}</p>`
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
-      : win ? '' : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BTRAIT.from && !S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[K.bossTrait(cfg.bi)])) ? `<p class="lede">Tip: this boss has <b>${K.EFFECTS[K.bossTrait(cfg.bi)].n}</b>. ${esc(K.EFFECTS[K.bossTrait(cfg.bi)].d)}.</p>`
+      : win ? '' : !b.aborted && cfg.type === 'tower' ? `<p class="lede">Tip: ${cfg.ess === 'All' ? 'the Tower of Fate takes any hero, but its foes are far tougher' : `only ${cfg.ess} heroes can climb this tower`}. Level, ascend and gear them, and bring your four strongest. Trying again costs nothing.</p>`
+        : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BTRAIT.from && !S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[K.bossTrait(cfg.bi)])) ? `<p class="lede">Tip: this boss has <b>${K.EFFECTS[K.bossTrait(cfg.bi)].n}</b>. ${esc(K.EFFECTS[K.bossTrait(cfg.bi)].d)}.</p>`
         : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BLIGHT.bh && !S.team.some(heals) ? '<p class="lede">Tip: your team has no healer. This boss drains your whole team every turn (Blight Aura); bring a hero who heals or shields (Draelyn, or a Support from the Fate Altar).</p>'
         : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
-    const canNext = isStage ? cfg.i + 1 < K.STAGES.length : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
+    const tower = cfg.type === 'tower';
+    const canNext = isStage ? cfg.i + 1 < K.STAGES.length : tower ? cfg.floor < K.TOWER.floors : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
     const acts = win
-      ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : 'Next level'}</button>` : ''}<button class="btn" data-act="modal" data-go="again">Replay</button><button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
+      ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : tower ? 'Next floor' : 'Next level'}</button>` : ''}${tower ? '' : '<button class="btn" data-act="modal" data-go="again">Replay</button>'}<button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
       : `<button class="btn primary" data-act="modal" data-go="again">Try again</button><button class="btn" data-act="modal" data-go="champs">Upgrade champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`;
     const openBtns = pups.map(u => u[3]).filter(Boolean).map(t => `<button class="btn violet" data-act="modal" data-go="open-${t}">Open the ${UNLOCK_NAME[t]}</button>`).join('');
     if (pups.length) SFX.up();
@@ -3106,12 +3158,12 @@
     endBattleView(); B = null;
     if (!cfg) { render(); return; }
     if (go.startsWith('open-')) setTab(go.slice(5));
-    else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else startDungeon(cfg.id, cfg.n + 1); }
-    else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else startDungeon(cfg.id, cfg.n); }
+    else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
+    else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'champs') setTab('team');
     else if (cfg.type === 'arena') setTab('arena');
     else if (cfg.type === 'gboss') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
-    else setTab(cfg.type === 'stage' ? 'campagne' : 'kerkers');
+    else setTab(cfg.type === 'stage' ? 'campagne' : cfg.type === 'tower' ? 'tower' : 'kerkers');
   }
 
   // ---------- boot ----------

@@ -814,6 +814,46 @@ const K = (function () {
   // Easy Chapter I · Stage 1 is the starter's solo fight: soft enough that every starter, even an Uncommon, wins it
   const FIRST_PW = 0.7;
   const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (!d && !st.chapter && !st.n ? FIRST_PW : 1) * (isWall(st) ? TUNE.wall : 1) * (BOSSES[f] ? TUNE.chBoss : 1)), st));
+  // ---------- Tower of Essence: six essence towers (only heroes of that essence) and the Tower of Fate (all heroes) ----------
+  // One fight per floor (no phases), each floor won once. Floor f: enemy level and strength climb from Easy Chapter I to
+  // past the end of Brutal (t = how far up, curved: gentle at first, steep near the top) while the team is limited to one
+  // essence, so a Brutal player has to work for the last floors. Higher floors bring more enemies whose essence beats
+  // the tower's. Every 10th floor a boss with guards (boss × TOWER.boss). The seventh tower, the Tower of Fate (`All`),
+  // takes heroes of every essence: a free pick of the best mix, so its foes are × TOWER.open (boss floors × openBoss);
+  // measured with four Legendaries it ends about where the essence towers do. Measured (best Ember team; floor still won half
+  // the time): a Chapter III-IV team ~60, Easy done ~130, Brutal start ~200, Brutal done ~270, Nightmare done ~300 (floor
+  // 300 itself ~20% a try). Teams without a Legendary stop 30-70 floors earlier.
+  // curve: [floor, enemy level, strength] points, straight lines in between (calibrated by simulation, see CLAUDE.md)
+  const TOWERS = ['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'All'];
+  const TOWER = { floors: 300, curve: [[1, 1, 0.9], [50, 25, 2.0], [100, 45, 4.3], [200, 65, 7.4], [300, 85, 10.5]], boss: 0.45, open: 2, openBoss: 1.15 };
+  function towerFloor(f) {
+    const c = TOWER.curve, i = Math.max(1, c.findIndex(p => p[0] >= f)), [f0, l0, s0] = c[i - 1], [f1, l1, s1] = c[i], k = (f - f0) / (f1 - f0);
+    return { lvl: Math.round(l0 + (l1 - l0) * k), str: s0 + (s1 - s0) * k, boss: f % 10 === 0, t: (f - 1) / (TOWER.floors - 1) };
+  }
+  // the enemies of floor f in the tower of essence ess: the same every time (picked with a hash of tower and floor)
+  function towerFoes(ess, f) {
+    const ei = ESSENCES.indexOf(ess), F = towerFloor(f);
+    const h = n => { let x = ((ei + 1) * 7919 + f * 104729 + n * 1299709) | 0; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; };
+    const all = Object.keys(ENEMIES), counter = all.filter(id => ess !== 'All' && BEATS[ENEMIES[id].aff] === ess), rest = all.filter(id => !counter.includes(id));
+    const n = f <= 20 ? 2 : 3, out = [];
+    for (let i = 0; i < n; i++) { const pool = counter.length && h(i * 2) < 0.15 + 0.4 * F.t ? counter : rest; out.push(pool[Math.floor(h(i * 2 + 1) * pool.length)]); }
+    if (F.boss) out[0] = BOSS_ORDER[(f / 10 - 1) % BOSS_ORDER.length];
+    return out;
+  }
+  function towerUnits(ess, f) {
+    const F = towerFloor(f), st = { chapter: f >= 60 ? TUNE.hitFrom : 0 };
+    return towerFoes(ess, f).map(id => attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * (BOSSES[id] ? TOWER.boss : 1) * (ess !== 'All' ? 1 : F.boss ? TOWER.openBoss : TOWER.open)), st));
+  }
+  // first-clear reward of floor f: Sigils and hero XP every floor; shards and stones on boss floors and milestones
+  function towerReward(f) {
+    const F = towerFloor(f), o = { silver: Math.round(winSilver(F.lvl) * 0.6), xp: winXp(F.lvl), fs: {}, st: {} };
+    if (F.boss) { o.fs.fate = 1; o.st.lesser = 2; }
+    if (f % 30 === 0) { o.fs.greater = 1; o.st.greater = 1; }
+    if (f % 50 === 0) o.fs.ancient = 1;
+    if (f % 100 === 0) o.st.ancient = 1;
+    if (f === TOWER.floors) o.fs.mythic = 1;
+    return o;
+  }
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -973,18 +1013,20 @@ const K = (function () {
   function maxStars(id) { return Math.min(MAX_STARS, Math.ceil(RAR_CAP[CHAMPS[id].rar] / 10)); }
   // Ascension Stones in three tiers, by the star a hero ascends to: Lesser (to 2-4★, the save's `stones`), Greater (to
   // 5★) and Ancient (to 6★). Lesser drop everywhere; Greater mostly from boss stages, Normal on and Boss Hall level 3 on;
-  // Ancient only from boss stages (Easy from Chapter VI, every boss stage on Brutal and Nightmare), Boss Hall 9-10 and
+  // Ancient mostly from boss stages (Easy from Chapter IV, now and then a late Easy stage; every boss stage on Brutal
+  // and Nightmare), Boss Hall 9-10 and
   // weekly rewards, so the last stars are slow.
   const STONES = [{ id: 'lesser', name: 'Lesser Ascension Stone' }, { id: 'greater', name: 'Greater Ascension Stone' }, { id: 'ancient', name: 'Ancient Ascension Stone' }];
   const stoneTier = stars => (stars >= 5 ? 'ancient' : stars >= 4 ? 'greater' : 'lesser');
-  const rankCost = stars => ({ tier: stoneTier(stars), stones: stars >= 5 ? 10 : stars >= 4 ? 8 : stars * 4, silver: 400 * stars * stars });
+  const rankCost = stars => ({ tier: stoneTier(stars), stones: stars >= 4 ? 8 : stars * 4, silver: 400 * stars * stars });
   // stones for a won campaign stage on difficulty d (first: first clear) and a won Boss Hall level n
   function stageStones(st, d, first) {
-    const o = {}, boss = st.n === 6, late = st.chapter >= 5;
+    const o = {}, boss = st.n === 6, late = st.chapter >= 3;
     if (first) o.lesser = 3; else if (rnd() < 0.35) o.lesser = 1;
     if (first && (d >= 1 || boss)) o.greater = boss ? 2 : 1;
     else if (!first && rnd() < (boss ? 0.25 : d >= 1 ? 0.08 : 0.03)) o.greater = 1;
-    if (boss && (d >= 3 || late)) { if (first) o.ancient = 1; else if (rnd() < (d >= 3 ? 0.08 : 0.04)) o.ancient = 1; }
+    if (boss && (d >= 3 || late)) { if (first) o.ancient = 1; else if (rnd() < 0.15) o.ancient = 1; }
+    else if (!first && st.chapter >= 6 && rnd() < 0.04) o.ancient = 1;
     return o;
   }
   function bossStones(n, first) {
@@ -1721,7 +1763,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
