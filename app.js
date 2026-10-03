@@ -407,6 +407,7 @@
         if (Math.random() < K.upgradeChance(it)) { it.lvl++; K.upgradeMilestone(it); ok++; } else fail++;
       }
     }
+    track('upg', ok + fail);
     return { ok, fail, spent };
   }
   // gear rarities as coloured words, e.g. "Rare / Epic"
@@ -448,7 +449,7 @@
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
     b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
     b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
-    if (tab === 'profiel' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = profileHtml();
+    if (tab === 'profiel' && TH.tab === 'profile' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = backBar() + townHallHtml();
   }
   function lockedHtml(t, lede) {
     const u = UNLOCKS[t], prog = u.lvl ? levelProgress(u.lvl) : Math.min(1, (S.cleared + 1) / (u.ch * 7));
@@ -476,7 +477,7 @@
   const HOME_ZONES = [
     { go: 'kerkers', art: 'kerkers', label: 'Boss Hall', box: [10, 0, 460, 300], plate: HZP(235, 285) },
     { go: 'arena', art: 'arena', label: 'Arena', box: [500, 110, 330, 215], plate: HZP(665, 330) },
-    { go: 'profiel', art: 'profiel', label: 'Town Hall: your profile', box: [820, 0, 350, 290], plate: HZP(995, 290) },
+    { go: 'profiel', art: 'profiel', label: 'Town Hall: profile, quests and rewards', box: [820, 0, 350, 290], plate: HZP(995, 290) },
     { go: 'altaar', art: 'altaar', label: 'Fate Altar', box: [1190, 0, 346, 330], plate: HZP(1365, 330) },
     { go: 'team', art: 'team', label: 'Heroes & Gear', box: [60, 300, 380, 250], plate: HZP(235, 560) },
     { go: 'social', art: 'social', label: 'Social: friends and guild', box: [900, 380, 340, 180], plate: HZP(1070, 565) },
@@ -499,7 +500,7 @@
     { go: 'altaar', title: 'Summon Altar', text: 'The Fate Altar: summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
     { go: 'kerkers', title: 'Boss Halls', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
-    { go: 'profiel', title: 'Town Hall', text: 'Your profile: name, avatar and player level, sound settings, your account and save backups. The Guide (the ? in the top bar, or the ☰ menu on a phone) explains every term.' },
+    { go: 'profiel', title: 'Town Hall', text: 'Daily quests, missions, your collection and achievements, full of Energy and Fate Shards. Also your profile: name, avatar, settings, account and save backups. The Guide (the ? in the top bar, or the ☰ menu on a phone) explains every term.' },
     { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
@@ -539,6 +540,7 @@
       const locked = !unlocked(z.go);
       const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 40, HOME_W)};top:${pc(py + 4, HOME_H)}">${needTag(z.go)}</span>`
         : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}"></span>`
+        : z.go === 'profiel' && thClaimN() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="Rewards to claim in the Town Hall"></span>`
         : z.go === 'expedition' && expDone() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="The ship is back"></span>` : '';
       return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" title="${z.label}"></button>${namePlate(z)}${badge}`;
     }).join('');
@@ -588,7 +590,7 @@
       if (loginDue()) setTimeout(showLogin, 600);
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? profileHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -901,6 +903,7 @@
   function heroSource(id) {
     const c = C[id], st = K.STAGES.findIndex(s => K.stageUnlock(s, S.starter) === id);
     if (c.captured) return 'Captured in the campaign';
+    if (K.ENEMIES[id]) return 'Fate Altar, or capture one in the campaign';
     if (c.dev) return 'Gift only';
     return st >= 0 ? `Unlock: ${stageName(st)} (Easy), or the Fate Altar` : 'Fate Altar';
   }
@@ -1009,8 +1012,12 @@
     brukkar: 'The raging brute. Part warrior, part tank: the more he bleeds, the harder he hits.',
     karnok: 'The dwarf warrior. Hammer blows that stun, a wall of Defense for the team and a thunderclap on every enemy.',
     vorlund: 'The golden knight. A tank who taunts, shields the whole team and strikes back when hit.',
+    grimtar: 'The orc shaman. His spirits poison every enemy, cripple their healing and tear down their Defense for the team.',
+    krogash: 'The orc fire mage. Burns that hurt half again as much, an ash storm on every enemy and a huge fire blast.',
+    zulgroth: 'The orc void priest. A healer who mends the weakest ally every turn, shields and cleanses the team.',
+    bloodsnarl: 'The orc hunter and his wolf. Bleeding arrows, a wolf that finishes the weakest foe, and more damage on the wounded.',
   };
-  // the eight starters stand in two rows in a dungeon hall; tapping one shows its details below, "Choose" asks to confirm
+  // the twelve starters stand in rows in a dungeon hall (2 × 6, on phones 3 × 4); tapping one shows its details below, "Choose" asks to confirm
   const STARTER_BG = 4; // chapter background: the brick-and-lava dungeon hall
   let starterSel = null;
   function starterHtml() {
@@ -1018,7 +1025,7 @@
     const top = { hp: 0, atk: 0, def: 0, spd: 0 };
     for (const id of K.STARTERS) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
     const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
-    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig ${i < 4 ? 'back' : 'front'} ${id === starterSel ? 'sel' : ''}" style="left:${i < 4 ? 12.5 + i * 25 : 12.5 + (i - 4) * 25}%" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
+    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig st12 ${id === starterSel ? 'sel' : ''}" style="--c6:${i % 6};--r6:${Math.floor(i / 6)};--c4:${i % 4};--r4:${Math.floor(i / 4)}" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
         <img class="spr" src="${SPR.url(id, 2)}" alt=""><span class="st-ring"></span><span class="st-nm">${esc(C[id].short)}</span></button>`).join('');
     const c = starterSel && C[starterSel];
     const info = c ? `<div class="st-card rar-${c.rar}">
@@ -1314,6 +1321,7 @@
     GD.busy = false;
     if (r.error || !r.gboss) { toast(r.error || 'The fight could not start.', true); guildLoad(); return; }
     const f = r.gboss;
+    track('gboss');
     runBattle({ type: 'gboss', team: f.team, d: f.d, ess: f.ess, seed: f.seed, fight: f, area: AREA_OF[f.ess] ?? 1, title: `Guild boss · ${K.BOSSES[K.GBOSS.art[f.ess]].name}` });
   }
   // ================= GEAR VAULT =================
@@ -1446,6 +1454,266 @@
       if (tab === 'home') render();
     });
     el.querySelector('button').focus();
+  }
+
+  // ================= TOWN HALL: QUESTS, MISSIONS, COLLECTION, ACHIEVEMENTS =================
+  // The Town Hall has five tabs (TH.tab): Profile, Quests (daily + weekly), Missions (a long path of goals in chapters),
+  // Collection (heroes and captured enemies ever owned) and Achievements (tiered feats). Rewards lean on Energy,
+  // Greater and Ancient Fate Shards. Everything runs client-side like the campaign, so nothing here pays out between players.
+  // S.q = { day, dn: { quest: count today }, dp: daily points, dc: [daily chests claimed], wk, wp, wc: weekly points/chests,
+  //   tot: { counter: lifetime count }, m: { mission or 'f<chapter>': 1 }, col: { milestone: 1 }, a: { achievement: tiers claimed },
+  //   hs: { hero ever owned: 1 }, be: { enemy ever captured: 1 } }
+  const TH = { tab: 'profile' };
+  const EN_SVG = '<svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg>';
+  const weekNo = () => Math.floor((today() + 3) / 7); // weeks start on Monday 00:00 UTC
+  // daily quests: points per quest; quests for modes that are still locked show what opens them
+  const QUESTS = [
+    { id: 'login', n: 1, pts: 10, t: 'Log in' },
+    { id: 'camp', n: 5, pts: 20, t: 'Win 5 campaign battles', go: 'campagne' },
+    { id: 'energy', n: 60, pts: 15, t: 'Spend 60 Energy', go: 'campagne', open: () => S.cleared >= 6, need: 'clearing Chapter I' },
+    { id: 'upg', n: 3, pts: 15, t: 'Upgrade gear 3 times', go: 'team' },
+    { id: 'feed', n: 1, pts: 10, t: 'Feed a hero or train a skill', go: 'team' },
+    { id: 'summon', n: 1, pts: 10, t: 'Summon a hero at the Fate Altar', go: 'altaar', u: 'altaar' },
+    { id: 'exp', n: 1, pts: 10, t: 'Send out an expedition', go: 'expedition', u: 'expedition' },
+    { id: 'tower', n: 1, pts: 15, t: 'Fight in the Tower of Essence', go: 'tower', u: 'tower' },
+    { id: 'boss', n: 1, pts: 15, t: 'Win a Boss Hall battle', go: 'kerkers', u: 'kerkers' },
+    { id: 'arena', n: 2, pts: 15, t: 'Attack twice in the Arena', go: 'arena', u: 'arena', acc: true },
+    { id: 'gboss', n: 1, pts: 10, t: 'Fight the Guild Boss', go: 'guild', u: 'guild', acc: true },
+  ];
+  const qOpen = t => (!t.u || unlocked(t.u)) && (!t.open || t.open()) && (!t.acc || signedIn());
+  const qNeed = t => (t.u && !unlocked(t.u) ? `Opens after ${needTxt(t.u)}` : t.open && !t.open() ? `Opens after ${t.need}` : t.acc && !signedIn() ? 'Needs an account: sign in first' : '');
+  const DAILY_CHESTS = [{ at: 30, r: { energy: 20, silver: 2000 } }, { at: 60, r: { energy: 30, fs: { fate: 1 } } }, { at: 100, r: { energy: 50, fs: { greater: 1 } } }];
+  const WEEKLY_CHESTS = [{ at: 250, r: { energy: 60, fs: { greater: 2 } } }, { at: 450, r: { energy: 100, fs: { greater: 3 } } }, { at: 650, r: { energy: 140, fs: { ancient: 1 } } }];
+  function qState() {
+    const q = S.q || (S.q = {}), d = today(), w = weekNo();
+    q.tot = q.tot || {}; q.m = q.m || {}; q.col = q.col || {}; q.a = q.a || {}; q.hs = q.hs || {}; q.be = q.be || {};
+    if (q.wk !== w) { q.wk = w; q.wp = 0; q.wc = []; }
+    if (q.day !== d) { q.day = d; q.dn = {}; q.dp = 0; q.dc = []; qAdd(q, 'login', 1, true); }
+    return q;
+  }
+  function qAdd(q, k, n, quiet) {
+    q.tot[k] = (q.tot[k] || 0) + n;
+    const t = QUESTS.find(x => x.id === k); if (!t || !qOpen(t)) return;
+    const was = q.dn[k] || 0; q.dn[k] = was + n;
+    if (was < t.n && was + n >= t.n) { q.dp += t.pts; q.wp += t.pts; if (!quiet) toast(`Daily quest done: ${t.t} · +${t.pts} points`, false, 3000); }
+  }
+  // count an action for the quests and achievements (k: a QUESTS id, or a lifetime-only counter such as 'asc', 'flaw')
+  function track(k, n = 1) { if (!S || S.needStarter || !(n > 0)) return; qAdd(qState(), k, n); }
+  const qBest = (k, v) => { const q = qState(); q.tot[k] = Math.max(q.tot[k] || 0, v); };
+  // collection: heroes and captured enemies ever owned (feeding one away keeps it in the collection)
+  const isHeroId = id => C[id] && !C[id].captured && !C[id].dev;
+  const BEASTS = Object.keys(K.ENEMIES).filter(id => C[id] && C[id].captured);
+  function colSync() {
+    const q = qState();
+    for (const id in S.roster) { if (isHeroId(id)) q.hs[id] = 1; else if (C[id] && C[id].captured) q.be[id] = 1; }
+    for (const id in S.fodder) if (C[id] && C[id].captured) q.be[id] = 1;
+    return q;
+  }
+  const heroesAt = f => Object.keys(S.roster).filter(id => isHeroId(id) && f(S.roster[id])).length;
+  const bestHero = k => Object.keys(S.roster).reduce((m, id) => Math.max(m, S.roster[id][k] || 0), 0);
+  const bestGear = () => S.inv.reduce((m, it) => Math.max(m, it.lvl || 0), 0);
+  const bestTower = () => Math.max(0, ...Object.values((S.tw && S.tw.prog) || {}));
+  const bhAt = n => Object.values(S.bh).filter(x => x >= n).length;
+  const tot = k => (qState().tot[k] || 0);
+  const everHeroes = () => K.CHAMP_ORDER.filter(id => colSync().hs[id]).length;
+  // the mission path: chapters of six goals; a chapter's final reward needs all six claimed, and only the current chapter is open
+  const MISSIONS = [
+    { name: 'First Steps', r: { energy: 50, fs: { greater: 2 } }, list: [
+      { t: 'Clear Chapter I on Easy', v: () => S.cleared + 1, n: 7, r: { energy: 30, silver: 2000 } },
+      { t: 'Have 4 heroes', v: () => heroesAt(() => true), n: 4, r: { fs: { fate: 2 } } },
+      { t: 'Upgrade gear 5 times', v: () => tot('upg'), n: 5, r: { silver: 3000 } },
+      { t: 'Reach player level 5', v: () => effLvl(S), n: 5, r: { fs: { greater: 1 } } },
+      { t: 'Summon a hero at the Fate Altar', v: () => S.p.st.summons, n: 1, r: { energy: 30 } },
+      { t: 'Feed a hero or train a skill', v: () => tot('feed'), n: 1, r: { stones: 5 } }] },
+    { name: 'Rising Power', r: { hero: 'epic', energy: 50 }, list: [
+      { t: 'Clear Chapter III on Easy', v: () => S.cleared + 1, n: 21, r: { fs: { greater: 1 } } },
+      { t: 'Bring a hero to level 30', v: () => bestHero('lvl'), n: 30, r: { energy: 50 } },
+      { t: 'Upgrade a piece of gear to +8', v: bestGear, n: 8, r: { silver: 5000 } },
+      { t: 'Win 50 battles', v: () => S.p.st.won, n: 50, r: { energy: 40 } },
+      { t: 'Send out an expedition', v: () => tot('exp'), n: 1, r: { fs: { fate: 2 } } },
+      { t: 'Ascend a hero to 4★', v: () => bestHero('stars'), n: 4, r: { stones: 10 } }] },
+    { name: 'Proving Grounds', r: { energy: 100, fs: { ancient: 1 } }, list: [
+      { t: 'Clear Chapter V on Easy', v: () => S.cleared + 1, n: 35, r: { fs: { ancient: 1 } } },
+      { t: 'Beat 3 different Boss Hall bosses', v: () => bhAt(1), n: 3, r: { fs: { greater: 2 } } },
+      { t: 'Reach floor 25 in a Tower of Essence', v: bestTower, n: 25, r: { energy: 60 } },
+      { t: 'Have 4 heroes at level 40', v: () => heroesAt(h => h.lvl >= 40), n: 4, r: { fs: { greater: 1 } } },
+      { t: 'Upgrade a piece of gear to +12', v: bestGear, n: 12, r: { silver: 10000 } },
+      { t: 'Win 10 Boss Hall battles', v: () => S.p.st.bossWon, n: 10, r: { energy: 60 } }] },
+    { name: 'Champion of Fate', r: { hero: 'epic', fs: { ancient: 1 } }, list: [
+      { t: 'Finish the campaign on Easy', v: () => S.cleared + 1, n: 70, r: { fs: { ancient: 1 } } },
+      { t: 'Ascend a hero to 5★', v: () => bestHero('stars'), n: 5, r: { energy: 80, st: { greater: 2 } } },
+      { t: 'Beat Boss Hall level 5 of any boss', v: () => bhAt(5), n: 1, r: { fs: { greater: 3 } } },
+      { t: 'Reach floor 75 in a Tower of Essence', v: bestTower, n: 75, r: { fs: { ancient: 1 } } },
+      { t: 'Upgrade a piece of gear to +16', v: bestGear, n: 16, r: { silver: 20000 } },
+      { t: 'Reach player level 30', v: () => effLvl(S), n: 30, r: { fs: { greater: 2 } } }] },
+    { name: 'Legend', r: { hero: 'legendary' }, list: [
+      { t: 'Finish the campaign on Normal', v: () => (S.dcl[1] ?? -1) + 1, n: 70, r: { fs: { ancient: 2 } } },
+      { t: 'Ascend a hero to 6★', v: () => bestHero('stars'), n: 6, r: { energy: 120, st: { ancient: 2 } } },
+      { t: 'Beat Boss Hall level 8 of any boss', v: () => bhAt(8), n: 1, r: { fs: { ancient: 1 } } },
+      { t: 'Reach floor 150 in a Tower of Essence', v: bestTower, n: 150, r: { fs: { ancient: 1 } } },
+      { t: 'Clear Chapter V on Hard', v: () => (S.dcl[2] ?? -1) + 1, n: 35, r: { fs: { greater: 3 } } },
+      { t: 'Collect 30 different heroes', v: everHeroes, n: 30, r: { energy: 100 } }] },
+  ];
+  const misChapter = () => { const q = qState(); const i = MISSIONS.findIndex((_, c) => !q.m['f' + c]); return i < 0 ? MISSIONS.length : i; };
+  const misDone = m => Math.min(m.n, m.v()) >= m.n;
+  // collection milestones: heroes ever owned, each essence and rarity complete, and the Bestiary of captured enemies
+  const RAR_FULL = [[1, { fs: { greater: 2 } }], [2, { fs: { ancient: 1 } }], [3, { fs: { ancient: 2 } }], [4, { fs: { mythic: 1 } }]];
+  const COL_HEROES = [[5, { energy: 30 }], [10, { fs: { greater: 1 } }], [15, { energy: 60 }], [20, { fs: { greater: 2 } }], [25, { fs: { ancient: 1 } }], [30, { energy: 100 }], [40, { fs: { ancient: 1 } }], [K.CHAMP_ORDER.length, { fs: { mythic: 1 } }]];
+  const COL_BEASTS = [[5, { energy: 20 }], [10, { fs: { greater: 1 } }], [20, { energy: 50 }], [30, { fs: { greater: 2 } }], [40, { fs: { ancient: 1 } }], [BEASTS.length, { energy: 100, fs: { ancient: 1 } }]];
+  const essHeroes = e => K.CHAMP_ORDER.filter(id => C[id].aff === e);
+  const rarHeroes = r => K.CHAMP_ORDER.filter(id => C[id].rar === r);
+  function colList() {
+    const q = colSync(), have = ids => ids.filter(id => q.hs[id]).length, nb = BEASTS.filter(id => q.be[id]).length, nh = everHeroes();
+    return [
+      ...COL_HEROES.map(([n, r]) => ({ id: 'h' + n, t: `Collect ${n} heroes`, v: nh, n, r })),
+      ...K.ESSENCES.filter(e => essHeroes(e).length).map(e => ({ id: 'e' + e, t: `Every ${e} hero`, v: have(essHeroes(e)), n: essHeroes(e).length, r: { fs: { ancient: 1 } }, ess: e })),
+      ...RAR_FULL.map(([ra, r]) => ({ id: 'r' + ra, t: `Every ${K.RARITIES[ra]} hero`, v: have(rarHeroes(ra)), n: rarHeroes(ra).length, r, rar: ra })),
+      ...COL_BEASTS.map(([n, r]) => ({ id: 'b' + n, t: `Capture ${n} kinds of enemies`, v: nb, n, r })),
+    ];
+  }
+  // achievements: tiers with growing rewards
+  const ACH_RW = [{ energy: 40 }, { energy: 60, fs: { greater: 1 } }, { energy: 80, fs: { greater: 2 } }, { energy: 100, fs: { ancient: 1 } }, { energy: 120, fs: { ancient: 1 } }];
+  const diffsDone = () => { let n = 0; while (n < K.DIFFS.length && clearedOn(n) >= K.STAGES.length - 1) n++; return n; };
+  const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
+  const ACH = [
+    { id: 'won', name: 'Battle-Hardened', t: n => `Win ${plural(n, 'battle', 'battles')}`, v: () => S.p.st.won, at: [100, 500, 2000, 5000] },
+    { id: 'diff', name: 'Conqueror', t: n => `Finish the campaign on ${K.DIFFS[n - 1].name}`, v: diffsDone, at: [1, 2, 3, 4, 5] },
+    { id: 'boss', name: 'Boss Slayer', t: n => `Win ${plural(n, 'Boss Hall battle', 'Boss Hall battles')}`, v: () => S.p.st.bossWon, at: [10, 100, 300, 1000] },
+    { id: 'bh10', name: 'Hall of Legends', t: n => `Beat level 10 of ${plural(n, 'Boss Hall boss', 'Boss Hall bosses')}`, v: () => bhAt(10), at: [1, 5, 15, K.BOSS_ORDER.length] },
+    { id: 'tower', name: 'Tower Climber', t: n => `Reach floor ${n} in a Tower of Essence`, v: bestTower, at: [50, 100, 200, 300] },
+    { id: 'towers', name: 'Master of Essences', t: n => `Reach floor 100 in ${plural(n, 'Tower of Essence', 'Towers of Essence')}`, v: () => Object.values((S.tw && S.tw.prog) || {}).filter(f => f >= 100).length, at: [3, K.TOWERS.length] },
+    { id: 'solo', name: 'Lone Wolf', t: n => `Clear floor ${n} of a Tower of Essence with a single hero`, v: () => tot('solo'), at: [10, 25, 50] },
+    { id: 'flaw', name: 'Untouchable', t: n => `Win ${plural(n, 'Nightmare stage', 'Nightmare stages')} without losing a hero`, v: () => tot('flaw'), at: [1, 25, 100] },
+    { id: 'stars', name: 'Ascendant', t: n => `Ascend ${plural(n, 'hero', 'heroes')} to 6★`, v: () => heroesAt(h => h.stars >= 6), at: [1, 4, 10] },
+    { id: 'smith', name: 'Master Smith', t: n => `Upgrade gear ${plural(n, 'time', 'times')}`, v: () => tot('upg'), at: [100, 500, 2000] },
+    { id: 'myth', name: 'Mythical Hoard', t: n => `Own ${plural(n, 'piece', 'pieces')} of Mythical gear`, v: () => S.inv.filter(it => it.rar === 5).length, at: [1, 6, 24] },
+    { id: 'summ', name: 'Summoner', t: n => `Summon ${plural(n, 'hero', 'heroes')}`, v: () => S.p.st.summons, at: [10, 100, 500] },
+    { id: 'exp', name: 'Seafarer', t: n => `Send out ${plural(n, 'expedition', 'expeditions')}`, v: () => tot('exp'), at: [10, 50, 200] },
+    { id: 'arena', name: 'Gladiator', t: n => `Attack ${plural(n, 'time', 'times')} in the Arena`, v: () => tot('arena'), at: [10, 100, 500] },
+    { id: 'gboss', name: 'Guild Champion', t: n => `Fight the Guild Boss ${plural(n, 'time', 'times')}`, v: () => tot('gboss'), at: [10, 100, 300] },
+    { id: 'plvl', name: 'Veteran', t: n => `Reach player level ${n}`, v: () => effLvl(S), at: [25, 50, 100] },
+    { id: 'pres', name: 'Reborn', t: n => `Prestige ${plural(n, 'time', 'times')}`, v: () => S.p.prestige || 0, at: [1, 3, 5] },
+  ];
+  // what can be claimed right now, per tab (badges on the Town Hall and its tabs)
+  function thClaims() {
+    if (!S || S.needStarter) return { quests: 0, missions: 0, collection: 0, achievements: 0 };
+    const q = qState(), c = misChapter(), mc = MISSIONS[c];
+    const quests = DAILY_CHESTS.filter((x, i) => q.dp >= x.at && !q.dc.includes(i)).length + WEEKLY_CHESTS.filter((x, i) => q.wp >= x.at && !q.wc.includes(i)).length;
+    const missions = mc ? mc.list.filter((m, i) => !q.m[c + '.' + i] && misDone(m)).length + (mc.list.every((m, i) => q.m[c + '.' + i]) ? 1 : 0) : 0;
+    const collection = colList().filter(x => !q.col[x.id] && x.v >= x.n).length;
+    const achievements = ACH.filter(a => (q.a[a.id] || 0) < a.at.length && a.v() >= a.at[q.a[a.id] || 0]).length;
+    return { quests, missions, collection, achievements };
+  }
+  const thClaimN = () => { const c = thClaims(); return c.quests + c.missions + c.collection + c.achievements; };
+  // a reward as small chips; `hero` is 'epic' or 'legendary' (a random one you do not own yet, rolled on claim)
+  function rwChips(r) {
+    const out = [];
+    if (r.energy) out.push(`<span class="rw en">${EN_SVG}<b>${r.energy}</b></span>`);
+    for (const k of RW_KEYS) if (r.fs && r.fs[k]) out.push(`<span class="rw" title="${esc(K.SHARD[k].name)}">${shardIc(k)}<b>${r.fs[k]}</b></span>`);
+    for (const [t, n] of stoneParts(r)) out.push(`<span class="rw" title="${esc(stoneName(t, n))}">${stoneIc(t)}<b>${n}</b></span>`);
+    if (r.silver) out.push(`<span class="rw">${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b></span>`);
+    if (r.hero) out.push(`<span class="rw hero rar-${r.hero === 'legendary' ? 4 : 3}"><b>${r.hero === 'legendary' ? 'Legendary' : 'Epic'} hero</b></span>`);
+    return `<span class="rws">${out.join('')}</span>`;
+  }
+  function rollHero(rar) { const all = K.CHAMP_ORDER.filter(id => C[id].rar === rar), fresh = all.filter(id => !S.roster[id]); return K.pick(fresh.length ? fresh : all); }
+  function claimReward(r, what) {
+    const g = { ...r }; if (r.hero) g.hero = rollHero(r.hero === 'legendary' ? 4 : 3);
+    grantGift(g); save(); hud(); SFX.up(); render();
+    if (g.hero) { const m = $('#modal'); m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><h2>${esc(what)}</h2><p class="tag">A new hero joins you</p><div class="mvp th-hero">${por(g.hero, 2)}<span><b class="rartxt rar-${C[g.hero].rar}">${esc(C[g.hero].name)}</b> · ${K.RARITIES[C[g.hero].rar]} ${esc(C[g.hero].role)}</span></div><ul class="rewards">${giftParts(g).filter(x => !x.startsWith('Hero')).map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="modal-actions"><button class="btn primary" data-act="modal" data-go="close">Great!</button></div></div>`; m.hidden = false; }
+    else toast(`${what}: ${giftParts(g).join(' · ')}`, false, 4000);
+  }
+  function thClaim(a) {
+    const q = qState(), k = a.dataset.k, i = +a.dataset.i;
+    if (k === 'd' || k === 'w') {
+      const list = k === 'd' ? DAILY_CHESTS : WEEKLY_CHESTS, got = k === 'd' ? q.dc : q.wc, pts = k === 'd' ? q.dp : q.wp;
+      if (!list[i] || got.includes(i) || pts < list[i].at) return;
+      got.push(i); claimReward(list[i].r, `${k === 'd' ? 'Daily' : 'Weekly'} chest`);
+    } else if (k === 'm') {
+      const c = misChapter(), m = MISSIONS[c] && MISSIONS[c].list[i];
+      if (!m || q.m[c + '.' + i] || !misDone(m)) return;
+      q.m[c + '.' + i] = 1; claimReward(m.r, 'Mission complete');
+    } else if (k === 'mf') {
+      const c = misChapter(), mc = MISSIONS[c];
+      if (!mc || !mc.list.every((m, j) => q.m[c + '.' + j])) return;
+      q.m['f' + c] = 1; claimReward(mc.r, `Missions: ${mc.name} complete`);
+    } else if (k === 'c') {
+      const x = colList().find(y => y.id === a.dataset.id);
+      if (!x || q.col[x.id] || x.v < x.n) return;
+      q.col[x.id] = 1; claimReward(x.r, 'Collection reward');
+    } else if (k === 'a') {
+      const x = ACH.find(y => y.id === a.dataset.id), t = x && (q.a[x.id] || 0);
+      if (!x || t >= x.at.length || x.v() < x.at[t]) return;
+      q.a[x.id] = t + 1; claimReward(ACH_RW[t], `Achievement: ${x.name}`);
+    }
+  }
+  const thBar = (v, n) => `<span class="th-bar"><i style="width:${Math.min(100, Math.round(v / n * 100))}%"></i></span>`;
+  const claimBtn = (k, extra, ok, label) => `<button class="btn small ${ok ? 'primary' : ''}" data-act="thclaim" data-k="${k}" ${extra} ${ok ? '' : 'disabled'}>${label || 'Claim'}</button>`;
+  function chestsHtml(list, pts, got, k, max) {
+    return `<div class="th-track"><span class="th-bar big"><i style="width:${Math.min(100, Math.round(pts / max * 100))}%"></i></span>${list.map((c, i) => {
+      const st = got.includes(i) ? 'done' : pts >= c.at ? 'ready' : '';
+      return `<div class="th-chest ${st}" style="--x:${Math.round(c.at / max * 100)}%"><button type="button" class="th-chest-b" data-act="thclaim" data-k="${k}" data-i="${i}" ${st === 'ready' ? '' : 'disabled'} aria-label="Chest at ${c.at} points${st === 'done' ? ' (claimed)' : st === 'ready' ? ': claim' : ''}">${CHEST_SVG}</button><b>${c.at}</b>${rwChips(c.r)}</div>`;
+    }).join('')}</div>`;
+  }
+  const CHEST_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path class="lid" d="M3 10V7.5C3 5 5 3.5 7.5 3.5h9C19 3.5 21 5 21 7.5V10z"/><path class="box" d="M3 10h18v9.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path class="band" d="M10 8.5h4v4.5h-4z"/></svg>';
+  function questsHtml() {
+    const q = qState(), now = Date.now();
+    const rows = QUESTS.map(t => {
+      const open = qOpen(t), v = Math.min(t.n, q.dn[t.id] || 0), done = v >= t.n;
+      return `<li class="th-row ${done ? 'done' : ''} ${open ? '' : 'locked'}"><span class="th-pts">+${t.pts}</span><span class="th-main"><b>${t.t}</b>${open ? `${thBar(v, t.n)}<small>${v.toLocaleString('en-US')} / ${t.n.toLocaleString('en-US')}</small>` : `<small>${qNeed(t)}</small>`}</span>${done ? '<span class="th-ok" aria-label="done">✓</span>' : open && t.go ? `<button class="btn small" data-act="go" data-go="${t.go}">Go</button>` : ''}</li>`;
+    }).join('');
+    const weekLeft = ((q.wk + 1) * 7 - 3) * 86400000 - now;
+    return `<section class="th-sec"><div class="th-head"><h3>Daily quests</h3><small class="empty-note">New quests in ${fmtLeft(86400000 - now % 86400000)}</small></div>
+        <p class="empty-note">Finish quests for points. Every chest along the bar opens at its points: energy, Sigils and Fate Shards.</p>
+        ${chestsHtml(DAILY_CHESTS, q.dp, q.dc, 'd', 100)}<p class="th-score"><b>${q.dp}</b> daily points today</p><ul class="th-list">${rows}</ul></section>
+      <section class="th-sec"><div class="th-head"><h3>Weekly chests</h3><small class="empty-note">Resets in ${weekLeft > 86400000 ? `${Math.floor(weekLeft / 86400000)} d ${Math.floor(weekLeft % 86400000 / 3600000)} h` : fmtLeft(weekLeft)} (Monday, UTC)</small></div>
+        <p class="empty-note">Every daily point also counts for the week. Keep at it for Greater Fate Shards and an Ancient Fate Shard.</p>
+        ${chestsHtml(WEEKLY_CHESTS, q.wp, q.wc, 'w', 650)}<p class="th-score"><b>${q.wp}</b> points this week</p></section>`;
+  }
+  function missionsHtml() {
+    const q = qState(), c = misChapter();
+    const path = MISSIONS.map((m, i) => `<li class="${i < c ? 'done' : i === c ? 'on' : ''}"><span>${i + 1}</span><b>${m.name}</b></li>`).join('');
+    if (c >= MISSIONS.length) return `<section class="th-sec"><ol class="th-path">${path}</ol><p class="lede">You completed every mission. More are on the way!</p></section>`;
+    const mc = MISSIONS[c], all = mc.list.every((m, i) => q.m[c + '.' + i]);
+    const rows = mc.list.map((m, i) => {
+      const got = q.m[c + '.' + i], v = Math.min(m.n, Math.max(0, m.v())), ok = v >= m.n;
+      return `<li class="th-row ${got ? 'done' : ''}"><span class="th-main"><b>${m.t}</b>${thBar(v, m.n)}<small>${v.toLocaleString('en-US')} / ${m.n.toLocaleString('en-US')}</small></span>${rwChips(m.r)}${got ? '<span class="th-ok" aria-label="claimed">✓</span>' : claimBtn('m', `data-i="${i}"`, ok)}</li>`;
+    }).join('');
+    const n = mc.list.filter((m, i) => q.m[c + '.' + i]).length;
+    return `<section class="th-sec"><ol class="th-path">${path}</ol>
+      <div class="th-head"><h3>Chapter ${c + 1}: ${mc.name}</h3><small class="empty-note">${n} / ${mc.list.length} claimed</small></div>
+      <ul class="th-list">${rows}</ul>
+      <div class="th-final ${all ? 'ready' : ''}"><span><b>Chapter reward</b><small>${all ? 'Claim it to open the next chapter.' : 'Claim all six missions to earn it.'}</small></span>${rwChips(mc.r)}${claimBtn('mf', '', all)}</div></section>`;
+  }
+  function collectionHtml() {
+    const q = colSync(), list = colList(), get = p => list.filter(x => x.id[0] === p);
+    const ms = xs => `<ul class="th-ms">${xs.map(x => `<li class="${q.col[x.id] ? 'done' : x.v >= x.n ? 'ready' : ''}"><b>${x.n}</b>${rwChips(x.r)}${q.col[x.id] ? '<span class="th-ok" aria-label="claimed">✓</span>' : claimBtn('c', `data-id="${x.id}"`, x.v >= x.n)}</li>`).join('')}</ul>`;
+    const face = (id, have) => `<span class="th-face ${have ? '' : 'miss'} rar-${C[id].rar}" title="${esc(C[id].name)}${have ? '' : ' (not collected yet)'}">${por(id)}</span>`;
+    const group = (x, ids, chip) => `<li class="th-grp ${q.col[x.id] ? 'done' : ''}"><div class="th-grp-h">${chip}<b>${x.t}</b><small>${x.v} / ${x.n}</small>${rwChips(x.r)}${q.col[x.id] ? '<span class="th-ok" aria-label="claimed">✓</span>' : claimBtn('c', `data-id="${x.id}"`, x.v >= x.n)}</div><div class="th-faces">${ids.map(id => face(id, q.hs[id])).join('')}</div></li>`;
+    const nh = everHeroes(), nb = BEASTS.filter(id => q.be[id]).length;
+    return `<section class="th-sec"><div class="th-head"><h3>Heroes</h3><small class="empty-note">${nh} / ${K.CHAMP_ORDER.length} collected</small></div>
+        ${thBar(nh, K.CHAMP_ORDER.length)}<p class="empty-note">Every hero you ever owned counts, also the ones you fed away.</p>${ms(get('h'))}</section>
+      <section class="th-sec"><div class="th-head"><h3>By essence</h3></div><ul class="th-grps">${get('e').map(x => group(x, essHeroes(x.ess), affChip(x.ess))).join('')}</ul></section>
+      <section class="th-sec"><div class="th-head"><h3>By rarity</h3></div><ul class="th-grps">${get('r').map(x => group(x, rarHeroes(x.rar), '')).join('')}</ul></section>
+      <section class="th-sec"><div class="th-head"><h3>Bestiary</h3><small class="empty-note">${nb} / ${BEASTS.length} kinds captured</small></div>
+        ${thBar(nb, BEASTS.length)}<p class="empty-note">Campaign battles sometimes capture an enemy. Every kind you catch fills a page.</p>${ms(get('b'))}
+        <div class="th-faces beasts">${BEASTS.map(id => face(id, q.be[id])).join('')}</div></section>`;
+  }
+  function achievementsHtml() {
+    const q = qState();
+    const total = ACH.reduce((s, a) => s + a.at.length, 0), have = ACH.reduce((s, a) => s + (q.a[a.id] || 0), 0);
+    const cards = ACH.map(a => {
+      const t = q.a[a.id] || 0, maxed = t >= a.at.length, n = a.at[Math.min(t, a.at.length - 1)], v = a.v(), ok = !maxed && v >= n;
+      const pips = a.at.map((_, i) => `<i class="${i < t ? 'on' : ''}"></i>`).join('');
+      return `<li class="th-ach ${maxed ? 'done' : ok ? 'ready' : ''}"><div class="th-ach-h"><b>${a.name}</b><span class="th-pips" aria-label="Tier ${t} of ${a.at.length}">${pips}</span></div>
+        <small>${maxed ? `Complete: ${a.t(a.at[a.at.length - 1])}` : a.t(n)}</small>${maxed ? '' : `${thBar(Math.min(v, n), n)}<div class="th-ach-f"><small>${Math.min(v, n).toLocaleString('en-US')} / ${n.toLocaleString('en-US')}</small>${rwChips(ACH_RW[t])}${claimBtn('a', `data-id="${a.id}"`, ok)}</div>`}</li>`;
+    }).join('');
+    return `<section class="th-sec"><div class="th-head"><h3>Achievements</h3><small class="empty-note">${have} / ${total} tiers</small></div>${thBar(have, total)}<ul class="th-achs">${cards}</ul></section>`;
+  }
+  function townHallHtml() {
+    const c = thClaims(), dot = n => (n ? `<span class="dot" aria-label="${n} to claim"></span>` : '');
+    const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements]];
+    const bar = `<div class="dtabs th-tabs" role="tablist" aria-label="Town Hall">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-act="thtab" data-t="${k}" aria-selected="${TH.tab === k}">${l}${dot(n)}</button>`).join('')}</div>`;
+    return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : profileHtml());
   }
 
   // the guild info counter while the Guildmaster types
@@ -1798,7 +2066,7 @@
     if (e.target.closest('.brand') && !B && !S.needStarter) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#guide')) { if (B) return; SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
-    if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; TH.tab = 'profile'; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
     if (!a || a.closest('#battle')) return;
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
@@ -1820,9 +2088,11 @@
     else if (act === 'arstate') arenaCall('state');
     else if (act === 'arrefresh') arenaCall('refresh');
     else if (act === 'ardef') arenaCall('defense').then(r => { if (r.state) toast('Your current team now defends you in the arena.'); });
-    else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) startArena(r.fight); });
+    else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } });
     else if (act === 'arlb') loadBoard(a.dataset.kind);
     else if (act === 'arclaim') claimArena().then(socialLoad);
+    else if (act === 'thtab') { TH.tab = a.dataset.t; editName = false; render(); }
+    else if (act === 'thclaim') thClaim(a);
     else if (act === 'soctab') { SO.tab = a.dataset.t; if (SO.tab === 'guild') { GD.view = 'home'; guildLoad(); } render(); }
     else if (act === 'gjoin') guildAct('guild_join', { gid: +id }, { ok: 'Welcome to the guild!', full: 'That guild is full.', closed: 'That guild is closed.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.', not_found: 'That guild no longer exists.' });
     else if (act === 'gleave') confirmBox('Leave guild?', `Leave <b>${esc(GD.mine ? GD.mine.name : '')}</b>? ${GD.mine && GD.mine.role === 'leader' ? 'The lead passes to the longest-serving officer or member. ' : ''}Your guild boss points of this week still count for your own chest.`, 'Leave', () => guildAct('guild_leave', {}, { ok: 'You left the guild.' }, () => { GD.view = 'home'; }));
@@ -1906,6 +2176,7 @@
       if (S.exp || !EXSEL.size) return;
       const k = +a.dataset.k, now = Date.now();
       S.exp = { k, ids: [...EXSEL].filter(x => S.roster[x] && !inAnyTeam(x)), start: now, end: now + K.EXPEDITIONS[k].hours * 3600e3, lvl: expLvl() };
+      track('exp');
       EXSEL.clear(); save(); render(); toast(`${K.EXPEDITIONS[k].name}: the ship sets sail. Back in ${K.EXPEDITIONS[k].hours} ${K.EXPEDITIONS[k].hours === 1 ? 'hour' : 'hours'}.`);
     }
     else if (act === 'expclaim') expClaim();
@@ -1958,6 +2229,7 @@
       const cost = K.upgradeCost(item);
       if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return;
       S.silver -= cost;
+      track('upg');
       if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
       else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
       save(); render();
@@ -2001,7 +2273,7 @@
       if (!(S.fodder[f] > 0) || h.lvl >= K.maxLvl(h.stars, selChamp)) return;
       const go = () => {
         if (!(S.fodder[f] > 0) || selChamp !== to) return;
-        const gain = K.feedXp(f, h.lvl); S.fodder[f]--; const up = giveXp(gain);
+        const gain = K.feedXp(f, h.lvl); S.fodder[f]--; const up = giveXp(gain); track('feed');
         SFX.up(); save(); render(); toast(`${C[to].short} was fed a copy of ${C[f].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.`);
       };
       if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
@@ -2012,6 +2284,7 @@
         if (!S.roster[x] || selChamp !== to) return;
         const gain = K.feedXp(x, h.lvl, S.roster[x].lvl), worn = itemsOf(x);
         delete S.roster[x]; worn.forEach(it => (it.owner = null)); if (S.p.avatar === x) S.p.avatar = null;
+        track('feed');
         const up = giveXp(gain);
         SFX.up(); save(); render(); toast(`${C[to].short} absorbed ${C[x].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.${worn.length ? ' Their gear went back to your inventory.' : ''}`);
       };
@@ -2020,6 +2293,7 @@
       const f = a.dataset.f, h = S.roster[selChamp];
       if (f !== selChamp || !(S.fodder[f] > 0)) return;
       const i = K.skillUp(h, f); if (i < 0) return;
+      track('feed');
       S.fodder[f]--; SFX.summon(3); save(); render();
       toast(`${C[f].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}${h.sk[i] >= K.SKILL_MAX && C[f].skills[i].cd ? ' (cooldown −1)' : ''}.`);
     } else if (act === 'cfyes') { $('#modal').hidden = true; const f = confirmYes; confirmYes = null; if (f) f(); }
@@ -2035,7 +2309,7 @@
     } else if (act === 'rank') {
       const h = S.roster[selChamp], rc = K.rankCost(h.stars);
       if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || stoneN(rc.tier) < rc.stones || S.silver < rc.silver) return;
-      if (rc.tier === 'lesser') S.stones -= rc.stones; else S.stx[rc.tier] -= rc.stones; S.silver -= rc.silver; h.stars++; SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
+      if (rc.tier === 'lesser') S.stones -= rc.stones; else S.stx[rc.tier] -= rc.stones; S.silver -= rc.silver; h.stars++; track('asc'); SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
     } else if (act === 'modal') modalAction(a.dataset.go);
   });
 
@@ -2044,7 +2318,7 @@
   function doSummon(n, type) {
     type = type || lastType; lastType = type;
     if ((S.fs[type] || 0) < n || !unlocked('altaar')) return;
-    S.fs[type] -= n; S.p.st.summons += n;
+    S.fs[type] -= n; S.p.st.summons += n; track('summon', n);
     const res = [];
     for (let i = 0; i < n; i++) res.push(K.summonOne(S, type));
     save(); render();
@@ -3035,6 +3309,7 @@
   function spendEnergy(cost) {
     energyTick();
     if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}.`, true, 4200); return false; }
+    track('energy', cost || 0);
     S.energy -= cost || 0; save(); paintEnergy(); return true;
   }
   function paintEnergy() {
@@ -3132,6 +3407,9 @@
     const pxp = win ? (first || cfg.type !== 'tower' ? playerWinXp(lvl, first, cfg.type === 'boss') : 0) : b.aborted || cfg.type === 'tower' ? 0 : Math.round(playerWinXp(lvl) * 0.25);
     const pups = grantPlayerXp(pxp); if (pups.length) paintEnergy();
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
+    if (win && cfg.type === 'stage') { track('camp'); if (cfg.diff === 4 && b.heroes.every(u => u.alive)) track('flaw'); }
+    if (win && cfg.type === 'boss') track('boss');
+    if (cfg.type === 'tower' && !b.aborted) { track('tower'); if (win && cfg.ids && cfg.ids.length === 1) qBest('solo', cfg.floor); }
     const unlocks = newUnlocks();
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;

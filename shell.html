@@ -1208,7 +1208,7 @@ div.stage { cursor: default; color: inherit; font: inherit; }
 }
 /* ===== framed panels: gold corner brackets, depth and a warm top light on every content panel ===== */
 .dg, .detail, .camp-info, .help > div, .lockbox, .prof-head, .prof-acc, .prof-bk, .ar-me, .ar-def, .ar-opps, .ar-board,
-.gl-sec, .soc-card, .g-card, .g-tile, .fs-card, .st-card, .tour-card, .modal-box, .fr-sec, .gb-diffs button, .bh-row, .gb-card {
+.gl-sec, .soc-card, .g-card, .g-tile, .fs-card, .st-card, .tour-card, .modal-box, .fr-sec, .gb-diffs button, .bh-row, .gb-card, .th-sec {
   --corner: color-mix(in srgb, var(--gold) 75%, transparent);
   --frame:
     linear-gradient(var(--corner), var(--corner)) 0 0 / 14px 2px no-repeat, linear-gradient(var(--corner), var(--corner)) 0 0 / 2px 14px no-repeat,
@@ -1888,11 +1888,112 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .tw-go { grid-column: 1 / -1; justify-self: stretch; min-height: 46px; font-size: 1rem; }
 @media (max-width: 760px) { .tw-next { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 12px; } .tw-side { grid-column: 1 / -1; } .tw-mss { flex-direction: row; overflow-x: auto; } .tw-ms { flex: none; } .tw-fln { font-size: 34px; } .tw-foe { width: 66px; } .tw-foe img { width: 56px; height: 56px; } }
 @media (max-width: 760px) { .tw-tabs { display: flex; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 2px 12px; } .tw-tabs::-webkit-scrollbar { display: none; } .tw-tab { flex: none; } #screen:has(.tw-tabs) .section-head .lede { display: none; } }
-/* eight starters: a back row and a front row */
-.st-fig.back { top: 3%; bottom: 52%; width: 22%; z-index: 1; }
-.st-fig.front { top: 46%; bottom: 3%; width: 22%; z-index: 2; }
+/* twelve starters: two rows of six (phones: three rows of four); --c/--r are the column and row */
+.st-fig.st12 { left: calc(8.333% + var(--c6) * 16.667%); top: calc(3% + var(--r6) * 47%); bottom: auto; height: 46%; width: 16.5%; z-index: calc(1 + var(--r6)); }
+/* every figure at the same height (wide ones, like the orcs, may reach past their slot) */
+.st-fig.st12 img { flex: none; height: calc(84% - 1.7em); width: auto; max-width: 150%; object-fit: contain; margin-top: auto; }
 .st-fig .st-nm { font-size: clamp(.62rem, 1.4vw, .9rem); margin-top: 1px; }
-@media (max-width: 760px) { .st-fig.back, .st-fig.front { width: 25%; } .st-fig.back { top: 4%; bottom: 52%; } .st-fig.front { top: 50%; bottom: 2%; } }
+@media (max-width: 760px) { .st-fig.st12 { left: calc(12.5% + var(--c4) * 25%); top: calc(2% + var(--r4) * 32.5%); height: 32%; width: 25%; z-index: calc(1 + var(--r4)); } }
+/* ===== Town Hall: quests, missions, collection, achievements ===== */
+.th-tabs { overflow-x: auto; scrollbar-width: none; }
+.th-tabs::-webkit-scrollbar { display: none; }
+.th-tabs button { flex: 1 0 auto; padding: 0 14px; }
+.th-sec { padding: 14px 16px; margin-bottom: 16px; display: flex; flex-direction: column; gap: 10px; }
+.th-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.th-head h3 { margin: 0; }
+.th-sec > .empty-note { margin: 0; }
+.th-bar { display: block; height: 6px; background: #0d0a10; border: 1px solid var(--line); overflow: hidden; }
+.th-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold-dim), var(--gold)); }
+.th-bar.big { height: 12px; border-color: var(--gold-dim); }
+.th-bar.big i { background: linear-gradient(90deg, #b8862f, #ffd76a); box-shadow: 0 0 10px rgba(255, 210, 100, .45); }
+.rws { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.rw { display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px 1px 3px; background: #0f0c12; border: 1px solid var(--line); font-family: var(--font-tag); font-size: .78rem; color: var(--fg); white-space: nowrap; }
+.rw b { font-weight: 700; }
+.rw img { width: 18px; height: 18px; }
+.rw .en-ic { width: 14px; height: 14px; fill: #ffd76a; filter: drop-shadow(0 0 3px rgba(255, 200, 80, .6)); }
+.rw.en { border-color: #7a6326; color: #ffe39a; }
+.rw.hero { padding: 2px 8px; border-color: currentColor; }
+.rw.hero.rar-3 { color: var(--r3); } .rw.hero.rar-4 { color: var(--r4); }
+.th-ok { color: var(--good); font-weight: 700; font-size: 1.15rem; padding: 0 6px; }
+/* chest track: the points bar with a chest at each threshold */
+.th-track { position: relative; padding: 14px 0 64px; margin: 0 22px 0 6px; }
+.th-chest { position: absolute; top: 0; left: var(--x); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.th-chest > b { font-family: var(--font-tag); font-size: .75rem; color: var(--muted); }
+.th-chest .rws { justify-content: center; max-width: 120px; }
+.th-chest-b { width: 40px; height: 40px; display: grid; place-items: center; background: #15101a; border: 2px solid var(--line); cursor: default; padding: 0; }
+.th-chest-b svg { width: 26px; height: 26px; }
+.th-chest-b .box { fill: #5a4630; } .th-chest-b .lid { fill: #6e5638; } .th-chest-b .band { fill: #9a8a6a; }
+.th-chest.ready .th-chest-b { cursor: pointer; border-color: var(--gold); box-shadow: 0 0 12px rgba(255, 210, 100, .55); animation: thPulse 1.4s ease-in-out infinite; }
+.th-chest.ready .box { fill: #9a6a2a; } .th-chest.ready .lid { fill: #c58a34; } .th-chest.ready .band { fill: #ffd76a; }
+.th-chest.ready > b { color: var(--gold); }
+.th-chest.done .th-chest-b { opacity: .45; }
+.th-chest.done .rws { opacity: .45; }
+@keyframes thPulse { 50% { transform: scale(1.08); } }
+.th-score { margin: 0; font-family: var(--font-tag); color: var(--muted); }
+.th-score b { color: var(--gold); font-size: 1.15rem; }
+/* rows: quests and missions */
+.th-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.th-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); }
+.th-row.done { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.th-row.done .th-main b { color: var(--muted); }
+.th-row.locked { opacity: .55; }
+.th-pts { flex: none; min-width: 40px; text-align: center; font-family: var(--font-tag); font-weight: 700; color: var(--gold); }
+.th-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.th-main b { font-family: var(--font-display); font-size: .95rem; }
+.th-main small { color: var(--muted); font-size: .8rem; }
+/* missions path and chapter reward */
+.th-path { list-style: none; margin: 0; padding: 0; display: flex; gap: 4px; overflow-x: auto; }
+.th-path li { flex: 1 0 auto; display: flex; align-items: center; gap: 6px; padding: 6px 10px; background: #120e15; border: 1px solid var(--line); color: var(--muted); font-size: .85rem; }
+.th-path li span { width: 20px; height: 20px; display: grid; place-items: center; border: 1px solid currentColor; font-family: var(--font-tag); font-size: .75rem; }
+.th-path li.on { color: var(--gold); border-color: var(--gold-dim); }
+.th-path li.done { color: var(--good); }
+.th-final { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border: 1px dashed var(--gold-dim); background: rgba(217, 180, 90, .05); }
+.th-final > span:first-child { flex: 1; min-width: 160px; display: flex; flex-direction: column; }
+.th-final > span:first-child b { font-family: var(--font-display); color: var(--gold); }
+.th-final small { color: var(--muted); }
+.th-final.ready { border-style: solid; border-color: var(--gold); box-shadow: 0 0 14px rgba(255, 210, 100, .3); }
+/* collection */
+.th-ms { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.th-ms li { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; padding: 8px; background: var(--panel); border: 1px solid var(--line); }
+.th-ms li > b { font-family: var(--font-tag); font-size: 1.1rem; color: var(--fg); }
+.th-ms li.ready { border-color: var(--gold); }
+.th-ms li.done { opacity: .6; }
+.th-grps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.th-grp { padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.th-grp.done { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.th-grp-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.th-grp-h > b { font-family: var(--font-display); font-size: .95rem; }
+.th-grp-h > small { color: var(--muted); margin-right: auto; }
+.th-faces { display: flex; flex-wrap: wrap; gap: 4px; }
+.th-face { width: 36px; height: 36px; border: 2px solid var(--line); background: #0f0c12; overflow: hidden; }
+.th-face.rar-1 { border-color: var(--r1); } .th-face.rar-2 { border-color: var(--r2); } .th-face.rar-3 { border-color: var(--r3); } .th-face.rar-4 { border-color: var(--r4); }
+.th-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.th-face.miss { border-color: var(--line); }
+.th-face.miss img { filter: grayscale(1) brightness(.25); }
+/* achievements */
+.th-achs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.th-ach { padding: 10px; background: var(--panel); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.th-ach.ready { border-color: var(--gold); box-shadow: 0 0 12px rgba(255, 210, 100, .25); }
+.th-ach.done { border-color: color-mix(in srgb, var(--good) 45%, var(--line)); }
+.th-ach > small { color: var(--muted); }
+.th-ach-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.th-ach-h b { font-family: var(--font-display); color: var(--gold); }
+.th-pips { display: flex; gap: 3px; }
+.th-pips i { width: 9px; height: 9px; transform: rotate(45deg); border: 1px solid var(--gold-dim); background: #0f0c12; }
+.th-pips i.on { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 5px rgba(255, 210, 100, .6); }
+.th-ach-f { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.th-ach-f > small { color: var(--muted); margin-right: auto; font-variant-numeric: tabular-nums; }
+.mvp.th-hero img { width: 72px; height: 72px; }
+@media (max-width: 480px) {
+  .th-sec { padding: 12px; }
+  .th-row:has(.rws) { flex-wrap: wrap; }
+  .th-row:has(.rws) .th-main { flex-basis: 100%; }
+  .th-row:has(.rws) .rws { margin-right: auto; }
+  .th-track { margin: 0 26px 0 14px; padding-bottom: 76px; }
+  .th-chest .rws { max-width: 76px; }
+  .th-chest-b { width: 34px; height: 34px; }
+  .th-ms { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>
 
 <div id="app">

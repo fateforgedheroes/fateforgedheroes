@@ -247,10 +247,12 @@ const SPR = (function () {
       img.src = src;
     })));
   }
+  // figures painted facing left (the orc cards); mirrored at load so every figure faces right like the rest
+  const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl']);
   function preload() {
     return Promise.all([loadChapterBgs(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
-      img.onload = () => { const c = canvas(img.width, img.height); c.getContext('2d').drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
+      img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); if (FACES_LEFT.has(id)) { g.translate(img.width, 0); g.scale(-1, 1); } g.drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
       img.onerror = () => res();
       img.src = ART[id].body;
     }))]);

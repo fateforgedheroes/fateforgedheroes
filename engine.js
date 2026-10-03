@@ -143,6 +143,36 @@ const K = (function () {
         SK('Verdant Aegis', 'allies', 'buff', 'shield', 3, 'All allies gain a shield of 15% of Draelyn’s max HP for 2 turns and are cleansed.', [SH(0.15, 2), { t: 'cleanse' }]),
         SK('Rally', 'allies', 'buff', 'heal', 4, 'Heals all allies for 20% and grants Attack Up for 2 turns.', [HEAL(0.2), BF('atkUp', 2)]),
       ] },
+    // the four orcs: Uncommon heroes (starter choice and Fate Altar) who also fight as enemies in Chapters II and IV
+    // (same id as their enemy entry; a captured one joins as this hero)
+    grimtar: { name: 'Grimtar', faction: 'Beast Horde', role: 'Mage', role2: 'Controller', rar: 1, aff: 'Verdant',
+      passive: 'toxicpresence', passiveName: 'Restless Spirits', passiveDesc: 'At the end of each of his turns, every enemy has a 15% chance to be Poisoned.',
+      skills: [
+        SK('Spirit Bolt', 'enemy', 'magic', 'poison', 0, 'Attack of 100%. 30% chance of Poison for 2 turns.', [D(1.0), DB('poison', 2, 0.3)]),
+        SK('Wailing Spirits', 'enemies', 'magic', 'curse', 3, 'Hits all enemies for 55%. 40% chance of Heal Reduction for 2 turns.', [D(0.55), DB('healRed', 2, 0.4)]),
+        SK('Ancestral Hex', 'enemy', 'magic', 'curse', 4, 'Attack of 160%. 60% chance of Defense Down for 2 turns.', [D(1.6), DB('defDown', 2, 0.6)]),
+      ] },
+    krogash: { name: 'Krogash', faction: 'Beast Horde', role: 'Mage', rar: 1, aff: 'Ember',
+      passive: 'kindling', passiveName: 'Ashen Fury', passiveDesc: 'Burn applied by Krogash deals 50% more damage.',
+      skills: [
+        SK('Ashen Bolt', 'enemy', 'magic', 'fire', 0, 'Attack of 100%. 30% chance of Burn for 2 turns.', [D(1.0), DB('burn', 2, 0.3)]),
+        SK('Ash Storm', 'enemies', 'magic', 'meteor', 3, 'Hits all enemies for 60%. 40% chance of Burn for 2 turns.', [D(0.6), DB('burn', 2, 0.4)]),
+        SK('Pyre of the Warlord', 'enemy', 'magic', 'fire', 4, 'Attack of 180%. 60% chance of Burn for 2 turns.', [D(1.8), DB('burn', 2, 0.6)]),
+      ] },
+    zulgroth: { name: 'Zulgroth', faction: 'Beast Horde', role: 'Support', rar: 1, aff: 'Umbral',
+      passive: 'beacon', passiveName: 'Void Mending', passiveDesc: 'Heals the weakest ally for 5% at the start of each of his turns.',
+      skills: [
+        SK('Void Orb', 'enemy', 'magic', 'dark', 0, 'Attack of 90%. 30% chance of Speed Down for 1 turn.', [D(0.9), DB('spdDown', 1, 0.3)]),
+        SK('Void Pact', 'allies', 'buff', 'heal', 3, 'Heals all allies for 15% and grants Attack Up for 2 turns.', [HEAL(0.15), BF('atkUp', 2)]),
+        SK('Shadow Ward', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 15% of Zulgroth’s max HP for 2 turns and are cleansed.', [SH(0.15, 2), { t: 'cleanse' }]),
+      ] },
+    bloodsnarl: { name: 'Bloodsnarl', faction: 'Beast Horde', role: 'Ranger', rar: 1, aff: 'Ember',
+      passive: 'scavenger', passiveName: 'Pack Hunter', passiveDesc: '+20% damage against targets below 50% HP.',
+      skills: [
+        SK('Blood Arrow', 'enemy', 'ranged', 'arrow', 0, 'Attack of 100%. 30% chance of Bleed for 2 turns.', [D(1.0), DB('bleed', 2, 0.3)]),
+        SK('Loose the Wolf', 'lowestEnemy', 'melee', 'bite', 3, 'His wolf mauls the weakest enemy for 140%. 50% chance of Bleed for 2 turns.', [D(1.4), DB('bleed', 2, 0.5)]),
+        SK('Volley of Fangs', 'random', 'ranged', 'arrow', 4, 'Four arrows of 50% on random enemies. Each has a 25% chance of Bleed for 2 turns.', [D(0.5), DB('bleed', 2, 0.25)], { hits: 4 }),
+      ] },
     ithyra: { name: 'Ithyra', faction: 'Mistspawn', role: 'Mage', role2: 'Controller', rar: 3, aff: 'Frost',
       passive: 'frostbite', passiveName: 'Frostbite', passiveDesc: '+30% damage against Frozen or slowed targets.',
       skills: [
@@ -489,7 +519,7 @@ const K = (function () {
   // heroes outside every pool (see j3duin); they only come from a mail gift
   const DEV_HEROES = Object.keys(CHAMPS).filter(id => CHAMPS[id].dev);
   const CHAMP_ORDER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'morgrim', 'vorlund', 'valkessa', 'faedrin', 'krothar', 'ithyra', 'nyressa', 'selenia', 'drakulen', 'keldrax', 'oraneth', 'zarvion', 'sylreth', 'thalnir', 'aurelion', 'zyrael', 'velmira', 'nithara',
-    'kaelira', 'vorak', 'elyndra', 'morveth', 'theryn', 'arkanis', 'liora', 'gorvann', 'sylvara', 'veyrith', 'astraea', 'korran', 'zephara', 'malreth', 'eryndor', 'ignara', 'thalessa', 'ravok', 'seraphine', 'draevan', 'mirella', 'volkaris', 'nyxara', 'orvyn', 'celesthyr'];
+    'kaelira', 'vorak', 'elyndra', 'morveth', 'theryn', 'arkanis', 'liora', 'gorvann', 'sylvara', 'veyrith', 'astraea', 'korran', 'zephara', 'malreth', 'eryndor', 'ignara', 'thalessa', 'ravok', 'seraphine', 'draevan', 'mirella', 'volkaris', 'nyxara', 'orvyn', 'celesthyr', 'grimtar', 'krogash', 'zulgroth', 'bloodsnarl'];
 
   // ---------- Enemies (fodder) ----------
   let FOE_ATK = +(typeof process!=='undefined'&&process.env.FA||2.0), BOSS_ATK = +(typeof process!=='undefined'&&process.env.BA||5), BOSS_HP = +(typeof process!=='undefined'&&process.env.BH||1);
@@ -565,7 +595,6 @@ const K = (function () {
     mosscrawler: 'Controller', thornbeast: 'Warrior', rotvineshambler: 'Tank', bogreaper: 'Assassin', woodwraith: 'Support',
     frostfangwolf: 'Assassin', iceboundknight: 'Tank', glacierbrute: 'Warrior', frostbornwitch: 'Mage', frozenhorror: 'Controller',
     stormimp: 'Assassin', thunderraider: 'Warrior', tempestharpy: 'Controller', stormcaller: 'Mage', thundergolem: 'Tank',
-    grimtar: 'Mage', krogash: 'Mage', zulgroth: 'Support', bloodsnarl: 'Ranger',
   };
   const TIER_RAR = { Common: 0, Uncommon: 1, Rare: 2 };
   const TGT_TXT = { enemy: 'one enemy', enemies: 'all enemies', random: 'random enemies', lowestEnemy: 'the weakest enemy', ally: 'one ally', allies: 'all allies', lowestAlly: 'the weakest ally', self: 'self' };
@@ -870,7 +899,7 @@ const K = (function () {
   }
   // a new player picks one starter; the rest of the team is earned in Chapter I (see CHAPTERS[0].unlock)
   // the eight Uncommons a new player picks from (every one of them is also a campaign unlock, see CHAPTERS)
-  const STARTERS = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'vorlund'];
+  const STARTERS = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'vorlund', 'grimtar', 'krogash', 'zulgroth', 'bloodsnarl'];
   // when a campaign unlock is the player's own starter, that stage gives this Rare of a similar role instead, so the
   // team still grows the same way whichever starter was picked
   const STARTER_SUB = { bromir: 'ravok', grythor: 'korran', skavren: 'orvyn', draelyn: 'selenia', vaessa: 'mirella', brukkar: 'keldrax', karnok: 'gorvann', vorlund: 'theryn' };
