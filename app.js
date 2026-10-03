@@ -764,7 +764,7 @@
     }
     const cls = [opts.sel ? 'sel' : '', opts.inteam ? 'inteam' : ''].join(' ');
     const slot = S.team.indexOf(id) + 1; // --tord: team members first in the phone strip (see CSS)
-    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}"${slot ? ` data-slot="${slot}"` : ''} style="--ec:${AFF_COL[c.aff]}${slot ? `;--tord:${slot - 5}` : ''}">${affChip(c.aff)}<span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
+    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}"${slot ? ` data-slot="${slot}"` : ''} style="--ec:${AFF_COL[c.aff]}${slot ? `;--tord:${slot - 5}` : ''}">${affChip(c.aff)}<span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${S.roster[id].lock ? '<span class="lockmark" title="Locked">🔒</span>' : ''}${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
   }
   const sortedIds = () => [...K.CHAMP_ORDER, ...K.DEV_HEROES.filter(id => S.roster[id]), ...K.CAPTURE_ORDER.filter(id => S.roster[id])].sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || C[b].rar - C[a].rar || ((S.roster[b]?.lvl || 0) - (S.roster[a]?.lvl || 0)));
   // what a team brings: healing (heal, shield or revive skills, or a healing passive), protection (tanks, Defense Up,
@@ -871,7 +871,7 @@
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          <div class="d-team"><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
+          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
         </div></div>
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
@@ -931,7 +931,7 @@
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
     const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
     const copies = Object.keys(S.fodder).filter(f => S.fodder[f] > 0 && C[f]).sort((a, b) => (b === id) - (a === id) || C[a].rar - C[b].rar);
-    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !inAnyTeam(x) && !onExp(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
+    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !inAnyTeam(x) && !onExp(x) && !S.roster[x].lock).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
     const release = C[id].captured && !inAnyTeam(id) && !onExp(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
     const xpBtn = (xp, attrs) => `<button class="btn small primary" ${attrs} ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${xp.toLocaleString('en-US')} XP</button>`;
     const copyRow = f => `<div class="fd rar-${C[f].rar} ${f === id ? 'self' : ''}">${por(f)}<div><b>${esc(C[f].name)}</b> <span class="tag">×${S.fodder[f]}</span><small class="empty-note">${K.RARITIES[C[f].rar]} · spare copy</small></div>
@@ -941,7 +941,7 @@
     const heroRow = x => `<div class="fd rar-${C[x].rar}">${por(x)}<div><b>${esc(C[x].short)}</b> <span class="tag">Lv ${S.roster[x].lvl}</span><small class="empty-note">${K.RARITIES[C[x].rar]} · ${roleStr(C[x])}</small></div>
         <div class="row">${xpBtn(K.feedXp(x, h.lvl, S.roster[x].lvl), `data-act="feedhero" data-id="${x}"`)}</div></div>`;
     return `<div class="fodder"><div class="section-head" style="margin-bottom:6px"><h3 style="margin:0">Feed</h3>${release}</div>
-      <p class="empty-note">Feed spare copies or other heroes to give ${esc(C[id].short)} XP. A copy of ${esc(C[id].short)} itself raises one skill level instead (max ${K.SKILL_MAX} per skill). Duplicates from the Fate Altar and captured enemies become spare copies.</p>
+      <p class="empty-note">Feed spare copies or other heroes to give ${esc(C[id].short)} XP. Locked heroes are never offered. A copy of ${esc(C[id].short)} itself raises one skill level instead (max ${K.SKILL_MAX} per skill). Duplicates from the Fate Altar and captured enemies become spare copies.</p>
       ${copies.length ? `<h4 class="fd-h">Spare copies</h4><div class="fodder-list">${copies.map(copyRow).join('')}</div>` : ''}
       ${others.length ? `<h4 class="fd-h">Heroes outside your team</h4><div class="fodder-list">${others.map(heroRow).join('')}</div>` : ''}
       ${!copies.length && !others.length ? '<p class="empty-note">Nothing to feed yet. Summon at the Fate Altar or capture enemies in the campaign.</p>' : ''}</div>`;
@@ -1569,7 +1569,7 @@
   }
   const progressText = f => f.cleared != null && f.cleared >= 0 && K.STAGES[f.cleared] ? stageName(f.cleared) : 'Just started';
   // a friend row opens their profile (buttons inside keep their own action)
-  const personRow = (f, acts) => `<li${f.kind === 'friend' ? ` class="pf-open" data-act="profile" data-id="${f.user_id}" title="View profile"` : ''}><span class="fr-av">${f.avatar && C[f.avatar] ? por(f.avatar) : ''}</span><span class="fr-main"><b>${esc(f.name)}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}${f.rating ? ` · Arena ${f.rating}` : ''}</small></span><span class="fr-acts">${acts}</span></li>`;
+  const personRow = (f, acts) => `<li${f.kind === 'friend' ? ` class="pf-open" data-act="profile" data-id="${f.user_id}" title="View profile"` : ''}><span class="fr-av">${f.avatar && C[f.avatar] ? por(f.avatar) : ''}</span><span class="fr-main"><b>${esc(f.name)}${f.user_id ? ` <small class="fr-fc" title="Friend code">(${friendCode(f.user_id).replace(/^(.{4})/, '$1 ')})</small>` : ''}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}${f.rating ? ` · Arena ${f.rating}` : ''}</small></span><span class="fr-acts">${acts}</span></li>`;
   function needAccount(title) {
     const cl = cloud();
     if (!cl || !cl.enabled) return `<p class="empty-note">${title} needs the online version of the game.</p>`;
@@ -1876,6 +1876,7 @@
         save(); hud(); render(); SFX.up(); toast(`Prestige ${romanN(n)}! A new emblem is yours. Level 1 again, with everything you own.`, false, 5000);
       });
     }
+    else if (act === 'hlock') { const h = S.roster[id]; if (!h) return; h.lock = !h.lock; if (!h.lock) delete h.lock; save(); render(); toast(h.lock ? `${C[id].short} is locked: it will never be offered as food.` : `${C[id].short} is unlocked.`); }
     else if (act === 'hinfo') heroInfo(id);
     else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; invSlot = null; champTab = 'stats'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
@@ -1961,7 +1962,7 @@
       if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
     } else if (act === 'feedhero') {
       const x = id, h = S.roster[selChamp], to = selChamp;
-      if (!S.roster[x] || x === to || inAnyTeam(x) || onExp(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
+      if (!S.roster[x] || S.roster[x].lock || x === to || inAnyTeam(x) || onExp(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
       const go = () => {
         if (!S.roster[x] || selChamp !== to) return;
         const gain = K.feedXp(x, h.lvl, S.roster[x].lvl), worn = itemsOf(x);
