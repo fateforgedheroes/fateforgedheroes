@@ -955,7 +955,28 @@ const K = (function () {
   const MAX_STARS = 6;
   function maxLvl(stars, id) { const cap = id && CHAMPS[id] ? RAR_CAP[CHAMPS[id].rar] : 60; return Math.min(cap, stars * 10); }
   function maxStars(id) { return Math.min(MAX_STARS, Math.ceil(RAR_CAP[CHAMPS[id].rar] / 10)); }
-  const rankCost = stars => ({ stones: stars * 4, silver: 400 * stars * stars });
+  // Ascension Stones in three tiers, by the star a hero ascends to: Lesser (to 2-4★, the save's `stones`), Greater (to
+  // 5★) and Ancient (to 6★). Lesser drop everywhere; Greater mostly from boss stages, Normal on and Boss Hall level 3 on;
+  // Ancient only from boss stages (Easy from Chapter VI, every boss stage on Brutal and Nightmare), Boss Hall 9-10 and
+  // weekly rewards, so the last stars are slow.
+  const STONES = [{ id: 'lesser', name: 'Lesser Ascension Stone' }, { id: 'greater', name: 'Greater Ascension Stone' }, { id: 'ancient', name: 'Ancient Ascension Stone' }];
+  const stoneTier = stars => (stars >= 5 ? 'ancient' : stars >= 4 ? 'greater' : 'lesser');
+  const rankCost = stars => ({ tier: stoneTier(stars), stones: stars >= 5 ? 10 : stars >= 4 ? 8 : stars * 4, silver: 400 * stars * stars });
+  // stones for a won campaign stage on difficulty d (first: first clear) and a won Boss Hall level n
+  function stageStones(st, d, first) {
+    const o = {}, boss = st.n === 6, late = st.chapter >= 5;
+    if (first) o.lesser = 3; else if (rnd() < 0.35) o.lesser = 1;
+    if (first && (d >= 1 || boss)) o.greater = boss ? 2 : 1;
+    else if (!first && rnd() < (boss ? 0.25 : d >= 1 ? 0.08 : 0.03)) o.greater = 1;
+    if (boss && (d >= 3 || late)) { if (first) o.ancient = 1; else if (rnd() < (d >= 3 ? 0.08 : 0.04)) o.ancient = 1; }
+    return o;
+  }
+  function bossStones(n, first) {
+    const o = { lesser: 1 + Math.floor(n / 3) };
+    if (n >= 3) { const g = first ? (n >= 5 ? 2 : 1) : rnd() < (n >= 5 ? 0.3 : 0.15) ? 1 : 0; if (g) o.greater = g; }
+    if (n >= 9) { const a = first ? 1 : rnd() < 0.1 ? 1 : 0; if (a) o.ancient = a; }
+    return o;
+  }
   // every skill can be levelled SKILL_MAX times (by feeding a duplicate of the same hero): +SKILL_STEP power per level,
   // and at the maximum level a skill with a cooldown gets 1 turn shorter
   const SKILL_MAX = 5, SKILL_STEP = 0.08;
@@ -1643,15 +1664,15 @@ const K = (function () {
   const ARENA_TIERS = [
     { name: 'Bronze', min: 0, silver: 2000, fs: {} },
     { name: 'Silver', min: 1100, silver: 4000, fs: { greater: 1 } },
-    { name: 'Gold', min: 1300, silver: 7000, fs: { greater: 2 } },
-    { name: 'Platinum', min: 1500, silver: 10000, fs: { ancient: 1 } },
-    { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 2 } },
+    { name: 'Gold', min: 1300, silver: 7000, fs: { greater: 2 }, st: { greater: 2 } },
+    { name: 'Platinum', min: 1500, silver: 10000, fs: { ancient: 1 }, st: { greater: 3 } },
+    { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 2 }, st: { ancient: 1 } },
   ];
   const arenaTier = rating => ARENA_TIERS.filter(t => rating >= t.min).pop();
   // extra weekly reward for the top 5 (rank among everyone who fought that week), on top of the tier reward
   const ARENA_RANK_REWARDS = [
-    { silver: 0, fs: { mythic: 1 } },
-    { silver: 0, fs: { ancient: 1 } },
+    { silver: 0, fs: { mythic: 1 }, st: { ancient: 2 } },
+    { silver: 0, fs: { ancient: 1 }, st: { ancient: 1 } },
     { silver: 0, fs: { greater: 3 } },
     { silver: 10000, fs: {} },
     { silver: 5000, fs: {} },
@@ -1686,7 +1707,7 @@ const K = (function () {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
+    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

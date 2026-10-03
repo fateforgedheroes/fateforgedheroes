@@ -41,7 +41,24 @@
   // Campaign difficulties (K.DIFFS): S.cleared = Easy progress (the old Normal), S.dcl[d] = highest stage cleared on difficulty d >= 1,
   // S.diff = selected difficulty. The old Brutal mode (S.hard, S.clearedHard) carries over as Normal progress.
   // S.seen: unlock messages already shown (speed 3×/5×, Fate Altar, Boss Hall); existing players don't get old ones again.
+  // ---------- Teams: up to TEAM_MAX named teams (S.teams[i] = { name, ids }); S.modeTeam says which team each game mode
+  // uses. S.team is the team in use (the one on the Team screen and in the last battle): the same array as
+  // S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
+  const TEAM_MAX = 3, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss']];
+  function linkTeams(s) {
+    if (!Array.isArray(s.teams) || !s.teams.length) s.teams = [{ name: 'Team 1', ids: Array.isArray(s.team) ? s.team : [] }];
+    s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
+    s.modeTeam = s.modeTeam || {};
+    for (const [m] of TEAM_MODES) if (!(s.modeTeam[m] < s.teams.length)) s.modeTeam[m] = 0;
+    s.team = s.teams[s.tsel].ids;
+    return s;
+  }
+  const teamIds = mode => (S.teams[S.modeTeam[mode]] || S.teams[0]).ids;
+  const inAnyTeam = id => S.teams.some(t => t.ids.includes(id));
+  // switch to the team a mode uses (before its battle)
+  function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
+    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
@@ -387,7 +404,7 @@
   }
   function statsOf(id) { return K.heroStats(id, S.roster[id], itemsOf(id)); }
   function power(st) { return Math.round(st.hp * 0.12 + st.atk * 1.8 + st.def * 1.3 + st.spd * 4 + st.crit * 5 + st.cdmg * 2 + (st.acc + st.res) * 0.8); }
-  const teamPower = () => S.team.reduce((s, id) => s + power(statsOf(id)), 0);
+  const teamPower = (ids = S.team) => ids.reduce((s, id) => s + power(statsOf(id)), 0);
   let toastT;
   function toast(msg, bad, ms) {
     const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.hidden = false;
@@ -396,7 +413,7 @@
   function hud() {
     $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy();
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
-    $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones;
+    $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones; $('#stones').parentElement.title = 'Ascension Stones: ' + K.STONES.map(s => `${stoneN(s.id)} ${s.name.replace(/ Ascension Stone$/, '')}`).join(', ') + '. Lesser for 2-4★, Greater for 5★, Ancient for 6★.';
     const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
     sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${S.sound ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${S.sound ? 'Sound on' : 'Sound off'}</span>`;
     document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0 && unlocked('altaar'));
@@ -443,7 +460,7 @@
     { go: 'arena', label: 'Arena', box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
     { go: 'profiel', label: 'Town Hall: your profile', box: [830, 20, 320, 265], plate: [864, 283, 214, 50] },
     { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
-    { go: 'champions', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
+    { go: 'team', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
     { go: 'social', label: 'Social: friends and guild', name: 'Social', icon: 'people', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
     { go: 'guild', label: 'Guild Hall: your guild and the guild boss', name: 'Guild Hall', icon: 'banner', box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
     { box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
@@ -460,7 +477,7 @@
   // (shade, spotlight and a card with Next). The last step leads back to the campaign, where the Fight button is
   // spotlighted (spotFight). S.seen.tour = done or skipped.
   const TOUR = [
-    { go: 'champions', title: 'Heroes & Gear', text: 'Your heroes. Level them up, equip and upgrade the gear you win, feed spare heroes for XP and ascend them for higher level caps. Build your team of four here.' },
+    { go: 'team', title: 'Heroes & Gear', text: 'Your heroes. Level them up, equip and upgrade the gear you win, feed spare heroes for XP and ascend them for higher level caps. Build your team of four here.' },
     { go: 'altaar', title: 'Fate Altar', text: 'Summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
     { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
@@ -514,7 +531,7 @@
   function backBar() {
     // Heroes, Team and Gear share a tab bar with an icon on each tab
     const tb = (t, label, icon) => `<button type="button" data-act="tab" data-tab="${t}" aria-pressed="${tab === t}"><span class="seg-ic">${icon}</span>${label}</button>`;
-    const sw = tab === 'champions' || tab === 'team' || tab === 'vault' ? `<div class="seg big-tabs" role="group" aria-label="Heroes, team or gear">${tb('champions', 'Heroes', svgIcon('people'))}${tb('team', 'Team', svgIcon('swords'))}${tb('vault', 'Gear', SLOT_GLYPH.borstpantser)}</div>` : '';
+    const sw = tab === 'champions' || tab === 'team' || tab === 'vault' ? `<div class="seg big-tabs" role="group" aria-label="Team, heroes or gear">${tb('team', 'Team', svgIcon('swords'))}${tb('champions', 'Heroes', svgIcon('people'))}${tb('vault', 'Gear', SLOT_GLYPH.borstpantser)}</div>` : '';
     return `<div class="backbar"><button type="button" class="btn small" data-act="tab" data-tab="home">‹ Home</button>${sw}</div>`;
   }
   function setTab(t) {
@@ -553,7 +570,7 @@
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
     // on phones the roster is a horizontal strip: keep the selected hero in view after every re-render
-    const sel = tab === 'champions' && el.querySelector('.champ-layout .card.sel');
+    const sel = tab === 'team' && el.querySelector('.champ-layout .card.sel');
     if (sel) { const strip = sel.parentElement; strip.scrollLeft += sel.getBoundingClientRect().left - strip.getBoundingClientRect().left - (strip.clientWidth - sel.offsetWidth) / 2; }
   }
 
@@ -570,7 +587,7 @@
   }
   function campaignHtml() {
     const d = S.diff || 0, D = K.DIFFS[d], hard = d > 0, cleared = clearedOn(d), next = cleared + 1;
-    const strip = S.team.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
+    const strip = teamIds('campaign').map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
     const chap = Math.min(S.chap ?? maxChap, maxChap);
     const foeImgs = st => st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('');
@@ -623,7 +640,7 @@
         <div class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
         <p class="diff-note">Drops ${rarsHtml(D.rars)} gear${d ? ` · enemies Lv ${K.diffLvl(K.STAGES[0], d)}–${K.diffLvl(K.STAGES[K.STAGES.length - 1], d)}` : ''}</p></div>
       ${cont}
-      <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div>
+      <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower(teamIds('campaign')).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
       <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared</span></div>
       ${setBanner(K.CHAPTERS[chap].set, D)}
@@ -665,9 +682,9 @@
           <p><b>${esc(B0.passiveName)}</b>: ${esc(B0.passiveDesc)}</p>
           <p>${B0.aff === 'Aether' ? 'No essence has the advantage here.' : `Strong against it: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
           <div class="setlist">${sets}</div>
-          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
+          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = teamIds('boss').some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
           <div class="lvls" role="group" aria-label="Level">${lvls}</div>
-          <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge${enCost(K.bossEnergy(sel))}</button></div>
+          <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><span class="bh-btns"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge${enCost(K.bossEnergy(sel))}</button></span></div>
         </div></div>`
       : `<div class="dg locked"><div class="dg-body"><h3 style="margin:0">Locked</h3><p class="empty-note">${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></div></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
@@ -751,31 +768,41 @@
     ];
   }
   const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'}" title="${esc(tip)}">${ok ? '✓' : '✗'} ${k}</li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
+  // Team: the four slots, and every owned hero with its details (stats, skills, gear, ascend and feed) next to the list;
+  // tap a hero to see it, "Add to team" / "Remove from team" in its details
   function teamHtml() {
+    if (!S.roster[selChamp]) selChamp = S.team[0];
     const slots = [0, 1, 2, 3].map(i => {
       const id = S.team[i];
       if (!id) return `<div class="slot"><small>Empty</small></div>`;
-      return `<button class="slot filled rar-${C[id].rar}" data-act="toggle" data-id="${id}" title="Click to remove from your team"><span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
+      return `<button class="slot filled rar-${C[id].rar} ${id === selChamp ? 'sel' : ''}" data-act="sel" data-id="${id}" title="Show ${esc(C[id].short)}"><span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
     }).join('');
-    const list = filteredIds(), owned = list.filter(id => S.roster[id]).length;
-    return `<div class="section-head"><div><h2>Team</h2><p class="lede">Choose up to four champions. Speed decides who acts first. A mix of damage, protection and healing beats four attackers, and bringing several essences means you always have a Strong Hit.</p></div><div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div></div>
+    const tabs = S.teams.map((t, i) => `<button type="button" class="tm-tab ${i === S.tsel ? 'on' : ''}" data-act="tmsel" data-i="${i}" aria-pressed="${i === S.tsel}"><b>${esc(t.name)}</b><small>${t.ids.length}/4 · ${TEAM_MODES.filter(([m]) => S.modeTeam[m] === i).map(([, l]) => l).join(', ') || 'not used'}</small></button>`).join('')
+      + (S.teams.length < TEAM_MAX ? '<button type="button" class="tm-tab add" data-act="tmnew"><b>+ Create a team</b><small>up to 3</small></button>' : '');
+    const modes = TEAM_MODES.map(([m, l]) => { const on = S.modeTeam[m] === S.tsel; return `<button type="button" class="tm-mode ${on ? 'on' : ''}" data-act="tmmode" data-m="${m}" aria-pressed="${on}" title="${on ? `${l} uses this team` : `Use this team for ${l}`}">${on ? '✓ ' : ''}${l}</button>`; }).join('');
+    const bar = `<div class="tm-bar"><div class="tm-tabs" role="group" aria-label="Your teams">${tabs}</div>
+      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}<span class="tm-acts"><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span></div></div>`;
+    const list = filteredIds('owned');
+    return `<div class="section-head"><div><h2>Team</h2><p class="lede">Choose up to four champions and make them stronger: tap a hero for its stats, skills and gear, to feed it, ascend it or add it to your team. A mix of damage, protection and healing beats four attackers.</p></div><div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div></div>
+      ${bar}
       <div class="slots">${slots}</div>
       ${rolesHtml(S.team)}
-      <div class="section-head"><h3 style="margin:0">Your champions</h3><span class="tag">${owned} of ${Object.keys(S.roster).length} heroes</span></div>
-      ${filterBar()}
-      ${list.length ? `<div class="grid-cards">${list.map(id => cardHtml(id, { act: 'toggle', inteam: S.team.includes(id) })).join('')}</div>` : '<p class="empty-note">No champions match these filters.</p>'}`;
+      <div class="champ-layout"><div>${filterBar(false)}
+        ${list.length ? `<div class="grid-cards">${list.map(id => cardHtml(id, { act: 'sel', sel: id === selChamp, inteam: S.team.includes(id) })).join('')}</div>` : '<p class="empty-note">No champions match these filters.</p>'}</div>
+        ${heroDetail(selChamp)}</div>`;
   }
-  // ----- team filters: essence, rarity and class filter the list; power, level, rarity or name sort it -----
+  // ----- hero filters: essence, rarity and class filter the list; power, level, rarity or name sort it.
+  // own: 'owned' (Team), or on the Heroes index 'all' / 'owned' / 'missing' (TF.own) -----
   const CLASSES = ['Tank', 'Warrior', 'Assassin', 'Ranger', 'Mage', 'Support', 'Controller'];
-  const TF = { aff: 'all', rar: 'all', role: 'all', sort: 'power', unowned: false };
-  function filteredIds() {
+  const TF = { aff: 'all', rar: 'all', role: 'all', sort: 'power', own: 'all' };
+  function filteredIds(own) {
     const keep = id => (TF.aff === 'all' || C[id].aff === TF.aff) && (TF.rar === 'all' || C[id].rar === +TF.rar)
-      && (TF.role === 'all' || C[id].role === TF.role || C[id].role2 === TF.role) && (TF.unowned || S.roster[id]);
+      && (TF.role === 'all' || C[id].role === TF.role || C[id].role2 === TF.role) && (own === 'all' || (own === 'owned') === !!S.roster[id]);
     const val = id => !S.roster[id] ? -1 : TF.sort === 'level' ? S.roster[id].lvl : TF.sort === 'rarity' ? C[id].rar : power(statsOf(id));
     const ids = [...new Set([...K.CHAMP_ORDER, ...K.DEV_HEROES.filter(id => S.roster[id]), ...K.CAPTURE_ORDER.filter(id => S.roster[id])])].filter(keep);
     return ids.sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || (TF.sort === 'name' ? C[a].name.localeCompare(C[b].name) : val(b) - val(a) || C[b].rar - C[a].rar));
   }
-  function filterBar() {
+  function filterBar(index) {
     const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
     const essences = ['all', ...K.ESSENCES].map(a => `<button type="button" class="ess-f ${TF.aff === a ? 'on' : ''}" data-act="tfaff" data-aff="${a}" aria-pressed="${TF.aff === a}" title="${a === 'all' ? 'All essences' : a}">${a === 'all' ? 'All' : affChip(a)}</button>`).join('');
     return `<div class="tfilter">
@@ -783,26 +810,24 @@
       <label>Rarity<select data-filter="rar">${opt('all', 'All', TF.rar)}${K.RARITIES.slice(0, 5).map((r, i) => opt(i, r, TF.rar)).join('')}</select></label>
       <label>Class<select data-filter="role">${opt('all', 'All', TF.role)}${CLASSES.map(r => opt(r, r, TF.role)).join('')}</select></label>
       <label>Sort by<select data-filter="sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select></label>
-      <label class="tf-check"><input type="checkbox" data-filter="unowned" ${TF.unowned ? 'checked' : ''}> Show unowned</label>
-      ${TF.aff !== 'all' || TF.rar !== 'all' || TF.role !== 'all' ? '<button type="button" class="linkbtn" data-act="tfreset">Clear filters</button>' : ''}
+      ${index ? `<label>Show<select data-filter="own">${[['all', 'All heroes'], ['owned', 'Unlocked'], ['missing', 'Not unlocked']].map(([v, l]) => opt(v, l, TF.own)).join('')}</select></label>` : ''}
+      ${TF.aff !== 'all' || TF.rar !== 'all' || TF.role !== 'all' || (index && TF.own !== 'all') ? '<button type="button" class="linkbtn" data-act="tfreset">Clear filters</button>' : ''}
     </div>`;
   }
 
-  // ----- champions -----
-  function champsHtml() {
-    if (!S.roster[selChamp]) selChamp = S.team[0];
-    const id = selChamp, c = C[id], r = S.roster[id];
+  // ----- hero details (Team screen): stats, skills, gear, ascend and feed of an owned hero -----
+  function heroDetail(id) {
+    const c = C[id], r = S.roster[id];
     const st = statsOf(id), base = K.heroStats(id, r, []);
     const cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap;
     const statRow = (k, pct) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k]}${pct ? '%' : ''}${st[k] > base[k] ? `<small>+${st[k] - base[k]}</small>` : ''}</dd>`;
     const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
-    const skills = c.skills.map((s, i) => { const lv = r.sk[i] || 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${pips(lv)}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${Math.round(lv * K.SKILL_STEP * 100)}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
-      + (c.passive ? `<div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>` : '');
+    const skills = skillsHtml(id, r);
     let rank = '', canRank = false;
     if (r.stars < mxs) {
-      const rc = K.rankCost(r.stars), ok = atCap && S.stones >= rc.stones && S.silver >= rc.silver;
+      const rc = K.rankCost(r.stars), ok = atCap && stoneN(rc.tier) >= rc.stones && S.silver >= rc.silver;
       canRank = ok;
-      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${ic('stone')} ${rc.stones} Ascension Stones · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
+      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${stoneIc(rc.tier)} ${rc.stones} ${stoneName(rc.tier, rc.stones)} (you have ${stoneN(rc.tier)}) · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
     }
     const items = itemsOf(id), counts = K.setCounts(items);
     const setInfo = Object.keys(counts).map(k => { const SS = K.SETS[k], on = counts[k] >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${counts[k]}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }).join('');
@@ -822,22 +847,66 @@
           <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}">Equip</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
     }
-    return `<div class="champ-layout">
-      <div><div class="section-head"><h2>Champions</h2><span class="tag">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes${K.CAPTURE_ORDER.some(x => S.roster[x]) ? ` · ${K.CAPTURE_ORDER.filter(x => S.roster[x]).length} captured` : ''}</span></div><div class="grid-cards">${sortedIds().map(x => cardHtml(x, { act: 'sel', sel: x === id, inteam: S.team.includes(x) })).join('')}</div></div>
-      <div class="detail rar-${c.rar}" data-dtab="${champTab}">
+    const inTeam = S.team.includes(id);
+    return `<div class="detail rar-${c.rar}" data-dtab="${champTab}">
         <div class="d-head"><img class="spr bigspr ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
           <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">Team ${S.team.indexOf(id) + 1}</span>` : ''}</h2>
           <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
+          <div class="d-team"><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button></div>
         </div></div>
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
         <div class="dpanel" data-p="skills">${skills}</div>
         <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><div class="gear-acts"><button class="btn small" data-act="bestgear">Equip best gear</button><button class="btn small primary" data-act="upall" ${items.some(x => x.lvl < K.MAX_GEAR_LVL) ? '' : 'disabled'}>Upgrade all</button><button class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div></div><div class="gear-grid">${gear}</div>${setInfo ? `<div class="setbonus">${setInfo}<small class="empty-note">A set bonus counts once, however many extra pieces you wear.</small></div>` : ''}${inv}</div>
         <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
-      </div></div>`;
+      </div>`;
+  }
+  // the skills of a hero (r: its roster entry, or null for a hero not unlocked yet: no skill levels)
+  function skillsHtml(id, r) {
+    const c = C[id], pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
+    return c.skills.map((s, i) => { const lv = r ? r.sk[i] || 0 : 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${r ? pips(lv) : ''}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${Math.round(lv * K.SKILL_STEP * 100)}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
+      + (c.passive ? `<div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>` : '');
+  }
+  // where a hero can be found: a campaign stage unlock (Easy) and/or the Fate Altar
+  function heroSource(id) {
+    const c = C[id], st = K.STAGES.findIndex(s => s.unlock === id);
+    if (c.captured) return 'Captured in the campaign';
+    if (c.dev) return 'Gift only';
+    return st >= 0 ? `Unlock: ${stageName(st)} (Easy), or the Fate Altar` : 'Fate Altar';
+  }
+
+  // ----- Heroes: every hero in the game, unlocked or not, with filters; tap one for its details -----
+  function champsHtml() {
+    const ids = filteredIds(TF.own), have = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
+    const cards = ids.map(id => {
+      const c = C[id], r = S.roster[id];
+      return `<button type="button" class="card rar-${c.rar} ${r ? '' : 'missing'}" data-act="hinfo" data-id="${id}" title="${esc(c.name)}${r ? '' : ' · not unlocked yet'}">${affChip(c.aff)}${r ? `<span class="lv" title="Level ${r.lvl}">${r.lvl}</span>` : `<span class="lockpin" aria-hidden="true">${LOCK_SVG}</span>`}${por(id)}<span class="nm">${esc(c.short)}</span>${r ? starStr(r.stars, K.maxStars(id)) : `<span class="rartxt mini">${K.RARITIES[c.rar]}</span>`}<span class="sub">${r ? roleStr(c) : esc(heroSource(id).replace(/^Unlock: /, '').replace(/ \(Easy\), or the Fate Altar$/, ' / Altar'))}</span></button>`;
+    }).join('');
+    return `<div class="section-head"><div><h2>Heroes</h2><p class="lede">Every hero in the game. The ones you have not unlocked yet are dimmed, with where to find them. Tap a hero for its stats and skills.</p></div><span class="tag">${have} / ${K.CHAMP_ORDER.length} unlocked${K.CAPTURE_ORDER.some(x => S.roster[x]) ? ` · ${K.CAPTURE_ORDER.filter(x => S.roster[x]).length} captured` : ''}</span></div>
+      ${filterBar(true)}
+      ${ids.length ? `<div class="grid-cards hero-index">${cards}</div>` : '<p class="empty-note">No heroes match these filters.</p>'}`;
+  }
+  // popup with a hero's details from the Heroes index; an owned hero links to the Team screen
+  function heroInfo(id) {
+    const c = C[id], r = S.roster[id], m = $('#modal');
+    const st = r ? statsOf(id) : K.heroStats(id, { lvl: 1, xp: 0, stars: K.baseStars(id), sk: c.skills.map(() => 0) }, []);
+    const row = (k, pct) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k]}${pct ? '%' : ''}</dd>`;
+    m.innerHTML = `<div class="modal-box hero-pop rar-${c.rar}" role="dialog" aria-modal="true" aria-labelledby="hp-t">
+      <div class="hp-head"><img class="spr bigspr ${r ? '' : 'missing'} ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
+        <h2 id="hp-t">${esc(c.name)}</h2>
+        <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
+        <div>${r ? `${starStr(r.stars, K.maxStars(id))} · Level <b>${r.lvl}</b> / ${K.maxLvl(r.stars, id)} · Power <b>${power(st).toLocaleString('en-US')}</b>${S.team.includes(id) ? ' <span class="team-tag">In your team</span>' : ''}` : `<span class="tag">Not unlocked</span> <span class="empty-note">${esc(heroSource(id))}</span>`}</div>
+      </div></div>
+      <h3 class="hp-h">Stats${r ? '' : ' at level 1'}</h3>
+      <dl class="stats">${row('hp')}${row('atk')}${row('def')}${row('spd')}${row('crit', 1)}${row('cdmg', 1)}${row('acc')}${row('res')}</dl>
+      <h3 class="hp-h">Skills</h3>
+      <div class="hp-skills">${skillsHtml(id, r)}</div>
+      <div class="modal-actions">${r ? `<button class="btn primary" data-act="hteam" data-id="${id}">Upgrade in Team</button>` : ''}<button class="btn" data-act="modal" data-go="close">Close</button></div></div>`;
+    m.hidden = false;
+    m.querySelector('.btn').focus({ preventScroll: true }); m.querySelector('.modal-box').scrollTop = 0;
   }
 
   // Feed: spare copies (captured enemies and summoned duplicates) and any other hero outside the team can be fed for XP;
@@ -846,8 +915,8 @@
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
     const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
     const copies = Object.keys(S.fodder).filter(f => S.fodder[f] > 0 && C[f]).sort((a, b) => (b === id) - (a === id) || C[a].rar - C[b].rar);
-    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !S.team.includes(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
-    const release = C[id].captured && !S.team.includes(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
+    const others = Object.keys(S.roster).filter(x => x !== id && C[x] && !inAnyTeam(x)).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
+    const release = C[id].captured && !inAnyTeam(id) ? `<button class="btn small" data-act="release" data-id="${id}">Turn ${esc(C[id].short)} into a spare copy</button>` : '';
     const xpBtn = (xp, attrs) => `<button class="btn small primary" ${attrs} ${atCap ? 'disabled title="Max level for this star"' : ''}>Feed · +${xp.toLocaleString('en-US')} XP</button>`;
     const copyRow = f => `<div class="fd rar-${C[f].rar} ${f === id ? 'self' : ''}">${por(f)}<div><b>${esc(C[f].name)}</b> <span class="tag">×${S.fodder[f]}</span><small class="empty-note">${K.RARITIES[C[f].rar]} · spare copy</small></div>
         <div class="row">${f === id
@@ -860,6 +929,16 @@
       ${copies.length ? `<h4 class="fd-h">Spare copies</h4><div class="fodder-list">${copies.map(copyRow).join('')}</div>` : ''}
       ${others.length ? `<h4 class="fd-h">Heroes outside your team</h4><div class="fodder-list">${others.map(heroRow).join('')}</div>` : ''}
       ${!copies.length && !others.length ? '<p class="empty-note">Nothing to feed yet. Summon at the Fate Altar or capture enemies in the campaign.</p>' : ''}</div>`;
+  }
+  // a small popup asking for a team name (Create a team / Rename); onOk(name) with the trimmed name
+  let nameOk = null;
+  function nameBox(title, value, ok, onOk) {
+    nameOk = onOk;
+    const m = $('#modal');
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="nb-t"><h2 id="nb-t">${title}</h2>
+      <form data-form="tmname" class="nb-form"><label class="empty-note" for="nb-in">Team name (up to 20 characters)</label><input id="nb-in" name="tname" maxlength="20" required value="${esc(value)}" autocomplete="off">
+      <div class="modal-actions"><button class="btn primary" type="submit">${ok}</button><button class="btn" type="button" data-act="modal" data-go="close">Cancel</button></div></form></div>`;
+    m.hidden = false; const i = m.querySelector('input'); i.focus(); i.select();
   }
   // "Are you sure?" before feeding away a Rare or better hero
   let confirmYes = null;
@@ -934,7 +1013,7 @@
     m.hidden = false; m.querySelector('.btn').focus();
   }
   function pickStarter(id) {
-    S.roster[id] = newHero(id); S.team = [id]; S.starter = id; delete S.needStarter; starterSel = null;
+    S.roster[id] = newHero(id); S.teams = [{ name: 'Team 1', ids: [id] }]; S.tsel = 0; S.modeTeam = {}; linkTeams(S); S.starter = id; delete S.needStarter; starterSel = null;
     tab = 'home'; homeScroll = null; save(); render();
     const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
     toast(`${C[id].name} joins you. Tap the Campaign to begin your adventure.`, false, 4500);
@@ -952,7 +1031,7 @@
   async function arenaCall(action, extra) {
     AR.busy = true; if (tab === 'arena' && !B) render();
     let r;
-    try { r = await cloud().fn('arena', { action, name: S.p.name, avatar: avatarId(), team: snapTeam(S.team), ...extra }); }
+    try { r = await cloud().fn('arena', { action, name: S.p.name, avatar: avatarId(), team: snapTeam(teamIds('arena')), ...extra }); }
     catch (e) { r = { error: 'No connection to the arena. Check your internet and try again.' }; }
     AR.busy = false;
     if (r.state) { AR.st = r.state; AR.loadedAt = Date.now(); }
@@ -978,7 +1057,7 @@
     if (!AR.board) loadBoard(AR.lb);
   }
   const miniTeam = team => `<div class="ar-team">${team.filter(h => C[h.id]).map(h => `<span class="ar-h rar-${C[h.id].rar}" title="${esc(C[h.id].name)} · level ${h.lvl}">${por(h.id)}<i>${h.lvl}</i></span>`).join('')}</div>`;
-  const tierReward = t => [...(t.silver ? [sigils(t.silver)] : []), ...Object.entries(t.fs).map(([k, n]) => `${shardIc(k)} ${n}× ${esc(K.SHARD[k].name)}`)].join(' · ');
+  const tierReward = t => [...(t.silver ? [sigils(t.silver)] : []), ...Object.entries(t.fs).map(([k, n]) => `${shardIc(k)} ${n}× ${esc(K.SHARD[k].name)}`), ...Object.entries(t.st || {}).map(([k, n]) => `${stoneIc(k)} ${n}× ${stoneName(k, 1)}`)].join(' · ');
   function campaignText(r) {
     const d = r.detail || {}, dcl = Array.isArray(d.dcl) ? d.dcl : [];
     for (let i = dcl.length - 1; i >= 1; i--) if (dcl[i] >= 0 && K.DIFFS[i] && K.STAGES[dcl[i]]) return `${K.DIFFS[i].name} · ${stageName(dcl[i])}`;
@@ -1011,10 +1090,10 @@
         <div class="ar-top5"><span class="tag">Top 5 of the week (extra)</span><ol>${K.ARENA_RANK_REWARDS.map((t, i) => `<li><b>#${i + 1}</b> ${tierReward(t)}</li>`).join('')}</ol><small class="empty-note">Ranked by rating among everyone who fought that week.</small></div>
         ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
     const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')}</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
-        <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="tab" data-tab="team">Edit team</button></div></div>`;
+        <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="editteam" data-mode="arena">Edit arena team</button></div></div>`;
     const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b>${o.kind === 'bot' ? ' <span class="tag">Bot</span>' : ''}<small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
     const opps = `<section class="ar-opps"><div class="section-head"><h3>Opponents</h3><button class="btn small" data-act="arrefresh" ${AR.busy ? 'disabled' : ''}>New opponents</button></div>
-      <p class="empty-note">You attack with your current team (power ${K.teamPower(snapTeam(S.team)).toLocaleString('en-US')}). A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
+      <p class="empty-note">You attack with your arena team (power ${K.teamPower(snapTeam(teamIds('arena'))).toLocaleString('en-US')}). A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
     return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="arena">${me}${def}</div>${opps}${boardHtml()}`;
   }
   function startArena(f) {
@@ -1034,14 +1113,14 @@
   async function claimArena() {
     let rows;
     try { rows = await cloud().rpc('claim_arena_rewards'); } catch (e) { toast('Could not claim the rewards. Try again.', true); return; }
-    let silver = 0; const fs = {};
-    const add = t => { silver += t.silver; for (const k in t.fs) fs[k] = (fs[k] || 0) + t.fs[k]; };
+    let silver = 0; const fs = {}, st = {};
+    const add = t => { silver += t.silver; for (const k in t.fs) fs[k] = (fs[k] || 0) + t.fs[k]; for (const k in t.st || {}) st[k] = (st[k] || 0) + t.st[k]; };
     let best = 0;
     for (const r of rows || []) { add(K.arenaTier(r.rating)); const top = K.ARENA_RANK_REWARDS[r.rank - 1]; if (top) { add(top); best = best ? Math.min(best, r.rank) : r.rank; } }
-    S.silver += silver; for (const k in fs) S.fs[k] = (S.fs[k] || 0) + fs[k];
+    S.silver += silver; for (const k in fs) S.fs[k] = (S.fs[k] || 0) + fs[k]; addStones(st);
     if (AR.st) AR.st.rewards = 0;
     save(); render(); SFX.up();
-    const got = [...(silver ? [`+${silver.toLocaleString('en-US')} Sigils`] : []), ...Object.keys(fs).map(k => `+${fs[k]} ${K.SHARD[k].name}`)].join(' · ');
+    const got = [...(silver ? [`+${silver.toLocaleString('en-US')} Sigils`] : []), ...Object.keys(fs).map(k => `+${fs[k]} ${K.SHARD[k].name}`), ...Object.keys(st).map(k => `+${st[k]} ${stoneName(k, st[k])}`)].join(' · ');
     toast(got ? `${best ? `Top 5 of the week (#${best})! ` : ''}Weekly arena rewards: ${got}.` : 'No rewards to claim.', false, 5000);
   }
   // ================= GUILDS =================
@@ -1180,7 +1259,7 @@
           <div class="gb-keys">${Array.from({ length: K.GBOSS.keys }, (_, i) => `<i class="${i < keysLeft ? 'on' : ''}"></i>`).join('')}<span>${keysLeft} / ${K.GBOSS.keys} keys left today</span></div>
         </div></section>
       <div class="gb-diffs" role="group" aria-label="Difficulty">${diffs}</div>
-      <div class="section-head" style="margin:0"><span class="empty-note">Your team: power ${K.teamPower(snapTeam(S.team)).toLocaleString('en-US')} · <button class="linkbtn" data-act="tab" data-tab="team">change</button></span>
+      <div class="section-head" style="margin:0"><span class="empty-note">Your team: power ${K.teamPower(snapTeam(teamIds('guild'))).toLocaleString('en-US')} · <button class="linkbtn" data-act="editteam" data-mode="guild">change</button></span>
         <button class="btn primary" data-act="gbfight" ${keysLeft && !GD.busy ? '' : 'disabled'}>${GD.busy ? 'Fighting…' : 'Attack · 1 key'}</button></div>`;
   }
   function gchestHtml() {
@@ -1199,7 +1278,7 @@
     if (GD.busy) return;
     GD.busy = true; render();
     let r;
-    try { r = await cloud().fn('arena', { action: 'gboss', d: GD.d, name: S.p.name, avatar: avatarId(), team: snapTeam(S.team) }); }
+    try { r = await cloud().fn('arena', { action: 'gboss', d: GD.d, name: S.p.name, avatar: avatarId(), team: snapTeam(teamIds('guild')) }); }
     catch (e) { r = { error: 'No connection to the server. Check your internet and try again.' }; }
     GD.busy = false;
     if (r.error || !r.gboss) { toast(r.error || 'The fight could not start.', true); guildLoad(); return; }
@@ -1296,19 +1375,27 @@
   // Once per UTC day, on the homebase, a popup hands out that day's reward: a 7-day cycle that grows towards day 7.
   // Missing a day does not reset anything: the next claim is simply the next day.
   // S.login = { last: UTC day number of the last claim, n: claims so far }.
-  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 10 }, { fs: { ancient: 1 } }];
+  // ---------- Ascension Stones (K.STONES): S.stones = Lesser, S.stx = { greater, ancient } ----------
+  const stoneN = t => (t === 'lesser' ? S.stones : (S.stx && S.stx[t]) || 0);
+  function addStones(o) { S.stx = S.stx || {}; for (const t in o || {}) { const n = Math.floor(+o[t] || 0); if (n <= 0) continue; if (t === 'lesser') S.stones += n; else if (t === 'greater' || t === 'ancient') S.stx[t] = (S.stx[t] || 0) + n; } }
+  const stoneName = (t, n) => K.STONES.find(s => s.id === t).name + (n === 1 ? '' : 's');
+  const stoneIc = t => ic('stone', 'ic st-' + t);
+  // a reward's stones as { lesser, greater, ancient }: the old field `stones` is Lesser, `st` holds the others
+  const rewardStones = r => Object.assign({}, +r.stones > 0 ? { lesser: +r.stones } : {}, r.st || {});
+  const stoneParts = r => Object.entries(rewardStones(r)).filter(([, n]) => n > 0);
+  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 } }];
   const loginReward = n => LOGIN_REWARDS[n % 7];
   const loginDue = () => !S.needStarter && S.seen.home && S.seen.tour && (S.login ? S.login.last : -1) < today();
   let loginShown = false;
   function rewardIcons(r) {
-    return [...(r.silver ? [`${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b>`] : []), ...(r.stones ? [`${ic('stone')}<b>${r.stones}</b>`] : []), ...Object.keys(r.fs || {}).map(k => `${shardIc(k)}<b>${r.fs[k]}</b>`)].join('');
+    return [...(r.silver ? [`${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b>`] : []), ...stoneParts(r).map(([t, n]) => `${stoneIc(t)}<b>${n}</b>`), ...Object.keys(r.fs || {}).map(k => `${shardIc(k)}<b>${r.fs[k]}</b>`)].join('');
   }
   function showLogin() {
     if (loginShown || !loginDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
     loginShown = true;
     const n = (S.login && S.login.n) || 0, start = n - (n % 7), week = Math.floor(n / 7) + 1;
     // each reward as medallion icons and a short amount line
-    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...(r.stones ? [[ic('stone'), `${r.stones} ${r.stones === 1 ? 'Stone' : 'Stones'}`]] : []), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
+    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
     const tiles = Array.from({ length: 7 }, (_, i) => {
       const k = start + i, r = loginReward(k), state = k < n ? 'done' : k === n ? 'today' : 'next', p = parts(r);
       const ribbon = state === 'today' ? '<span class="lg-rib">Today</span>' : i === 6 ? '<span class="lg-rib best">Best</span>' : '';
@@ -1405,7 +1492,7 @@
       ]),
       sec('currency', 'Currencies and summoning', [
         row(`${ic('coin')} Sigils`, `The main currency: gear upgrades, ascending, Fate Shards (${K.SHARD_PRICE.toLocaleString('en-US')} each) and name changes.`),
-        row(`${ic('stone')} Ascension Stones`, 'Needed to ascend heroes (extra stars).'),
+        row(`${ic('stone')} Ascension Stones`, 'Needed to ascend heroes (extra stars), in three kinds by the star: Lesser (to 2-4★) drop everywhere; Greater (to 5★) from boss stages, Normal and harder, and Boss Hall level 3 on; Ancient (to 6★) only from Brutal and Nightmare boss stages, Boss Hall levels 9-10 and the weekly arena rewards.'),
         ...K.FATE_SHARDS.map(f => row(`${shardIc(f.id)} ${esc(f.name)}`, esc(f.desc))),
         row('Pity', `After ${K.PITY_EPIC} summons without an Epic or better, the next one is at least Epic. Only Ancient, Mythic and Legendary Fate Shards count.`),
       ]),
@@ -1455,12 +1542,12 @@
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
-  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.stones > 0 ? [`${+r.stones} Ascension ${+r.stones === 1 ? 'Stone' : 'Stones'}`] : []), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
+  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
   function grantGift(r) {
     // a hero gift (e.g. the developer hero): joins the roster, or becomes a spare copy when already owned
     if (r.hero && C[r.hero]) { if (!S.roster[r.hero]) S.roster[r.hero] = newHero(r.hero); else S.fodder[r.hero] = (S.fodder[r.hero] || 0) + 1; }
     if (+r.silver > 0) S.silver += Math.floor(+r.silver);
-    if (+r.stones > 0) S.stones += Math.floor(+r.stones);
+    addStones(rewardStones(r));
     for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
   }
   const progressText = f => f.cleared != null && f.cleared >= 0 && K.STAGES[f.cleared] ? stageName(f.cleared) : 'Just started';
@@ -1538,7 +1625,7 @@
   function startOver() {
     if (S.needStarter) return;
     backupRaw(JSON.stringify(S), true);
-    const s = resetSave(S); delete s.wasReset;
+    const s = linkTeams(resetSave(S)); delete s.wasReset;
     S = s; homeScroll = null; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });
     toast('Your adventure starts over. Choose your starter hero!', false, 5000);
   }
@@ -1615,6 +1702,8 @@
     const none = document.querySelector('.gl-none'); if (none) none.hidden = shown > 0;
   });
   document.addEventListener('submit', e => {
+    const tn = e.target.closest('[data-form="tmname"]');
+    if (tn) { e.preventDefault(); const name = tn.tname.value.trim().slice(0, 20); if (!name) return; $('#modal').hidden = true; const f = nameOk; nameOk = null; if (f) f(name); return; }
     const gc = e.target.closest('[data-form="gcreate"]');
     if (gc) {
       e.preventDefault();
@@ -1652,7 +1741,7 @@
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
     if (act === 'tfaff') { TF.aff = a.dataset.aff; render(); }
-    else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all' }); render(); }
+    else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all', own: 'all' }); render(); }
     else if (act === 'starterpick') { starterSel = id; render(); }
     else if (act === 'starterchoose') { if (starterSel) confirmStarter(); }
     else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
@@ -1706,6 +1795,7 @@
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
     else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
+    else if (act === 'bhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
     else if (act === 'spotblock') toast('Tap the glowing Fight button to start.');
     else if (act === 'tournext') { if (tourStep < TOUR.length - 1) { tourStep++; render(); } else { S.seen.tour = true; tourStep = 0; save(); spotFight = true; setTab('campagne'); window.scrollTo({ top: 0 }); } }
     else if (act === 'tourskip') { S.seen.tour = true; tourStep = 0; save(); render(); }
@@ -1721,6 +1811,21 @@
       else toast('Your team is full. Remove someone first.', true);
       save(); render();
     } else if (act === 'sel') { selChamp = id; invSlot = null; render(); }
+    else if (act === 'tmsel') { S.tsel = +a.dataset.i; S.team = S.teams[S.tsel].ids; if (!S.team.includes(selChamp)) selChamp = S.team[0] || selChamp; invSlot = null; save(); render(); }
+    else if (act === 'tmmode') { S.modeTeam[a.dataset.m] = S.tsel; save(); render(); }
+    else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
+    else if (act === 'tmnew') nameBox('Create a team', `Team ${S.teams.length + 1}`, 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
+    else if (act === 'tmname') nameBox('Rename team', S.teams[S.tsel].name, 'Save', name => { S.teams[S.tsel].name = name; save(); render(); });
+    else if (act === 'tmdel') {
+      const i = S.tsel, t = S.teams[i];
+      confirmBox(`Delete ${esc(t.name)}?`, 'The heroes stay in your roster; only this team is removed. Game modes that used it switch to your first team.', 'Delete', () => {
+        S.teams.splice(i, 1);
+        for (const [m] of TEAM_MODES) S.modeTeam[m] = S.modeTeam[m] === i ? 0 : S.modeTeam[m] > i ? S.modeTeam[m] - 1 : S.modeTeam[m];
+        S.tsel = 0; linkTeams(S); save(); render();
+      });
+    }
+    else if (act === 'hinfo') heroInfo(id);
+    else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; invSlot = null; champTab = 'stats'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
     else if (act === 'inv') { $('#modal').hidden = true; invSlot = a.dataset.slot; champTab = 'gear'; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     else if (act === 'invclose') { invSlot = null; render(); }
@@ -1804,7 +1909,7 @@
       if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
     } else if (act === 'feedhero') {
       const x = id, h = S.roster[selChamp], to = selChamp;
-      if (!S.roster[x] || x === to || S.team.includes(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
+      if (!S.roster[x] || x === to || inAnyTeam(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
       const go = () => {
         if (!S.roster[x] || selChamp !== to) return;
         const gain = K.feedXp(x, h.lvl, S.roster[x].lvl), worn = itemsOf(x);
@@ -1825,14 +1930,14 @@
       const f = a.dataset.f; if (!(S.fodder[f] > 0)) return;
       S.fodder[f]--; S.stones += K.breakStones(f); save(); render(); toast(`${C[f].name} broken down into ${K.breakStones(f)} Ascension ${K.breakStones(f) === 1 ? 'Stone' : 'Stones'}.`);
     } else if (act === 'release') {
-      if (!C[id] || !C[id].captured || S.team.includes(id)) return;
+      if (!C[id] || !C[id].captured || inAnyTeam(id)) return;
       delete S.roster[id]; S.fodder[id] = (S.fodder[id] || 0) + 1;
       S.inv.forEach(x => { if (x.owner === id) x.owner = null; });
       selChamp = S.team[0]; save(); render(); toast(`${C[id].name} is now a spare copy. Capture another to use it as a hero again.`);
     } else if (act === 'rank') {
       const h = S.roster[selChamp], rc = K.rankCost(h.stars);
-      if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || S.stones < rc.stones || S.silver < rc.silver) return;
-      S.stones -= rc.stones; S.silver -= rc.silver; h.stars++; SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
+      if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || stoneN(rc.tier) < rc.stones || S.silver < rc.silver) return;
+      if (rc.tier === 'lesser') S.stones -= rc.stones; else S.stx[rc.tier] -= rc.stones; S.silver -= rc.silver; h.stars++; SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
     } else if (act === 'modal') modalAction(a.dataset.go);
   });
 
@@ -2587,13 +2692,15 @@
   function startCampaign(i, rep) {
     const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
     if (!spendEnergy(K.stageEnergy(st, diff))) { render(); return; }
+    useTeam('campaign');
     S.chap = st.chapter;
     runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
-  function startDungeon(id, n) {
+  function startDungeon(id, n, rep) {
     if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
+    useTeam('boss');
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
-    runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
+    runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
   const phaseUnits = (cfg, p) => cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
@@ -2777,14 +2884,14 @@
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
     const items = [], loot = [];
-    let xp, silver, stones = 0, unlock = null, first = false, captured = null;
+    let xp, silver, stones = {}, unlock = null, first = false, captured = null;
     const gotShards = [];
     if (win) {
       xp = K.winXp(lvl); silver = K.winSilver(lvl);
       if (cfg.type === 'stage') {
         const hard = cfg.hard, cleared = clearedOn(cfg.diff);
-        if (cfg.i > cleared) { first = true; if (cfg.diff) S.dcl[cfg.diff] = cfg.i; else S.cleared = cfg.i; gotShards.push(cfg.stage.n === 6 ? 'greater' : 'fate'); stones = 3; }
-        else { stones = Math.random() < 0.35 ? 1 : 0; }
+        if (cfg.i > cleared) { first = true; if (cfg.diff) S.dcl[cfg.diff] = cfg.i; else S.cleared = cfg.i; gotShards.push(cfg.stage.n === 6 ? 'greater' : 'fate'); }
+        stones = K.stageStones(cfg.stage, cfg.diff, first);
         if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), ...K.stageLoot(cfg.stage, cfg.diff), sets: [cfg.stage.set] }, S.nid++));
         if (first && cfg.stage.n === 6) delete S.chap;
         const u = K.STAGES[cfg.i].unlock;
@@ -2797,7 +2904,7 @@
         if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
       } else {
         if (cfg.n > (S.bh[cfg.id] || 0)) { S.bh[cfg.id] = cfg.n; first = true; S.bhSel[cfg.id] = Math.min(K.BOSS_LEVELS, cfg.n + 1); }
-        stones = 1 + Math.floor(cfg.n / 3);
+        stones = K.bossStones(cfg.n, first);
         if (first && cfg.n === 1) gotShards.push('fate');
         if (first && cfg.n === 5) gotShards.push('greater');
         if (first && cfg.n === 10) gotShards.push('ancient');
@@ -2808,7 +2915,7 @@
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
     } else { xp = Math.round(K.winXp(lvl) * 0.25); silver = Math.round(K.winSilver(lvl) * 0.3); }
     if (win) gotShards.push(...K.rollShards());
-    S.silver += silver; S.stones += stones;
+    S.silver += silver; addStones(stones);
     for (const t of gotShards) S.fs[t] = (S.fs[t] || 0) + 1;
     loot.forEach(it => S.inv.push(it));
     const ups = grantXp(xp);
@@ -2823,7 +2930,7 @@
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
     pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
-    if (stones) items.push(`<li ${d()}>${ic('stone')}+${stones} ${stones === 1 ? 'Ascension Stone' : 'Ascension Stones'}</li>`);
+    for (const [t, n] of Object.entries(stones)) if (n > 0) items.push(`<li ${d()}>${stoneIc(t)}+${n} ${stoneName(t, n)}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
     loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemName(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
@@ -2902,7 +3009,7 @@
       if ($('#modal').hidden) { clearInterval(repTimer); return; }
       if (document.querySelector('.unlock-pop')) return; // wait while an unlock message is open
       left--; const s = el.querySelector('span'); if (s) s.textContent = left;
-      if (left <= 0) { clearInterval(repTimer); const c = K.stageEnergy(K.STAGES[cfg.i], cfg.diff); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; startCampaign(cfg.i, { n: r.n, k: r.k + 1, won }); }
+      if (left <= 0) { clearInterval(repTimer); const c = cfg.type === 'stage' ? K.stageEnergy(K.STAGES[cfg.i], cfg.diff) : K.bossEnergy(cfg.n); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; const nx = { n: r.n, k: r.k + 1, won }; if (cfg.type === 'stage') startCampaign(cfg.i, nx); else startDungeon(cfg.id, cfg.n, nx); }
     }, 1000);
     el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; });
   }
@@ -2918,7 +3025,7 @@
     if (go.startsWith('open-')) setTab(go.slice(5));
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else startDungeon(cfg.id, cfg.n); }
-    else if (go === 'champs') setTab('champions');
+    else if (go === 'champs') setTab('team');
     else if (cfg.type === 'arena') setTab('arena');
     else if (cfg.type === 'gboss') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
     else setTab(cfg.type === 'stage' ? 'campagne' : 'kerkers');

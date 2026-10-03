@@ -10,7 +10,7 @@ const newHero = id => ({ lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id]
 // same formula as the game's team power, without gear: gear moves to whoever is in the team
 const power = (st, id) => { const s = K.heroStats(id, st.roster[id], []); return s.hp * 0.12 + s.atk * 1.8 + s.def * 1.3 + s.spd * 4 + s.crit * 5 + s.cdmg * 2 + (s.acc + s.res) * 0.8; };
 // a new player starts with only the chosen starter
-function newState(starter) { return { roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: -1, silver: 400, stones: 0, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
+function newState(starter) { return { roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: -1, silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
 // a stage is 3 phases in a row; survivors carry their HP over (with the small rest in between)
 async function fight(st, S) {
   const heroes = st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
@@ -33,7 +33,7 @@ function reward(st, S, first) {
   for (const t in st.fs) while (st.fs[t] > 0) { st.fs[t]--; const had = new Set(Object.keys(st.roster)); const r = K.summonOne(st, t); if (!had.has(r.id)) { const lv = st.roster[r.id]; delete st.roster[r.id]; addHero(st, r.id); st.roster[r.id].sk = lv.sk; } }
   // duplicates become spare copies: feed them to the same hero for skill levels
   for (const id in st.fodder || {}) while (st.fodder[id] > 0 && st.roster[id] && K.skillUp(st.roster[id], id) >= 0) st.fodder[id]--;
-  st.silver += K.winSilver(S.lvl); st.stones += first ? 3 : Math.random() < 0.35 ? 1 : 0;
+  st.silver += K.winSilver(S.lvl); { const g = K.stageStones(S, 0, first); for (const t in g) st.stones[t] += g[t]; }
   if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: S.lvl, slot: S.slot || K.pick(K.SLOTS), ...K.stageLoot(S, 0), sets: [S.set] }, st.nid++));
   // strongest four heroes for the next stage form the team (essence matters: avoid heroes the enemies are strong against),
   // then gear, ascension and upgrades
@@ -47,7 +47,7 @@ function reward(st, S, first) {
   for (const it of st.inv) if (it.owner && !st.team.includes(it.owner)) it.owner = null;
   for (const id of st.team) for (const slot of K.SLOTS) { const cur = st.inv.find(i => i.owner === id && i.slot === slot); const best = st.inv.filter(i => i.slot === slot && (!i.owner || i.owner === id)).sort((a, b) => score(b) - score(a))[0]; if (best && best !== cur) { if (cur) cur.owner = null; best.owner = id; } }
   // ascend capped heroes: the team first, then the best heroes on the bench
-  for (const id of [...st.team, ...byPow.slice(4, 10)]) { const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones >= c.stones && st.silver >= c.silver) { st.stones -= c.stones; st.silver -= c.silver; h.stars++; } }
+  for (const id of [...st.team, ...byPow.slice(4, 10)]) { const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones[c.tier] >= c.stones && st.silver >= c.silver) { st.stones[c.tier] -= c.stones; st.silver -= c.silver; h.stars++; } }
   // gear upgrades, keeping enough silver aside for the next ascension
   const keep = 2000 + Math.max(...st.team.map(id => st.roster[id].stars < K.maxStars(id) ? K.rankCost(st.roster[id].stars).silver : 0));
   let sp = true; while (sp) { sp = false; for (const it of st.inv.filter(i => i.owner)) { const c = K.upgradeCost(it); if (it.lvl < K.MAX_GEAR_LVL && st.silver >= c + keep) { st.silver -= c; if (Math.random() < K.upgradeChance(it)) { it.lvl++; K.upgradeMilestone(it); } sp = true; } } }
