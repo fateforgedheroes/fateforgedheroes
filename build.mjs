@@ -47,7 +47,7 @@ const out = new URL('./dist/', import.meta.url);
 mkdirSync(out, { recursive: true });
 writeFileSync(new URL('index.html', out), head + shell + '\n</body>\n</html>\n');
 // Static extras (optional)
-for (const f of ['privacy.html', 'favicon.png']) {
+for (const f of ['privacy.html', 'favicon.png', 'email-logo.png']) {
   const dir = DIRS.find(d => existsSync(new URL(d + f, import.meta.url)));
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);

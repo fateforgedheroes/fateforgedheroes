@@ -1,0 +1,49 @@
+<!-- Fate Forged Heroes: "Confirm signup" email.
+     Supabase → Authentication → Email Templates → Confirm signup:
+       Subject: Confirm your Fate Forged Heroes account
+       Message body: paste everything below this comment.
+     The logo is served by the game itself (dist/email-logo.png). -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Confirm your Fate Forged Heroes account</title>
+</head>
+<body style="margin:0;padding:0;background:#110e13;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#110e13;">
+  <tr><td align="center" style="padding:32px 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+      <!-- logo -->
+      <tr><td align="center" style="padding:0 0 20px;">
+        <a href="https://www.fateforgedheroes.com" style="text-decoration:none;"><img src="https://www.fateforgedheroes.com/email-logo.png" width="300" alt="Fate Forged Heroes" style="display:block;width:300px;max-width:80%;height:auto;border:0;"></a>
+      </td></tr>
+      <!-- card -->
+      <tr><td style="background:#1f1824;border:1px solid #6e5528;border-radius:10px;padding:32px 28px;">
+        <p style="margin:0 0 6px;font-family:Georgia,'Times New Roman',serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#d9b45a;">Welcome, hero</p>
+        <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.2;color:#f6ead0;font-weight:bold;">Confirm your account</h1>
+        <p style="margin:0 0 24px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.55;color:#d8cebf;">
+          Thanks for creating an account for <b style="color:#f6ead0;">Fate Forged Heroes</b>. Confirm your email address and your heroes, gear and progress are saved to your account, so you can play on any device and join the Arena and a guild.
+        </p>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center"><tr>
+          <td align="center" bgcolor="#d9a944" style="border-radius:8px;background:#d9a944;background-image:linear-gradient(180deg,#fbe4a0,#e2b452 45%,#b78130);">
+            <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 32px;font-family:Georgia,'Times New Roman',serif;font-size:17px;font-weight:bold;letter-spacing:1px;color:#2b1905;text-decoration:none;border-radius:8px;">Confirm my account</a>
+          </td>
+        </tr></table>
+        <p style="margin:24px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:13px;line-height:1.5;color:#a69ca8;">
+          Button not working? Copy this link into your browser:<br>
+          <a href="{{ .ConfirmationURL }}" style="color:#d9b45a;word-break:break-all;">{{ .ConfirmationURL }}</a>
+        </p>
+      </td></tr>
+      <!-- footer -->
+      <tr><td align="center" style="padding:20px 8px 0;font-family:Georgia,'Times New Roman',serif;font-size:12px;line-height:1.5;color:#7d7380;">
+        You get this email because someone signed up for Fate Forged Heroes with {{ .Email }}.<br>
+        Not you? Then you can ignore this email; no account is created without confirming.<br>
+        <a href="https://www.fateforgedheroes.com" style="color:#a69ca8;">www.fateforgedheroes.com</a>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>
