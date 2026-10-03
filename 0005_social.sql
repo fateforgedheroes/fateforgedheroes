@@ -120,7 +120,7 @@ grant execute on function public.friend_list() to authenticated;
 --     ('Welcome gift', 'Thanks for playing Fate Forged Heroes!', '{"silver": 5000, "fs": {"greater": 2}, "stones": 5}');
 --   to one player:  ... (user_id, title, body, rewards) values ('<user id>', 'Sorry!', 'For the bug yesterday.', '{"silver": 2000}');
 --   find a player:  select id, email from auth.users where email = 'player@example.com';
--- rewards keys the game understands: silver (Sigils), stones (Ascension Stones),
+-- rewards keys the game understands: silver (Sigils), energy (may go above the cap), stones (Ascension Stones),
 -- fs: { fate, greater, ancient, mythic, legendary } (Fate Shards), hero: a hero id (gift-only heroes: "dio", "malvek";
 -- a player who already has the hero gets a spare copy). One player by friend code:
 --   insert into public.mail (user_id, title, body, rewards) select id, 'A gift: Dio', '', '{"hero": "dio"}' from auth.users where id::text ilike '6c7ea9be%';

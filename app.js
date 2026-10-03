@@ -20,6 +20,10 @@
   const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
   const roleStr = c => c.role + (c.role2 ? ' / ' + c.role2 : '');
   const AREA_OF = { Ember: 4, Verdant: 3, Frost: 1, Storm: 2, Radiant: 0, Umbral: 2, Aether: 1 };
+  // the painted background (CHAPTER_BG index) of each campaign chapter: every stage of a chapter shares it; the moonlit
+  // town of Chapter I returns for the last chapter
+  const CHAPTER_BG_OF = [0, 6, 3, 2, 5, 8, 1, 7, 4, 0];
+  const chapterBg = c => 'c' + CHAPTER_BG_OF[Math.max(0, Math.min(CHAPTER_BG_OF.length - 1, c))];
 
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
@@ -74,7 +78,7 @@
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
-    if (!s.starter && !s.needStarter) s.starter = K.STARTERS.find(id => s.roster[id]) || null;
+    if (!s.starter && !s.needStarter) s.starter = ['thalnir', 'krothar', 'zephara', 'ithyra', 'drakulen', ...K.STARTERS].find(id => s.roster[id]) || null;
     // the homebase tour (TOUR) is for new players; anyone past the first stage has found their way already
     if (s.seen && s.seen.tour == null && s.cleared > 0) s.seen.tour = true;
     if (!s.dcl) { s.dcl = [null, s.clearedHard ?? -1, -1, -1, -1]; s.diff = 0; delete s.hard; delete s.clearedHard; }
@@ -615,7 +619,7 @@
     const firstRewards = (st, i) => {
       if (i <= cleared) return [];
       const rw = [];
-      if (!hard && st.unlock && !S.roster[st.unlock]) rw.push(`<span class="rw">${por(st.unlock)}${esc(C[st.unlock].short)}</span>`);
+      { const ul = K.stageUnlock(st, S.starter); if (!hard && ul && !S.roster[ul]) rw.push(`<span class="rw">${por(ul)}${esc(C[ul].short)}</span>`); }
       rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
       return rw;
     };
@@ -764,7 +768,7 @@
   function cardHtml(id, opts) {
     const c = C[id], owned = !!S.roster[id];
     if (!owned) {
-      const st = K.STAGES.findIndex(s => s.unlock === id);
+      const st = K.STAGES.findIndex(s => K.stageUnlock(s, S.starter) === id);
       const where = st >= 0 ? `Ch ${ROMAN[K.STAGES[st].chapter]}-${K.STAGES[st].n + 1}` : '';
       return `<div class="card lockedc rar-${c.rar}" title="${st >= 0 ? 'Earn in ' + stageName(st) + ' or at the Fate Altar' : 'Fate Altar only'}">${por(id)}<span class="nm">???</span><span class="sub">${where ? where + ' / Fate Altar' : 'Fate Altar'}</span></div>`;
     }
@@ -895,7 +899,7 @@
   }
   // where a hero can be found: a campaign stage unlock (Easy) and/or the Fate Altar
   function heroSource(id) {
-    const c = C[id], st = K.STAGES.findIndex(s => s.unlock === id);
+    const c = C[id], st = K.STAGES.findIndex(s => K.stageUnlock(s, S.starter) === id);
     if (c.captured) return 'Captured in the campaign';
     if (c.dev) return 'Gift only';
     return st >= 0 ? `Unlock: ${stageName(st)} (Easy), or the Fate Altar` : 'Fate Altar';
@@ -997,12 +1001,16 @@
 
   // ----- starter choice (new players) -----
   const STARTER_PITCH = {
-    krothar: 'The balanced bruiser. Hits harder when wounded and cleaves the whole enemy line with bleeding wounds.',
-    ithyra: 'The frost mage. Freezes and slows enemies, deals 30% more damage to them, and hits the whole enemy team with Blizzard.',
-    zephara: 'The glass cannon. The fastest starter, with big single-target damage and stuns, but less HP and Defense.',
-    thalnir: 'The unbreakable. Regenerates every turn, taunts the enemy team and poisons everything it touches.',
+    bromir: 'The bear tank. Thick fur takes less damage, a growl taunts the whole enemy team, and his mauling strike slows a foe down.',
+    grythor: 'The scaled brawler. Tough scales and heavy blows: a simple, sturdy fighter who keeps hitting.',
+    skavren: 'The rat assassin. Fast and sneaky, he finishes off wounded enemies and hits harder the lower they are.',
+    draelyn: 'The healer. A shield-maiden who keeps the team alive, cleanses debuffs and stands firm when hurt.',
+    vaessa: 'The blood witch. Lowers enemy Defense, steals their turn meter and supports the team; very hard to kill.',
+    brukkar: 'The raging brute. Part warrior, part tank: the more he bleeds, the harder he hits.',
+    karnok: 'The dwarf warrior. Hammer blows that stun, a wall of Defense for the team and a thunderclap on every enemy.',
+    vorlund: 'The golden knight. A tank who taunts, shields the whole team and strikes back when hit.',
   };
-  // the four starters stand side by side in a dungeon hall; tapping one shows its details below, "Choose" asks to confirm
+  // the eight starters stand in two rows in a dungeon hall; tapping one shows its details below, "Choose" asks to confirm
   const STARTER_BG = 4; // chapter background: the brick-and-lava dungeon hall
   let starterSel = null;
   function starterHtml() {
@@ -1010,7 +1018,7 @@
     const top = { hp: 0, atk: 0, def: 0, spd: 0 };
     for (const id of K.STARTERS) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
     const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
-    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig ${id === starterSel ? 'sel' : ''}" style="left:${12.5 + i * 25}%" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
+    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig ${i < 4 ? 'back' : 'front'} ${id === starterSel ? 'sel' : ''}" style="left:${i < 4 ? 12.5 + i * 25 : 12.5 + (i - 4) * 25}%" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
         <img class="spr" src="${SPR.url(id, 2)}" alt=""><span class="st-ring"></span><span class="st-nm">${esc(C[id].short)}</span></button>`).join('');
     const c = starterSel && C[starterSel];
     const info = c ? `<div class="st-card rar-${c.rar}">
@@ -1595,11 +1603,12 @@
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
-  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
+  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.energy > 0 ? [`${(+r.energy).toLocaleString("en-US")} Energy`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
   function grantGift(r) {
     // a hero gift (e.g. the developer hero): joins the roster, or becomes a spare copy when already owned
     if (r.hero && C[r.hero]) { if (!S.roster[r.hero]) S.roster[r.hero] = newHero(r.hero); else S.fodder[r.hero] = (S.fodder[r.hero] || 0) + 1; }
     if (+r.silver > 0) S.silver += Math.floor(+r.silver);
+    if (+r.energy > 0) { energyTick(); S.energy += Math.floor(+r.energy); paintEnergy(); } // may go above the cap; regen waits until it drops below
     addStones(rewardStones(r));
     for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
   }
@@ -2435,7 +2444,7 @@
     R.shake *= 0.86;
     g.setTransform(1, 0, 0, 1, -VIEW.x, 0);
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-    g.drawImage(SPR.bg(R.area), sh, shy);
+    g.drawImage(SPR.bg(R.bg || R.area), sh, shy);
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
     g.fillStyle = ashCol;
     for (const a of R.ash) { a.x += a.vx; a.y += R.area === 4 ? -a.vy : a.vy; if (a.y > H) a.y = -2; if (a.y < -2) a.y = H; if (a.x < 0) a.x = W; g.fillRect(Math.round(a.x), Math.round(a.y), 1, 1); }
@@ -2783,13 +2792,13 @@
     if (!spendEnergy(K.stageEnergy(st, diff))) { render(); return; }
     useTeam('campaign');
     S.chap = st.chapter;
-    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
+    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, bg: chapterBg(st.chapter), rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n, rep) {
     if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
     useTeam('boss');
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
-    runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
+    runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], bg: chapterBg(Math.floor(bi * K.CHAPTERS.length / K.BOSS_ORDER.length)), title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
   const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor, cfg.ids.length) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
@@ -2822,7 +2831,7 @@
     $('#toast').hidden = true;
     $('#b-title').textContent = cfg.title; $('#b-round').textContent = (nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
-    R.area = cfg.area;
+    R.area = cfg.area; R.bg = cfg.bg;
     const narrow = window.innerWidth < 640;
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
     cvs.width = VIEW.w; g.imageSmoothingEnabled = false;
@@ -3089,7 +3098,7 @@
         stones = K.stageStones(cfg.stage, cfg.diff, first);
         if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), ...K.stageLoot(cfg.stage, cfg.diff), sets: [cfg.stage.set] }, S.nid++));
         if (first && cfg.stage.n === 6) delete S.chap;
-        const u = K.STAGES[cfg.i].unlock;
+        const u = K.stageUnlock(K.STAGES[cfg.i], S.starter);
         const catchable = [...new Set(cfg.stage.phases.flat())].filter(f => !K.BOSSES[f]);
         if (catchable.length && Math.random() < K.CAPTURE_CHANCE) {
           const cid = K.pick(catchable);

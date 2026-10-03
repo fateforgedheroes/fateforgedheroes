@@ -21,7 +21,7 @@ const newHero = id => ({ lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id]
 const power = (st, id) => { const s = K.heroStats(id, st.roster[id], []); return s.hp * 0.12 + s.atk * 1.8 + s.def * 1.3 + s.spd * 4 + s.crit * 5 + s.cdmg * 2 + (s.acc + s.res) * 0.8; };
 // player level, same rules as app.js
 const pxNeed = l => 60 * l + 12 * l * l, playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
-function newState(starter) { return { roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: [-1, -1, -1, -1, -1], silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, plvl: 1, pxp: 0, pc: {} }; }
+function newState(starter) { return { starter, roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: [-1, -1, -1, -1, -1], silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, plvl: 1, pxp: 0, pc: {} }; }
 const heroUnits = st => st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
 async function phases(st, groups) {
   const heroes = heroUnits(st);
@@ -38,7 +38,7 @@ function reward(st, S, first, d) {
   const lvl = K.diffLvl(S, d);
   for (const id in st.roster) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); if (h.lvl >= cap || K.CHAMPS[id].captured) continue; h.xp += K.winXp(lvl) * (st.team.includes(id) ? 1 : 0.5); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
   playerXp(st, playerWinXp(lvl, first));
-  if (d === 0 && first && S.unlock && !st.roster[S.unlock]) { addHero(st, S.unlock); if (st.team.length < 4) st.team.push(S.unlock); }
+  { const u = K.stageUnlock(S, st.starter); if (d === 0 && first && u && !st.roster[u]) { addHero(st, u); if (st.team.length < 4) st.team.push(u); } }
   if (first) st.fs[S.n === 6 ? 'greater' : 'fate']++;
   for (const t of K.rollShards()) st.fs[t]++;
   for (const t in st.fs) while (st.fs[t] > 0) { st.fs[t]--; const had = new Set(Object.keys(st.roster)); const r = K.summonOne(st, t); if (!had.has(r.id)) { const lv = st.roster[r.id]; delete st.roster[r.id]; addHero(st, r.id); st.roster[r.id].sk = lv.sk; } }

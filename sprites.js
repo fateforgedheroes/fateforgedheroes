@@ -235,13 +235,25 @@ const SPR = (function () {
     const a = Math.min(2, Math.max(0, (CRISP - g0) / Math.max(1, g1 - g0)));
     im.data.set(unsharp(im.data, w, h, a)); g.putImageData(im, 0, 0);
   }
+  // chapter backgrounds (CHAPTER_BG): each painted panorama cover-cropped into a 480x270 canvas, centred, once at load
+  const chBg = [];
+  function loadChapterBgs() {
+    if (typeof CHAPTER_BG === 'undefined') return Promise.resolve();
+    return Promise.all(CHAPTER_BG.map((src, k) => new Promise(res => {
+      const img = new Image();
+      img.onload = () => { const c = canvas(480, 270), g = c.getContext('2d'), s = Math.max(480 / img.width, 270 / img.height), w = img.width * s, h = img.height * s;
+        g.imageSmoothingQuality = 'high'; g.drawImage(img, (480 - w) / 2, 270 - h, w, h); chBg[k] = c; res(); };
+      img.onerror = () => res();
+      img.src = src;
+    })));
+  }
   function preload() {
-    return Promise.all(Object.keys(ART).map(id => new Promise(res => {
+    return Promise.all([loadChapterBgs(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
       img.onload = () => { const c = canvas(img.width, img.height); c.getContext('2d').drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
       img.onerror = () => res();
       img.src = ART[id].body;
-    })));
+    }))]);
   }
   function base(id) {
     const k = id + ':base'; if (cache[k]) return cache[k];
@@ -381,7 +393,8 @@ const SPR = (function () {
     }, true);
   }
   const bgs = {};
-  function bg(area) { return typeof SPR_BG !== 'undefined' ? SPR_BG.bg(area) : (bgs[area] || (bgs[area] = up2(background(area)))); }
+  // a number is one of the drawn areas; 'c3' is chapter background 3 (CHAPTER_BG)
+  function bg(area) { if (typeof area === 'string' && area[0] === 'c' && chBg[+area.slice(1)]) return chBg[+area.slice(1)]; if (typeof area === 'string') area = 0; return typeof SPR_BG !== 'undefined' ? SPR_BG.bg(area) : (bgs[area] || (bgs[area] = up2(background(area)))); }
 
   function icon(W, H, fn) { const c = canvas(W, H), g = c.getContext('2d'); fn((x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); }); return c; }
   const ICONS = {

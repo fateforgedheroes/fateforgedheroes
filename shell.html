@@ -1888,6 +1888,11 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .tw-go { grid-column: 1 / -1; justify-self: stretch; min-height: 46px; font-size: 1rem; }
 @media (max-width: 760px) { .tw-next { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 12px; } .tw-side { grid-column: 1 / -1; } .tw-mss { flex-direction: row; overflow-x: auto; } .tw-ms { flex: none; } .tw-fln { font-size: 34px; } .tw-foe { width: 66px; } .tw-foe img { width: 56px; height: 56px; } }
 @media (max-width: 760px) { .tw-tabs { display: flex; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 2px 12px; } .tw-tabs::-webkit-scrollbar { display: none; } .tw-tab { flex: none; } #screen:has(.tw-tabs) .section-head .lede { display: none; } }
+/* eight starters: a back row and a front row */
+.st-fig.back { top: 3%; bottom: 52%; width: 22%; z-index: 1; }
+.st-fig.front { top: 46%; bottom: 3%; width: 22%; z-index: 2; }
+.st-fig .st-nm { font-size: clamp(.62rem, 1.4vw, .9rem); margin-top: 1px; }
+@media (max-width: 760px) { .st-fig.back, .st-fig.front { width: 25%; } .st-fig.back { top: 4%; bottom: 52%; } .st-fig.front { top: 50%; bottom: 2%; } }
 </style>
 
 <div id="app">

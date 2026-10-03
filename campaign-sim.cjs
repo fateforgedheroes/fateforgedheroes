@@ -10,7 +10,7 @@ const newHero = id => ({ lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id]
 // same formula as the game's team power, without gear: gear moves to whoever is in the team
 const power = (st, id) => { const s = K.heroStats(id, st.roster[id], []); return s.hp * 0.12 + s.atk * 1.8 + s.def * 1.3 + s.spd * 4 + s.crit * 5 + s.cdmg * 2 + (s.acc + s.res) * 0.8; };
 // a new player starts with only the chosen starter
-function newState(starter) { return { roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: -1, silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
+function newState(starter) { return { starter, roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: -1, silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
 // a stage is 3 phases in a row; survivors carry their HP over (with the small rest in between)
 async function fight(st, S) {
   const heroes = st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
@@ -26,7 +26,7 @@ function reward(st, S, first) {
   // the team gets full XP; heroes on the bench get half (a player feeds fodder and rotates heroes in)
   for (const id in st.roster) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); if (h.lvl >= cap || K.CHAMPS[id].captured) continue; h.xp += K.winXp(S.lvl) * (st.team.includes(id) ? 1 : 0.5); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
   // first clears can unlock a hero, who joins the team while it has fewer than 4 (same rule as the game)
-  if (first && S.unlock && !st.roster[S.unlock]) { addHero(st, S.unlock); if (st.team.length < 4) st.team.push(S.unlock); }
+  { const u = K.stageUnlock(S, st.starter); if (first && u && !st.roster[u]) { addHero(st, u); if (st.team.length < 4) st.team.push(u); } }
   // Fate Shards: guaranteed on a first clear, random drops on every win; summon and bring new heroes up
   if (first) st.fs[S.n === 6 ? 'greater' : 'fate']++;
   for (const t of K.rollShards()) st.fs[t]++;

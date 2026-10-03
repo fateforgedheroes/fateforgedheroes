@@ -869,7 +869,12 @@ const K = (function () {
     }
   }
   // a new player picks one starter; the rest of the team is earned in Chapter I (see CHAPTERS[0].unlock)
-  const STARTERS = ['thalnir', 'krothar', 'zephara', 'ithyra']; // tank, warrior, assassin, mage
+  // the eight Uncommons a new player picks from (every one of them is also a campaign unlock, see CHAPTERS)
+  const STARTERS = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar', 'karnok', 'vorlund'];
+  // when a campaign unlock is the player's own starter, that stage gives this Rare of a similar role instead, so the
+  // team still grows the same way whichever starter was picked
+  const STARTER_SUB = { bromir: 'ravok', grythor: 'korran', skavren: 'orvyn', draelyn: 'selenia', vaessa: 'mirella', brukkar: 'keldrax', karnok: 'gorvann', vorlund: 'theryn' };
+  const stageUnlock = (st, starter) => (st.unlock && st.unlock === starter && STARTER_SUB[starter]) || st.unlock || null;
   // legacy starting roster, only used to migrate very old saves
   const START_ROSTER = ['bromir', 'grythor', 'skavren', 'draelyn', 'vaessa', 'brukkar'];
   const START_TEAM = ['bromir', 'grythor', 'skavren', 'draelyn'];
@@ -1768,7 +1773,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,

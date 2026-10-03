@@ -16,7 +16,7 @@ const find = name => {
 };
 const read = name => { const p = find(name); return p ? readFileSync(p, 'utf8') : ''; };
 
-const assets = ['heroes', 'enemies', 'bosses', 'portraits', 'shards', 'logo', 'stone', 'sigil', 'home', 'gear', 'devhero'].map(n => read(n + '.js')).join('\n');
+const assets = ['heroes', 'enemies', 'bosses', 'portraits', 'shards', 'logo', 'stone', 'sigil', 'home', 'gear', 'devhero', 'chbg'].map(n => read(n + '.js')).join('\n');
 const shellSrc = read('shell.html'), engine = read('engine.js'), bgs = read('bgs.js'), sprites = read('sprites.js'), cloud = read('cloud.js'), app = read('app.js');
 if (missing.length) {
   console.error(`\nMissing files: ${missing.join(', ')}\nUpload them to the GitHub repository (in src/ or in the root).\n`);
