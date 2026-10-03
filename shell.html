@@ -775,9 +775,18 @@ button, a, input { touch-action: manipulation; }
   background: linear-gradient(180deg, #1c171f, #0d0a10); border: .18cqw solid #b08a3e; border-radius: .5cqw; box-shadow: 0 0 0 .12cqw #000, 0 .3cqw .8cqw rgba(0,0,0,.6);
   color: #cfc4d6; font-family: var(--font-display); font-weight: 700; font-size: 1.15cqw; letter-spacing: .05em; text-transform: uppercase; white-space: nowrap; }
 .hz-plate svg { width: 1.2cqw; height: 1.2cqw; fill: none; stroke: var(--gold); stroke-width: 1.6; flex: none; }
-.hz-plate.named { color: #f3e9d8; gap: .7cqw; justify-content: flex-start; padding-left: .3cqw; font-size: 1.25cqw; }
-.hz-plate.named i { width: 2.6cqw; height: 2.6cqw; flex: none; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle, #2a2130, #120e14); border: .15cqw solid #b08a3e; box-shadow: 0 0 0 .1cqw #000; }
-.hz-plate.named i svg { width: 1.5cqw; height: 1.5cqw; }
+.hz-plate.named { background: none; border: 0; box-shadow: none; border-radius: 0; padding: 0; gap: 0; justify-content: flex-start; filter: drop-shadow(0 .25cqw .5cqw rgba(0, 0, 0, .65)); }
+/* the medallion: black disc, double gold ring, a filled gold icon (like the painted Town Hall plate) */
+.hz-plate.named i { position: relative; z-index: 1; flex: none; width: 3.6cqw; height: 3.6cqw; margin-right: -1cqw; border-radius: 50%; display: grid; place-items: center; color: #e4ba68;
+  background: radial-gradient(circle at 50% 38%, #1d1619, #050405 72%); border: .2cqw solid #d6b064; box-shadow: 0 0 0 .14cqw #23180b, 0 0 0 .3cqw #a8833d; }
+.hz-plate.named i svg { width: 1.95cqw; height: 1.95cqw; fill: currentColor; stroke: none; }
+/* the bar: gold edge, black face, pointed right end with a small diamond near the tip */
+.hz-plate.named b { position: relative; isolation: isolate; flex: 1; min-width: 0; height: 2.55cqw; display: flex; align-items: center; justify-content: center; padding: 0 2.2cqw 0 1.3cqw;
+  font-family: var(--font-display); font-weight: 400; font-size: 1.3cqw; line-height: 1; letter-spacing: .02em; text-transform: uppercase; white-space: nowrap; color: #f1e6cf;
+  background: #c9a45a; clip-path: polygon(0 0, calc(100% - 1.25cqw) 0, 100% 50%, calc(100% - 1.25cqw) 100%, 0 100%); }
+.hz-plate.named b::before { content: ''; position: absolute; z-index: -1; inset: .13cqw; background: linear-gradient(180deg, #17121a, #070608); clip-path: polygon(0 0, calc(100% - 1.15cqw) 0, 100% 50%, calc(100% - 1.15cqw) 100%, 0 100%); }
+.hz-plate.named b::after { content: ''; position: absolute; right: 1.55cqw; top: 50%; width: .42cqw; height: .42cqw; border: .12cqw solid #c9a45a; transform: translateY(-50%) rotate(45deg); }
+.hz-plate.named.soon b { color: #b9adc0; font-size: 1.15cqw; }
 .hz-badge { position: absolute; pointer-events: none; transform: translateX(-50%); }
 .hz-badge.lock { display: flex; align-items: center; background: #120e14; color: var(--gold); border: .15cqw solid var(--gold-dim); padding: .15cqw .5cqw; font-family: var(--font-tag); font-weight: 700; font-size: .95cqw; letter-spacing: .05em; box-shadow: 0 0 0 .1cqw #000; }
 .hz-badge.dot { width: 1.1cqw; height: 1.1cqw; background: var(--ember); box-shadow: 0 0 0 .15cqw #000, 0 0 .8cqw var(--ember); }

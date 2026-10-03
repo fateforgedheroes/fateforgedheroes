@@ -461,11 +461,11 @@
     { go: 'arena', label: 'Arena', box: [500, 110, 320, 175], plate: [560, 283, 176, 50] },
     { go: 'profiel', label: 'Town Hall: your profile', box: [830, 20, 320, 265], plate: [864, 283, 214, 50] },
     { go: 'altaar', label: 'Fate Altar', box: [1190, 30, 346, 275], plate: [1244, 301, 238, 50] },
-    { go: 'team', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 250, 50] },
+    { go: 'team', label: 'Heroes & Gear', name: 'Heroes & Gear', icon: 'helm', box: [90, 320, 380, 215], plate: [170, 533, 282, 50] },
     { go: 'social', label: 'Social: friends and guild', name: 'Social', icon: 'people', box: [900, 330, 340, 195], plate: [950, 524, 250, 46] },
-    { go: 'guild', label: 'Guild Hall: your guild and the guild boss', name: 'Guild Hall', icon: 'banner', box: [1250, 400, 286, 147], plate: [1308, 545, 200, 50] },
+    { go: 'guild', label: 'Guild Hall: your guild and the guild boss', name: 'Guild Hall', icon: 'banner', box: [1250, 400, 286, 147], plate: [1300, 545, 232, 50] },
     { go: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
-    { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
+    { box: [380, 600, 320, 211], plate: [453, 809, 246, 50] },
     { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
     { go: 'tower', label: 'Tower of Essence', name: 'Tower of Essence', icon: 'tower', box: [1200, 660, 336, 204], plate: [1222, 862, 298, 50] },
   ];
@@ -510,7 +510,7 @@
     const tour = tourOn() ? TOUR[tourStep] : null, tc = tour && zoneCentre(tourZone(tour));
     // renamed buildings get a name plate over the name painted in the image (the forge is Heroes & Gear, the campfire Social)
     const PLATE_IC = { tower: '<path d="M5 15V6h6v9z"/><path d="M4 6V3h1.6v1.4h1.6V3h1.6v1.4h1.6V3H12v3z"/>', banner: '<path d="M3 1.5h10V12l-5-3-5 3z"/><path d="M2 1.5h12" stroke="currentColor" stroke-width="1.4"/>', helm: '<path d="M3 9.5a5 5 0 0 1 10 0V14h-2.6v-3.4H5.6V14H3z"/>', people: '<circle cx="5.5" cy="5.5" r="2.2"/><circle cx="11" cy="6" r="1.8"/><path d="M1.5 14c0-2.6 1.8-4.3 4-4.3s4 1.7 4 4.3M9.8 13.5c.2-2 1.1-3.3 2.9-3.3 1.4 0 2.3 1.2 2.3 3.3"/>' };
-    const namePlate = z => z.name ? `<span class="hz-plate named" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true">${PLATE_IC[z.icon] || ''}</svg></i>${esc(z.name)}</span>` : '';
+    const namePlate = z => z.name ? `<span class="hz-plate named" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true">${PLATE_IC[z.icon] || ''}</svg></i><b>${esc(z.name)}</b></span>` : '';
     const zones = HOME_ZONES.map(z => {
       // one button covers the building and its plate
       const [bx, by, bw, bh] = z.box, [px, py, pw, ph] = z.plate, x0 = Math.min(bx, px), y0 = Math.min(by, py);
@@ -518,7 +518,7 @@
       if (tut && z.go && z.go !== 'campagne') return `<button type="button" class="hz" style="${at(area)}" data-act="tutlock" aria-label="${z.label} (opens after your first battle)"></button>${namePlate(z)}`;
       if (tut && z.go === 'campagne') return `<button type="button" class="hz tut-go" style="${at(area)}" data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"></button>`;
       if (!z.go) return `<button type="button" class="hz soon" style="${at(area)}" data-act="soon" aria-label="Coming soon"></button>
-        <span class="hz-plate" style="${at(z.plate)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
+        <span class="hz-plate named soon" style="${at(z.plate)}"><i><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 7h9v7.5h-9z"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></i><b>Coming soon</b></span>`;
       const locked = !unlocked(z.go);
       const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 6, HOME_W)};top:${pc(py - 14, HOME_H)}">${needTag(z.go)}</span>`
         : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 10, HOME_W)};top:${pc(py - 8, HOME_H)}"></span>`
