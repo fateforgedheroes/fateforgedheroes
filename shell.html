@@ -1629,6 +1629,12 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 @media (max-width: 760px) { .tw-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); } .tw-next { grid-template-columns: 1fr; } .tw-go { justify-self: stretch; } }
 @media (max-width: 480px) { .tw-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .aff.tw-all { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: linear-gradient(135deg, #e0631c, #5e9e2a, #3a8fc4, #c99a1c, #8a4fc4); color: #fff; font-size: 12px; line-height: 1; }
+/* painted name plates on the homebase (PLATE_ART) */
+.hz-plate-img { position: absolute; object-fit: contain; pointer-events: none; filter: drop-shadow(0 .25cqw .4cqw rgba(0, 0, 0, .55)); transition: transform .15s; }
+.hz:hover + .hz-plate-img, .hz:focus-visible + .hz-plate-img { transform: scale(1.05); }
+.hz-plate-img.soon { filter: grayscale(.6) brightness(.75) drop-shadow(0 .25cqw .4cqw rgba(0, 0, 0, .55)); }
+.hz-badge.soon-tag { gap: .35cqw; color: #cfc4d6; }
+.hz-badge.soon-tag svg { width: 1cqw; height: 1cqw; fill: none; stroke: currentColor; stroke-width: 1.6; }
 </style>
 
 <div id="app">
