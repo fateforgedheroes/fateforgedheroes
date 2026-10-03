@@ -2926,10 +2926,17 @@
     if (done) floor = `<div class="tw-next done"><div><span class="tag">Conquered</span><h3>The ${twName(e)} is yours</h3><p class="empty-note">All ${K.TOWER.floors} floors cleared. Few heroes ever stand here.</p></div></div>`;
     else {
       const F = K.towerFloor(next), foes = K.towerFoes(e, next), rw = K.towerReward(next);
-      const big = []; for (let f = next + 1; f <= K.TOWER.floors && big.length < 3; f++) { const r = K.towerReward(f); if (r.fs.greater || r.fs.ancient || r.fs.mythic || r.st.ancient) big.push(`<li><b>Floor ${f}</b> ${twRewards({ ...r, silver: 0 }).slice(1).join(' · ')}</li>`); }
-      floor = `<div class="tw-next ${F.boss ? 'boss' : ''}"><div class="tw-fl"><span class="tag">${F.boss ? 'Boss floor' : 'Next floor'}</span><h3>Floor ${next}</h3><small class="empty-note">Enemy level ${F.lvl}</small></div>
-        <div class="tw-foes">${foes.map(f => `<span class="tw-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)} · ${E[f].aff}">${por(f)}${affChip(E[f].aff)}<small>${esc(E[f].name)}</small></span>`).join('')}</div>
-        <div class="tw-rw"><span class="tag">First clear</span><ul>${twRewards(rw, true).map(x => `<li>${x}</li>`).join('')}</ul>${big.length ? `<span class="tag">Coming up</span><ul class="tw-big">${big.join('')}</ul>` : ''}</div>
+      // rewards as icon tiles (icon, amount, short label) instead of sentences
+      const tiles = (r, xp) => [[ic('coin'), r.silver.toLocaleString('en-US'), 'Sigils'], ...(xp ? [['<b class="tw-xp">XP</b>', r.xp.toLocaleString('en-US'), 'per hero']] : []),
+        ...Object.entries(r.fs).map(([t, n]) => [shardIc(t), n, K.SHARD[t].name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate') + ' shard']),
+        ...Object.entries(r.st).map(([t, n]) => [stoneIc(t), n, t[0].toUpperCase() + t.slice(1) + ' stone'])]
+        .map(([i, n, l]) => `<span class="tw-tile"><span class="tw-ti">${i}</span><b>${n}</b><small>${esc(l)}</small></span>`).join('');
+      const big = []; for (let f = next + 1; f <= K.TOWER.floors && big.length < 3; f++) { const r = K.towerReward(f); if (r.fs.greater || r.fs.ancient || r.fs.mythic || r.st.ancient) big.push(`<li class="tw-ms"><span class="tw-msf">${f}</span><span class="tw-msi">${[...Object.entries(r.fs).map(([t, n]) => `<span title="${n} ${esc(K.SHARD[t].name)}">${shardIc(t)}${n > 1 ? `<i>${n}</i>` : ''}</span>`), ...Object.entries(r.st).map(([t, n]) => `<span title="${n} ${stoneName(t, n)}">${stoneIc(t)}${n > 1 ? `<i>${n}</i>` : ''}</span>`)].join('')}</span><small>${f - prog} floors</small></li>`); }
+      floor = `<div class="tw-next ${F.boss ? 'boss' : ''}">
+        <div class="tw-fl"><span class="tw-flt">${F.boss ? 'Boss floor' : 'Floor'}</span><b class="tw-fln">${next}</b><span class="tw-lv">Enemy Lv ${F.lvl}</span></div>
+        <div class="tw-mid"><span class="tw-h">Enemies</span><div class="tw-foes">${foes.map(f => `<span class="tw-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)} · ${E[f].aff}">${por(f)}${affChip(E[f].aff)}<small>${esc(E[f].name)}</small></span>`).join('')}</div>
+          <span class="tw-h">First clear</span><div class="tw-tiles">${tiles(rw, true)}</div></div>
+        ${big.length ? `<div class="tw-side"><span class="tw-h">Milestones</span><ul class="tw-mss">${big.join('')}</ul></div>` : ''}
         <button class="btn primary tw-go" data-act="twgo" ${team.length ? '' : 'disabled title="Pick heroes first"'}>Climb to floor ${next}</button></div>`;
     }
     const mine = Object.keys(S.roster).filter(id => C[id] && twFits(id, e)).sort((a, b) => power(statsOf(b)) - power(statsOf(a)));

@@ -1856,6 +1856,38 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 @keyframes swipenudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
 @media (prefers-reduced-motion: reduce) { .swipe-hint, .swipe-hint span { animation: none; } }
 .tour-card.up { bottom: auto; top: calc(64px + env(safe-area-inset-top, 0px)); }
+/* Tower: the next floor as a clean card: floor medallion, enemies and reward tiles, milestones on the side */
+.tw-next { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 230px); gap: 16px; align-items: start; padding: 16px; border-radius: 10px;
+  background: radial-gradient(70% 90% at 0% 0%, rgba(217, 180, 90, .12), transparent 60%), linear-gradient(180deg, #241c29, #17121b); border: 1px solid color-mix(in srgb, var(--gold) 30%, var(--line)); box-shadow: 0 0 0 1px #000, 0 8px 20px -8px rgba(0, 0, 0, .7); }
+.tw-next.boss { background: radial-gradient(70% 90% at 0% 0%, rgba(192, 38, 26, .22), transparent 60%), linear-gradient(180deg, #2a1a1e, #17121b); border-color: #8c2a20; }
+.tw-fl { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 10px; background: rgba(0, 0, 0, .35); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); text-align: center; }
+.tw-flt { font: 700 10px var(--font-tag); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.tw-next.boss .tw-flt { color: #ff8a6a; }
+.tw-fln { font: 900 42px/1 var(--font-display); background: linear-gradient(180deg, #fff1cc, #e2b85e 60%, #b8853a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tw-lv { padding: 2px 9px; border-radius: 999px; background: rgba(0, 0, 0, .4); border: 1px solid var(--line); font-size: .8rem; color: #d9cfe0; }
+.tw-mid { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tw-h { font: 700 10px var(--font-tag); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); }
+.tw-foes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.tw-foe { width: 78px; padding: 4px; border-radius: 8px; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); }
+.tw-foe img { width: 68px; height: 68px; border-radius: 6px; }
+.tw-foe.boss { border-color: #8c2a20; } .tw-foe.boss img { width: 68px; height: 68px; }
+.tw-foe small { display: block; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tw-tiles { display: flex; gap: 6px; flex-wrap: wrap; }
+.tw-tile { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 6px; align-items: center; padding: 5px 10px 5px 6px; border-radius: 8px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); }
+.tw-ti { grid-row: 1 / span 2; display: grid; place-items: center; width: 26px; height: 26px; }
+.tw-ti img { width: 24px; height: 24px; } .tw-ti .sigil-ic { width: 26px; height: 18px; }
+.tw-xp { font: 900 11px var(--font-tag); color: #120d10; background: var(--info); border-radius: 4px; padding: 2px 4px; }
+.tw-tile b { font: 700 15px/1 var(--font-tag); color: #fff1cc; } .tw-tile small { font-size: .72rem; color: var(--muted); line-height: 1.1; }
+.tw-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tw-mss { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tw-ms { display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); }
+.tw-msf { grid-row: 1 / span 2; display: grid; place-items: center; height: 36px; border-radius: 6px; font: 900 15px var(--font-tag); color: #2b1905; background: linear-gradient(180deg, #fbe4a0, #d9a944 60%, #a8742a); }
+.tw-msi { display: flex; gap: 4px; flex-wrap: wrap; } .tw-msi span { position: relative; } .tw-msi img { width: 22px; height: 22px; }
+.tw-msi i { position: absolute; right: -4px; bottom: -4px; font: 700 9px sans-serif; font-style: normal; color: #fff; background: #120d10; border-radius: 4px; padding: 0 3px; }
+.tw-ms small { color: var(--muted); font-size: .72rem; }
+.tw-go { grid-column: 1 / -1; justify-self: stretch; min-height: 46px; font-size: 1rem; }
+@media (max-width: 760px) { .tw-next { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 12px; } .tw-side { grid-column: 1 / -1; } .tw-mss { flex-direction: row; overflow-x: auto; } .tw-ms { flex: none; } .tw-fln { font-size: 34px; } .tw-foe { width: 66px; } .tw-foe img { width: 56px; height: 56px; } }
+@media (max-width: 760px) { .tw-tabs { display: flex; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 2px 12px; } .tw-tabs::-webkit-scrollbar { display: none; } .tw-tab { flex: none; } #screen:has(.tw-tabs) .section-head .lede { display: none; } }
 </style>
 
 <div id="app">
