@@ -394,7 +394,7 @@
     clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms || 2400);
   }
   function hud() {
-    $('#silver').textContent = S.silver.toLocaleString('en-US');
+    $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy();
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones;
     const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
@@ -587,11 +587,11 @@
     const tile = (st, i) => {
       const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
       const rw = firstRewards(st, i);
-      const go = state === 'next' ? 'Fight ›' : `${LOCK_SVG} Locked`;
+      const go = state === 'next' ? `Fight ›${enCost(K.stageEnergy(st, d))}` : `${LOCK_SVG} Locked`;
       // a cleared stage has two buttons: Replay, and Auto ×10 once the whole chapter is cleared on this difficulty
       const chapDone = clearedOn(d) >= st.chapter * 7 + 6, tag = state === 'cleared' ? 'div' : 'button';
       const foot = state === 'cleared'
-        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
+        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay${enCost(K.stageEnergy(st, d))}</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
         : `<span class="st-go">${go}</span>`;
       return `<${tag} class="stage ${state} ${st.boss ? 'bossst' : ''}" ${tag === 'button' ? `data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}` : ''}>
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span>${state === 'cleared' ? '<span class="st-state tag">✓</span>' : ''}</div>
@@ -616,7 +616,7 @@
           ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}
           <div class="cn-foes">${foeImgs(nx)}</div>
           <div class="st-meta"><span class="pill">Lv ${K.diffLvl(nx, d)}</span><span class="pill">${K.PHASES} phases</span><span class="pill cn-drop"><span class="st-dic">${dropIc(nx)}</span>${dropName(nx)}</span>${nrw.length ? `<span class="cn-rw">First clear: ${nrw.join('')}</span>` : ''}</div></div>
-        ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight</button></section>`}`
+        ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></section>`}`
       : `<section class="camp-next done"><div class="cn-main"><span class="tag">${esc(D.name)} complete</span><h3>Every stage cleared!</h3><span class="cn-sub">${K.DIFFS[d + 1] ? `${K.DIFFS[d + 1].name} is open: pick it above for better gear.` : 'You beat the hardest difficulty.'} Replay stages to farm gear.</span></div></section>`;
     return `<div class="campaign ${hard ? 'hardmode diff-' + D.id : ''}">
       <div class="camp-head"><h2>Campaign</h2>
@@ -665,8 +665,9 @@
           <p><b>${esc(B0.passiveName)}</b>: ${esc(B0.passiveDesc)}</p>
           <p>${B0.aff === 'Aether' ? 'No essence has the advantage here.' : `Strong against it: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
           <div class="setlist">${sets}</div>
+          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
           <div class="lvls" role="group" aria-label="Level">${lvls}</div>
-          <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge</button></div>
+          <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge${enCost(K.bossEnergy(sel))}</button></div>
         </div></div>`
       : `<div class="dg locked"><div class="dg-body"><h3 style="margin:0">Locked</h3><p class="empty-note">${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></div></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
@@ -1396,7 +1397,7 @@
         row('Slots', `${K.SLOTS.map(s => K.SLOT_NAMES[s]).join(', ')}. One piece per slot per hero.`),
         row('Gear rarity', `${[0, 1, 2, 3, 4, 5].map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' → ')}. Rarer gear has stronger stats and more substats. Mythical only drops in Nightmare.`),
         row('Level (item level)', 'How strong a piece is at its base; higher stages drop higher-level gear.'),
-        row('+1 … +12', `Upgrade level. Each upgrade costs Sigils and can fail (the item stays safe). Every 4 levels adds a substat or boosts one. Max +${K.MAX_GEAR_LVL}.`),
+        row(`+1 … +${K.MAX_GEAR_LVL}`, `Upgrade level. Each upgrade costs Sigils and can fail (the item stays safe). Every 4 levels adds a substat or boosts one. Max +${K.MAX_GEAR_LVL}.`),
         row('Main stat / substats', 'The first stat is the main stat; the others are substats.'),
         row('Upgrade all', 'Upgrades the gear a hero wears as far as your Sigils go, the most important piece for its role first.'),
         row('Sets', 'Wearing enough pieces of one set gives a bonus. Each set counts once: extra pieces do not stack.'),
@@ -2312,7 +2313,7 @@
     bang: 'M6.4 1.3h3.2L9 10H7zM6.7 11.4h2.6v2.9H6.7z',
     cross: 'M7.2.8h1.6v4.4H7.2zM7.2 10.8h1.6v4.4H7.2zM.8 7.2h4.4v1.6H.8zM10.8 7.2h4.4v1.6h-4.4zM8 5.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2z',
   };
-  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull' };
+  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull', ironhide: 'shield', swift: 'bolt' };
   const fxSvg = k => `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="${FXP[FX_ICON[k] || 'star']}"/></svg>`;
   // one badge; n = turns left (none for lasting effects), extra = a count shown instead (stacks)
   function fxBadge(k, n, title, extra) {
@@ -2585,10 +2586,12 @@
   // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
   function startCampaign(i, rep) {
     const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
+    if (!spendEnergy(K.stageEnergy(st, diff))) { render(); return; }
     S.chap = st.chapter;
     runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n) {
+    if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
     runBattle({ type: 'boss', id, bi, n, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
@@ -2703,14 +2706,42 @@
     return ups;
   }
   // returns one entry per level gained: [level, silver, shard, unlocked tab or null]
+  // ---------- Energy (K.ENERGY): S.energy, refilled by time from S.enAt (ms) ----------
+  const EN_MS = K.ENERGY.regenMin * 60000;
+  const enMax = () => K.energyMax(S.p.lvl);
+  function energyTick() {
+    const now = Date.now(), max = enMax();
+    if (S.energy == null || !S.enAt) { S.energy = S.energy ?? max; S.enAt = now; }
+    if (S.energy >= max) { S.enAt = now; return; }
+    const n = Math.floor((now - S.enAt) / EN_MS); if (n <= 0) return;
+    S.energy = Math.min(max, S.energy + n); S.enAt = S.energy >= max ? now : S.enAt + n * EN_MS;
+  }
+  const fmtMins = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+  // minutes until the bar holds `need` energy (0 if it already does)
+  function energyWait(need) { energyTick(); const short = need - S.energy; return short <= 0 ? 0 : Math.max(1, Math.ceil((short * EN_MS - (Date.now() - S.enAt)) / 60000)); }
+  const enIc = () => `<svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="${FXP.bolt}"/></svg>`;
+  const enCost = c => c ? `<span class="en-cost" title="Costs ${c} energy">${enIc()}${c}</span>` : '';
+  // pay for a battle; false (with a message) when there is not enough
+  function spendEnergy(cost) {
+    energyTick();
+    if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}.`, true, 4200); return false; }
+    S.energy -= cost || 0; save(); paintEnergy(); return true;
+  }
+  function paintEnergy() {
+    const el = $('#energy'); if (!el) return;
+    energyTick(); const max = enMax();
+    el.innerHTML = `${S.energy}<small>/${max}</small>`;
+    el.parentElement.title = S.energy >= max ? `Energy: full (${max}). Campaign stages and Boss Hall levels cost energy.` : `Energy: +1 every ${K.ENERGY.regenMin} minutes, full in ${fmtMins(energyWait(max))}. Campaign stages and Boss Hall levels cost energy.`;
+  }
+  setInterval(paintEnergy, 20000);
   function grantPlayerXp(amount) {
     const p = S.p, ups = [];
     p.xp += amount;
     while (p.xp >= pxNeed(p.lvl)) {
       p.xp -= pxNeed(p.lvl); p.lvl++;
       const silver = levelSilver(p.lvl), shard = p.lvl % 5 === 0 ? 'greater' : null;
-      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1;
-      ups.push([p.lvl, silver, shard, Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl) || null]);
+      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; energyTick(); const en = enMax(); S.energy += en;
+      ups.push([p.lvl, silver, shard, Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl) || null, en]);
     }
     return ups;
   }
@@ -2782,7 +2813,7 @@
     loot.forEach(it => S.inv.push(it));
     const ups = grantXp(xp);
     const pxp = win ? playerWinXp(lvl, first, cfg.type === 'boss') : b.aborted ? 0 : Math.round(playerWinXp(lvl) * 0.25);
-    const pups = grantPlayerXp(pxp);
+    const pups = grantPlayerXp(pxp); if (pups.length) paintEnergy();
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
     const unlocks = newUnlocks();
     save();
@@ -2790,7 +2821,7 @@
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
-    pups.forEach(([l, sv, sh, t]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
+    pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     if (stones) items.push(`<li ${d()}>${ic('stone')}+${stones} ${stones === 1 ? 'Ascension Stone' : 'Ascension Stones'}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
@@ -2811,7 +2842,8 @@
       : win && first && last ? `<p class="lede">You finished all ten chapters on ${K.DIFFS[cfg.diff].name}.${nd ? ` ${nd.name} difficulty is now open: tougher enemies, better gear (${rarsHtml(nd.rars)}).` : ' You beat the hardest difficulty!'}</p>`
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
-      : win ? '' : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BLIGHT.bh && !S.team.some(heals) ? '<p class="lede">Tip: your team has no healer. This boss drains your whole team every turn (Blight Aura); bring a hero who heals or shields (Draelyn, or a Support from the Fate Altar).</p>'
+      : win ? '' : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BTRAIT.from && !S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[K.bossTrait(cfg.bi)])) ? `<p class="lede">Tip: this boss has <b>${K.EFFECTS[K.bossTrait(cfg.bi)].n}</b>. ${esc(K.EFFECTS[K.bossTrait(cfg.bi)].d)}.</p>`
+        : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BLIGHT.bh && !S.team.some(heals) ? '<p class="lede">Tip: your team has no healer. This boss drains your whole team every turn (Blight Aura); bring a hero who heals or shields (Draelyn, or a Support from the Fate Altar).</p>'
         : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
     const canNext = isStage ? cfg.i + 1 < K.STAGES.length : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
     const acts = win
@@ -2870,7 +2902,7 @@
       if ($('#modal').hidden) { clearInterval(repTimer); return; }
       if (document.querySelector('.unlock-pop')) return; // wait while an unlock message is open
       left--; const s = el.querySelector('span'); if (s) s.textContent = left;
-      if (left <= 0) { clearInterval(repTimer); $('#modal').hidden = true; endBattleView(); B = null; startCampaign(cfg.i, { n: r.n, k: r.k + 1, won }); }
+      if (left <= 0) { clearInterval(repTimer); const c = K.stageEnergy(K.STAGES[cfg.i], cfg.diff); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; startCampaign(cfg.i, { n: r.n, k: r.k + 1, won }); }
     }, 1000);
     el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; });
   }

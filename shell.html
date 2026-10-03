@@ -1115,9 +1115,10 @@ button, a, input { touch-action: manipulation; }
 @media (max-width: 480px) { .set-banner { flex-wrap: wrap; } .sb-side { flex-direction: row; gap: 8px; width: 100%; justify-content: space-between; } }
 /* cleared stage tile: Replay and Auto ×10 */
 div.stage { cursor: default; color: inherit; font: inherit; }
-.st-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: auto; padding-top: 6px; }
+.st-acts { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; margin-top: auto; padding-top: 6px; }
 .st-acts .btn { padding-inline: 4px; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .st-acts .lock-ic { width: 11px; height: 11px; }
+.st-acts .btn { min-width: 0; } .st-acts .en-cost { margin-left: 0; padding: 0 3px 0 1px; }
 .rep-bar { padding: 8px 10px; border: 1px solid var(--violet); background: color-mix(in srgb, var(--violet) 14%, var(--panel)); font-size: .92rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rep-bar b { color: var(--violet); }
 .rep-bar .btn { margin-left: auto; }
@@ -1503,6 +1504,7 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .fxi.bad { --fc: #b8322a; }
 .fxi.fx-burn { --fc: #e0631c; } .fxi.fx-poison, .fxi.fx-blight { --fc: #5e9e2a; } .fxi.fx-bleed { --fc: #a3122a; }
 .fxi.fx-freeze { --fc: #3a8fc4; } .fxi.fx-stun, .fxi.fx-broken { --fc: #c99a1c; } .fxi.fx-shield, .fxi.fx-immune { --fc: #3c7fb8; }
+.fxi.fx-ironhide, .fxi.fx-swift { --fc: #8a5a12; box-shadow: 0 0 0 1px #f0c060, 0 0 6px rgba(240, 192, 96, .7), 0 2px 3px rgba(0, 0, 0, .6); }
 .fxi.rage { --fc: #c0261a; animation: ragepulse 1s ease-in-out infinite; }
 .fxi.clock { --fc: #3a2f45; width: auto; padding: 0 4px; font-size: clamp(10px, 1.1vw, 13px); color: var(--gold); gap: 2px; display: inline-flex; align-items: center; }
 .fxi.clock i { position: static; background: none; border: 0; color: var(--gold); font-size: inherit; padding: 0; }
@@ -1513,12 +1515,25 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 @media (prefers-reduced-motion: reduce) { .fxi.rage, .fxi.clock.soon { animation: none; } }
 /* the guide's effect list uses the same badges, a bit bigger */
 .gl-term .fxi { width: 24px; height: 24px; margin-right: 6px; vertical-align: middle; }
+/* Boss Hall trait note (Iron Hide / Swift) */
+.bh-trait { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 8px 10px; border: 1px solid rgba(240, 192, 96, .45); border-radius: 6px; background: rgba(138, 90, 18, .18); }
+.bh-trait .fxi { flex: none; width: 24px; height: 24px; }
+.bh-trait .warn { color: #ff9a7a; }
+/* energy (K.ENERGY): header counter and the cost on Fight / Replay / Challenge buttons */
+.res.en { color: #ffd76a; }
+.res.en .en-ic { width: 18px; height: 18px; fill: #ffd76a; filter: drop-shadow(0 0 3px rgba(255, 200, 80, .6)); }
+.res.en b { font-variant-numeric: tabular-nums; }
+.en-cost { display: inline-flex; align-items: center; gap: 1px; margin-left: 6px; padding: 0 5px 0 3px; border-radius: 999px; background: rgba(0, 0, 0, .35); font-size: .82em; font-variant-numeric: tabular-nums; line-height: 1.5; vertical-align: middle; }
+.en-cost .en-ic { width: 11px; height: 11px; fill: #ffd76a; }
+.res.en small { font-size: .8em; opacity: .75; }
+@media (max-width: 480px) { .res.en .en-ic { width: 14px; height: 14px; } .res.en small, .wallet .res:has(#ic-shard) { display: none; } }
 </style>
 
 <div id="app">
   <header class="top">
     <div class="brand"><h1 class="logo-img"><img id="logo" alt="Fate Forged Heroes"></h1></div>
     <div class="wallet">
+      <div class="res en" title="Energy"><svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg><b id="energy">0</b></div>
       <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b></div>
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b></div>

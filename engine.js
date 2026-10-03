@@ -57,6 +57,8 @@ const K = (function () {
     burrow: { n: 'Burrowed', s: 'BUR', buff: true, d: 'Untargetable and immune to damage' },
     enrage: { n: 'Enrage', s: 'RGE', buff: true, d: 'The boss took too long to beat: +25% Attack per stack, one more stack every 2 of its turns' },
     blight: { n: 'Blight Aura', s: 'BLT', buff: true, d: 'Each of its turns every enemy loses part of its max HP, whatever its Defense: only healing and shields keep a team standing' },
+    ironhide: { n: 'Iron Hide', s: 'IRN', buff: true, d: 'Takes 60% less damage until a Defense Down lands on it: bring a hero who lowers Defense' },
+    swift: { n: 'Swift', s: 'SWF', buff: true, d: '+40% Speed until a Speed Down lands on it: bring a hero who lowers Speed' },
     atkDown: { n: 'Attack Down', s: 'ATK-', buff: false, d: '-50% Attack' },
     defDown: { n: 'Defense Down', s: 'DEF-', buff: false, d: '-60% Defense' },
     spdDown: { n: 'Speed Down', s: 'SPD-', buff: false, d: '-30% Speed' },
@@ -84,6 +86,12 @@ const K = (function () {
   // hp / atk: a blighted boss has more HP and hits less hard itself, so the fight lasts long enough for the aura to matter
   const BLIGHT = { bh: 3, pct: [0.1, 0.11, 0.12, 0.13, 0.14], hp: 2.2, atk: 0.5 };
   const blighted = (u, d) => { if (u.isBoss) { u.blight = BLIGHT.pct[d || 0]; u.maxHp = u.hp = Math.round(u.maxHp * BLIGHT.hp); u.atk = Math.round(u.atk * BLIGHT.atk); } return u; };
+  // Boss Hall walls (from level BTRAIT.from, Hard): like a RAID dungeon, each boss has a trait that only a specific tool
+  // answers, and the first time that answer lands the trait breaks for the rest of the fight. Iron Hide: takes dmg × damage
+  // until a Defense Down lands (a debuffer is needed). Swift: Speed ×spd until a
+  // Speed Down lands (it acts 1.4× as often). The trait shows as a badge on the boss.
+  const BTRAIT = { from: 5, kinds: ['ironhide', 'swift'], answer: { ironhide: 'defDown', swift: 'spdDown' }, dmg: 0.4, spd: 1.4 };
+  const bossTrait = i => BTRAIT.kinds[i % BTRAIT.kinds.length];
   const DOT = { poison: 0.05, burn: 0.04, bleed: 0.04 };
   const STAT_NAMES = { hp: 'HP', atk: 'Attack', def: 'Defense', spd: 'Speed', crit: 'Crit Rate', cdmg: 'Crit Damage', acc: 'Accuracy', res: 'Resistance', hpP: 'HP', atkP: 'Attack', defP: 'Defense' };
   const PCT_STATS = ['crit', 'cdmg', 'hpP', 'atkP', 'defP'];
@@ -536,6 +544,11 @@ const K = (function () {
     tempestharpy: E('Tempest Harpy', 'Storm', 'Uncommon', 'Beast', 480, 72, 32, 110, [SK('Talon Rake', 'enemy', 'melee', 'claw', 0, '', [D(0.5)], { hits: 2 }), SK('Gale Wings', 'enemies', 'magic', 'rune', 3, '', [D(0.5), TMD(0.15)], { startCd: 1 })]),
     stormcaller: E('Stormcaller', 'Storm', 'Rare', 'Caster', 480, 76, 32, 104, [SK('Lightning Bolt', 'enemy', 'magic', 'rune', 0, '', [D(1.05)]), SK('Thunderstorm', 'enemies', 'magic', 'meteor', 3, '', [D(0.55), DB('stun', 1, 0.2)], { startCd: 1 })]),
     thundergolem: E('Thunderbound Golem', 'Storm', 'Rare', 'Construct', 1000, 66, 88, 82, [SK('Charged Fist', 'enemy', 'melee', 'smash', 0, '', [D(1.05), DB('stun', 1, 0.2)]), SK('Overcharge', 'self', 'buff', 'shield', 4, '', [BF('defUp', 2), BF('counter', 2)], { startCd: 1 })]),
+    // ----- the orc shamans and hunter (enemies 51-54) -----
+    grimtar: E('Grimtar', 'Verdant', 'Uncommon', 'Orc', 500, 72, 34, 100, [SK('Spirit Bolt', 'enemy', 'magic', 'poison', 0, '', [D(1.0), DB('poison', 2, 0.3)]), SK('Wailing Spirits', 'enemies', 'magic', 'curse', 3, '', [D(0.5), DB('healRed', 2, 0.35)], { startCd: 1 })]),
+    krogash: E('Krogash', 'Ember', 'Uncommon', 'Orc', 520, 74, 36, 98, [SK('Ashen Bolt', 'enemy', 'magic', 'fire', 0, '', [D(1.0), DB('burn', 2, 0.3)]), SK('Ash Storm', 'enemies', 'magic', 'meteor', 3, '', [D(0.55), DB('burn', 2, 0.35)], { startCd: 1 })]),
+    zulgroth: E('Zulgroth', 'Umbral', 'Uncommon', 'Orc', 560, 58, 42, 100, [SK('Void Orb', 'enemy', 'magic', 'dark', 0, '', [D(0.85), DB('spdDown', 1, 0.3)]), SK('Void Pact', 'allies', 'buff', 'heal', 3, '', [HEAL(0.12), BF('atkUp', 2)], { startCd: 1 })]),
+    bloodsnarl: E('Bloodsnarl', 'Ember', 'Uncommon', 'Orc', 540, 74, 34, 104, [SK('Blood Arrow', 'enemy', 'ranged', 'arrow', 0, '', [D(1.0), DB('bleed', 2, 0.3)]), SK('Loose the Wolf', 'lowestEnemy', 'melee', 'bite', 3, '', [D(1.35), DB('bleed', 2, 0.4)], { startCd: 1 })]),
   };
 
   // ---------- Captured enemies: playable as heroes (weaker kits) and usable as fodder. Bosses can never be captured. ----------
@@ -549,6 +562,7 @@ const K = (function () {
     mosscrawler: 'Controller', thornbeast: 'Warrior', rotvineshambler: 'Tank', bogreaper: 'Assassin', woodwraith: 'Support',
     frostfangwolf: 'Assassin', iceboundknight: 'Tank', glacierbrute: 'Warrior', frostbornwitch: 'Mage', frozenhorror: 'Controller',
     stormimp: 'Assassin', thunderraider: 'Warrior', tempestharpy: 'Controller', stormcaller: 'Mage', thundergolem: 'Tank',
+    grimtar: 'Mage', krogash: 'Mage', zulgroth: 'Support', bloodsnarl: 'Ranger',
   };
   const TIER_RAR = { Common: 0, Uncommon: 1, Rare: 2 };
   const TGT_TXT = { enemy: 'one enemy', enemies: 'all enemies', random: 'random enemies', lowestEnemy: 'the weakest enemy', ally: 'one ally', allies: 'all allies', lowestAlly: 'the weakest ally', self: 'self' };
@@ -708,10 +722,12 @@ const K = (function () {
   const CHAPTERS = [
     // pool[0] = regular foes, pool[1] = elites; stages mix them per phase (see stageGroup), so bigger pools mean more variety
     // Chapter I builds the team: the starter fights alone in stage 1, the first clears of stages 1-3 add Draelyn, Bromir and Skavren
-    { name: 'The Fallen Kingdom', set: 'krijger', desc: 'The heroes begin in a fallen realm, overrun by monsters and darkness.', area: 0, pool: [['botkrijger', 'gravestalker', 'cryptschutter', 'ashgoblin', 'zombie'], ['hellehond', 'cultist', 'cryptguard']], boss: 'grakk', adds: ['ashgoblin', 'cultist'], unlock: { 0: 'draelyn', 1: 'bromir', 2: 'skavren', 3: 'karnok', 6: 'morgrim' }, shapes: { 0: [1, 0], 1: [2, 0], 2: [2, 0] } },
-    { name: 'Whispers of the Dead', set: 'levensbron', desc: 'Ancient ruins, the undead and secrets of the past come to light.', area: 0, pool: [['cryptguard', 'botkrijger', 'gravestalker', 'cryptschutter', 'schim'], ['skeletridder', 'soulreaver', 'doodsmagier', 'dreadarcher', 'banshee']], boss: 'boneking', adds: ['cryptguard', 'dreadarcher'], unlock: { 2: 'grythor', 6: 'vorlund' } },
+    { name: 'The Fallen Kingdom', set: 'krijger', desc: 'The heroes begin in a fallen realm, overrun by monsters and darkness.', area: 0, pool: [['botkrijger', 'gravestalker', 'cryptschutter', 'ashgoblin', 'zombie'], ['hellehond', 'cultist', 'cryptguard']], boss: 'grakk', adds: ['ashgoblin', 'cultist'], unlock: { 0: 'draelyn', 1: 'bromir', 2: 'skavren', 3: 'karnok', 6: 'morgrim' }, shapes: { 0: [1, 0], 1: [2, 0], 2: [2, 0] },
+      // stage 1 is a solo fight for any starter: mixed essences, so no starter faces only foes it is weak against
+      first: [['ashgoblin'], ['cryptschutter'], ['zombie']] },
+    { name: 'Whispers of the Dead', set: 'levensbron', desc: 'Ancient ruins, the undead and secrets of the past come to light.', area: 0, pool: [['cryptguard', 'botkrijger', 'gravestalker', 'cryptschutter', 'schim', 'grimtar'], ['skeletridder', 'soulreaver', 'doodsmagier', 'dreadarcher', 'banshee', 'zulgroth']], boss: 'boneking', adds: ['cryptguard', 'dreadarcher'], unlock: { 2: 'grythor', 6: 'vorlund' } },
     { name: 'The Blighted Wilds', set: 'precisie', desc: 'A cursed forest where nature itself has been corrupted.', area: 3, pool: [['mosscrawler', 'hagedisstrijder', 'thornbeast', 'hagedissjamaan', 'wouddruide'], ['rotvineshambler', 'hagedisbruut', 'moerasheks', 'pestbrenger']], boss: 'treant', adds: ['mosscrawler', 'rotvineshambler'], unlock: { 2: 'vaessa', 6: 'valkessa' } },
-    { name: 'Embers of War', set: 'vlammenhart', desc: 'War rages across the land as demonic forces rise.', area: 4, pool: [['ashgoblin', 'cinderhound', 'hellehond', 'flameberserker', 'cultist'], ['hellfireshaman', 'helsebruut', 'magmabrute', 'succubus', 'gevallenridder']], boss: 'overlord', adds: ['flameberserker'], unlock: { 2: 'brukkar' } },
+    { name: 'Embers of War', set: 'vlammenhart', desc: 'War rages across the land as demonic forces rise.', area: 4, pool: [['ashgoblin', 'cinderhound', 'hellehond', 'flameberserker', 'cultist', 'bloodsnarl'], ['hellfireshaman', 'helsebruut', 'magmabrute', 'succubus', 'gevallenridder', 'krogash']], boss: 'overlord', adds: ['flameberserker'], unlock: { 2: 'brukkar' } },
     { name: 'The Frozen Wastes', set: 'wilgenbast', desc: 'A desolate northern land, ravaged by eternal frost.', area: 1, pool: [['frostfangwolf', 'iceboundknight', 'schim', 'skeletridder'], ['frostbornwitch', 'ijselementaal', 'glacierbrute', 'steengolem']], boss: 'frostcolossus', adds: ['frostfangwolf'], unlock: { 6: 'faedrin' } },
     { name: 'Kingdom of Shadows', set: 'vampierbloed', desc: 'The heroes enter a realm ruled entirely by Umbral forces.', area: 2, pool: [['vampier', 'soulreaver', 'gevallenridder', 'dreadarcher', 'cultist'], ['gravewarden', 'banshee', 'bloedpriesteres', 'doodsmagier']], boss: 'netherqueen', adds: ['vampier'] },
     { name: 'The Stormbound Realm', set: 'windloper', desc: 'A ruined land where endless storms and elemental beings reign.', area: 1, pool: [['stormimp', 'thunderraider', 'tempestharpy', 'steengolem'], ['stormcaller', 'thundergolem', 'frozenhorror', 'ijselementaal']], boss: 'stormbehemoth', adds: ['thunderraider'] },
@@ -735,9 +751,9 @@ const K = (function () {
   CHAPTERS.forEach((ch, c) => {
     for (let s = 0; s < 7; s++) {
       const lvl = 1 + c * 6 + s;
-      const foes = s === 6 ? [ch.boss, ...ch.adds] : stageGroup(ch, c, s, 0);
+      const foes = s === 6 ? [ch.boss, ...ch.adds] : s === 0 && ch.first ? ch.first[2] : stageGroup(ch, c, s, 0);
       const shape = Math.min(s, STAGE_SHAPE.length - 1);
-      const phases = [stageGroup(ch, c, shape, 1), stageGroup(ch, c, shape, 2), foes];
+      const phases = s === 0 && ch.first ? ch.first : [stageGroup(ch, c, shape, 1), stageGroup(ch, c, shape, 2), foes];
       STAGES.push({ chapter: c, n: s, lvl, foes, phases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
     }
   });
@@ -795,7 +811,9 @@ const K = (function () {
   // team without healing does not: measured, a team without a healer then needs ~1.4x the power, one with a healer about
   // the same as before. (Harder hits did the opposite: burst kills heroes before a healer can help.)
   const attrition = (u, st) => { if (!u.isBoss && st.chapter >= TUNE.hitFrom) { u.atk = Math.round(u.atk * TUNE.hit); u.maxHp = u.hp = Math.round(u.maxHp * TUNE.foeHp); } return u; };
-  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (isWall(st) ? TUNE.wall : 1) * (BOSSES[f] ? TUNE.chBoss : 1)), st));
+  // Easy Chapter I · Stage 1 is the starter's solo fight: soft enough that every starter, even an Uncommon, wins it
+  const FIRST_PW = 0.7;
+  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (!d && !st.chapter && !st.n ? FIRST_PW : 1) * (isWall(st) ? TUNE.wall : 1) * (BOSSES[f] ? TUNE.chBoss : 1)), st));
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -815,6 +833,16 @@ const K = (function () {
   const winXp = lvl => Math.round(TUNE.xp * (40 + lvl * 28));
   const winSilver = lvl => Math.round(TUNE.silver * (120 + lvl * 60));
 
+  // ---------- Energy (like RAID) ----------
+  // Every campaign stage and Boss Hall level costs energy when it starts (won or lost); energy refills by 1 every
+  // regenMin minutes up to energyMax (base + player level), and a player level-up adds a full bar on top (it may go over
+  // the max; it then stops refilling until it is below the max again). Easy Chapter I is free: the tutorial chapter.
+  // Arena and guild boss have their own tokens and keys. Pace (campaign-sim battles × cost against ~480 a day plus
+  // level-ups): Easy about a week and a half, all five difficulties a few months, as in RAID.
+  const ENERGY = { base: 100, regenMin: 3, stage: [3, 4, 5, 6, 8], boss: 6 };
+  const energyMax = plvl => ENERGY.base + (plvl || 1);
+  const stageEnergy = (st, d) => (!d && st.chapter === 0 ? 0 : ENERGY.stage[d || 0]);
+  const bossEnergy = n => ENERGY.boss + n;
   // ---------- Boss Hall ----------
   const BOSS_LEVELS = 10;
   // Every Boss Hall level plays like a campaign stage, so the Boss Hall is never a shortcut to better gear:
@@ -830,7 +858,7 @@ const K = (function () {
   }
   const bossLvl = (i, n) => bossRoom(i, n).lvl;
   // the enemies of phase p of Boss Hall level n (minions, minions, boss), toughened like the matching campaign stage
-  function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => { const u = toughen(enemyUnit(f, r.lvl), r.f); if (u.isBoss) u.hall = true; return n >= BLIGHT.bh ? blighted(u, r.d) : u; }); }
+  function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => { const u = toughen(enemyUnit(f, r.lvl), r.f); if (u.isBoss) u.hall = true; if (u.isBoss && n >= BTRAIT.from) u.trait = bossTrait(BOSS_ORDER.indexOf(id)); return n >= BLIGHT.bh ? blighted(u, r.d) : u; }); }
   const SET_GROUPS = [['vlammenhart', 'scherpte', 'nachtscherf'], ['woede', 'asvloek', 'vampierbloed'], ['wilgenbast', 'levensbron', 'wraak'], ['windloper', 'scherpte', 'vlammenhart']];
   const bossSets = i => SET_GROUPS[i % SET_GROUPS.length];
   function bossFoes(id, n) { return [id]; }
@@ -875,7 +903,8 @@ const K = (function () {
     const base = { atk: 5 + il * 0.9, hp: 40 + il * 7, def: 3 + il * 0.35, atkP: 3 + il * 0.09, defP: 3 + il * 0.09, hpP: 3 + il * 0.09, crit: 3 + il * 0.08, cdmg: 5 + il * 0.2, acc: 6 + il * 0.3, res: 6 + il * 0.3, spd: 5 + il * 0.12 }[k];
     return Math.round(base * q);
   }
-  const SUB_POOL = [['hpP', 3, 6], ['atkP', 3, 6], ['defP', 3, 6], ['crit', 2, 5], ['cdmg', 3, 7], ['acc', 3, 8], ['res', 3, 8], ['atk', 4, 10], ['hp', 30, 70], ['def', 2, 5], ['spd', 2, 4]];
+  // substat rolls: wide ranges around the same average as before, so a great piece is a lucky roll worth farming for (RAID)
+  const SUB_POOL = [['hpP', 2, 7], ['atkP', 2, 7], ['defP', 2, 7], ['crit', 1, 6], ['cdmg', 2, 8], ['acc', 2, 9], ['res', 2, 9], ['atk', 3, 11], ['hp', 20, 80], ['def', 1, 6], ['spd', 1, 5]];
   // substat scale: grows with item level; Mythical rolls 25% higher
   const subScale = (it, k) => (k === 'spd' ? 1 : 1 + it.il / 25) * (it.rar >= 5 ? 1.25 : 1);
   function rollSub(it, exclude) {
@@ -897,13 +926,14 @@ const K = (function () {
     return it;
   }
   function gearStats(it) {
-    const out = [[it.main, Math.round(mainValue(it.main, it.il, it.rar) * (1 + 0.06 * it.lvl))]];
+    const out = [[it.main, Math.round(mainValue(it.main, it.il, it.rar) * (1 + 0.045 * it.lvl))]];
     for (const s of it.subs) out.push([s[0], s[1]]);
     return out;
   }
-  const MAX_GEAR_LVL = 12;
+  // +16 like RAID: a substat added or boosted at +4, +8, +12 and +16; the main stat grows 4.5% per level, so +16 is what +12 was
+  const MAX_GEAR_LVL = 16;
   const upgradeCost = it => Math.round(40 * (it.lvl + 1) * (it.rar + 1) * (1 + it.il / 10));
-  const upgradeChance = it => Math.max(0.35, 1 - it.lvl * 0.055);
+  const upgradeChance = it => Math.max(0.15, 1 - it.lvl * 0.06);
   const fmtStat = (k, v) => `${STAT_NAMES[k]} +${v}${PCT_STATS.includes(k) ? '%' : ''}`;
   function upgradeMilestone(it) {
     if (it.lvl % 4 !== 0) return null;
@@ -1045,6 +1075,8 @@ const K = (function () {
       // damage meter: per unit uid, damage dealt and healing done by source (skill or effect name), and damage taken
       this.meter = {};
       this.deaths = 0;
+      // a Boss Hall trait shows as a lasting badge on its boss
+      for (const u of enemies) if (u.trait && !u.effects.some(e => e.k === u.trait)) u.effects.push({ k: u.trait, n: 999 });
     }
     allies(u) { return u.side === 'hero' ? this.heroes : this.enemies; }
     foes(u) { return u.side === 'hero' ? this.enemies : this.heroes; }
@@ -1061,6 +1093,7 @@ const K = (function () {
       let s = u.spd;
       if (this.has(u, 'spdUp')) s *= 1.3;
       if (this.has(u, 'spdDown')) s *= 0.7;
+      else if (u.trait === 'swift') s *= BTRAIT.spd;
       return Math.max(10, s);
     }
     // advance turn meters until someone reaches 100; returns that unit
@@ -1331,6 +1364,8 @@ const K = (function () {
       if (ex) { ex.n = Math.max(ex.n, e.n); if (e.v) ex.v = Math.max(ex.v || 0, e.v); if (e.src) ex.src = e.src; ex.fresh = ex.fresh || e.fresh; }
       else t.effects.push(e);
       if (!quiet) this.h.float(t, EFFECTS[e.k].n, EFFECTS[e.k].buff ? 'buff' : 'debuff');
+      // a Boss Hall trait breaks for the rest of the fight once its answer lands (BTRAIT)
+      if (t.trait && BTRAIT.answer[t.trait] === e.k) { const k = t.trait; t.trait = null; t.effects = t.effects.filter(x => x.k !== k); this.h.float(t, EFFECTS[k].n + ' broken', 'debuff'); }
     }
     calc(a, t, m, fx, skill) {
       let atk = a.atk;
@@ -1360,6 +1395,7 @@ const K = (function () {
       }
       if (crit) raw *= 1 + (a.cdmg + (this.has(a, 'cdmgUp') ? 30 : 0)) / 100;
       let d = raw * H.mult * (100 / (100 + def));
+      if (t.trait === 'ironhide' && !this.has(t, 'defDown')) d *= BTRAIT.dmg;
       // attacker modifiers
       if (a.passive === 'hellbrand' && t.effects.some(e => !EFFECTS[e.k].buff)) d *= 1.5;
       if (a.passive === 'frostbite' && (this.has(t, 'freeze') || this.has(t, 'spdDown'))) d *= 1.3;
@@ -1648,7 +1684,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     baseStars, maxLvl, maxStars, MAX_STARS, rankCost, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
