@@ -1728,11 +1728,140 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .fr-fc { font-family: var(--font-body); font-weight: 400; font-size: .78rem; letter-spacing: .04em; color: var(--muted); font-variant-numeric: tabular-nums; }
 .lockmark { position: absolute; left: 6px; bottom: 30px; z-index: 2; font-size: 12px; filter: drop-shadow(0 1px 1px #000); }
 .lock-btn.on { border-color: var(--gold); color: var(--gold); }
+.tw-warn { margin: 4px 0 8px; padding: 6px 10px; border-left: 3px solid var(--bad); background: rgba(217, 83, 63, .12); color: #ffc2b4; font-size: .92rem; }
+/* ===== phones (portrait, or landscape with a short screen): slim header with a Home button and a ☰ menu ===== */
+.homebtn, #menubtn, .mmenu { display: none; }
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .top { position: sticky; top: 0; z-index: 20; flex-wrap: nowrap; gap: 6px; margin-inline: -12px; padding: calc(5px + env(safe-area-inset-top, 0px)) 10px 5px;
+    background: linear-gradient(180deg, #1d1720, #120e15); border-bottom: 1px solid #3a2e24; box-shadow: 0 4px 12px rgba(0, 0, 0, .45); }
+  body:not([data-tab="home"]) .top .brand { display: none; }
+  body[data-tab="home"] .logo-img img { height: 34px; }
+  .homebtn { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 34px; padding: 0 11px 0 8px; border-radius: 9px; cursor: pointer;
+    font: 700 13px/1 var(--font-tag); letter-spacing: .03em; color: #2b1905; border: 1px solid #1a0f04;
+    background: linear-gradient(180deg, #fbe4a0, #e2b452 45%, #b78130); box-shadow: inset 0 1px 0 rgba(255, 252, 230, .85), 0 0 0 1px #d9b45a, 0 0 10px rgba(240, 180, 70, .45); }
+  .homebtn svg { width: 16px; height: 16px; fill: currentColor; }
+  body[data-tab="home"] .homebtn { display: none; }
+  .wallet .res:has(#ic-shard), .wallet .res:has(#ic-stone), #sound, #guide, #mail { display: none !important; }
+  .wallet { flex: 1; justify-content: flex-end; gap: 5px; }
+  #menubtn { display: inline-grid; place-items: center; position: relative; width: 36px; min-height: 34px; padding: 0; }
+  #menubtn svg { width: 18px; height: 18px; fill: none; stroke: var(--gold); stroke-width: 1.8; stroke-linecap: round; }
+  #menubtn .menu-n { position: absolute; top: -5px; right: -5px; }
+  .backbar > .btn[data-tab="home"] { display: none; }
+  .backbar:not(:has(.seg)) { display: none; }
+  .mmenu:not([hidden]) { display: block; position: fixed; z-index: 30; right: 8px; top: calc(52px + env(safe-area-inset-top, 0px)); width: min(290px, calc(100vw - 16px)); }
+  .mm-box { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; border: 1px solid #6e5528;
+    background: linear-gradient(180deg, #261e2b, #140f17); box-shadow: 0 0 0 1px #000, 0 14px 30px rgba(0, 0, 0, .7); }
+  .mm-it { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); font: 600 16px var(--font-body); text-align: left; cursor: pointer; }
+  .mm-it:hover, .mm-it:focus-visible { background: rgba(217, 180, 90, .12); }
+  .mm-ic { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(217, 180, 90, .15); color: var(--gold); font-size: 14px; flex: none; }
+  .mm-n { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 12px sans-serif; text-align: center; }
+  .mm-cur { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 10px; justify-content: start; margin-top: 6px; padding: 8px; border-top: 1px solid var(--line); font-size: 14px; }
+  .mm-cur .tag { grid-column: 1 / -1; }
+  .mm-cur span:not(.tag) { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .mm-cur img { width: 18px; height: 18px; }
+  .mm-cur small { color: var(--muted); font-size: 12px; }
+}
+/* ===== phones: the battle is one full-height screen (no scrolling); the log takes whatever height is left ===== */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  #app:has(#battle:not([hidden])) { padding-bottom: 0; }
+  #battle:not([hidden]) { height: 100dvh; min-height: 0; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); overflow: hidden; }
+  #battle > * { flex: none; }
+  #battle .order { min-height: 44px; }
+  #battle .order .oc { width: 40px; height: 40px; } #battle .order .oc img { width: 37px; height: 37px; }
+  .b-bar { order: 1; border-radius: 10px; background: linear-gradient(180deg, #221a26, #120e15); border-color: #5c4a35; box-shadow: 0 -6px 14px rgba(0, 0, 0, .45); }
+  .sk { min-height: 70px; border-radius: 9px; }
+  .b-desc { margin: 0; padding: 7px 9px; border-radius: 8px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); line-height: 1.3; }
+  #b-log { order: 2; flex: 1 1 auto !important; max-height: none; min-height: 36px; border-radius: 8px; }
+}
+@media (max-height: 640px) and (max-width: 760px) { .sk { min-height: 58px; } .b-desc { font-size: .8rem; padding: 5px 8px; } }
+@media (max-width: 760px) { .sk b { overflow-wrap: normal; word-break: normal; hyphens: auto; font-size: clamp(.66rem, 2.9vw, .8rem); letter-spacing: 0; } }
+/* phones in landscape: battlefield on the left at full height, the skill panel on the right, no log */
+@media (max-height: 500px) and (orientation: landscape) {
+  #battle:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 34%); grid-template-rows: auto auto minmax(0, 1fr); gap: 4px 8px; padding-top: calc(4px + env(safe-area-inset-top, 0px)); }
+  #battle .b-top, #battle .order, #battle .coach { grid-column: 1 / -1; }
+  #battle .order { min-height: 36px; } #battle .order .oc { width: 32px; height: 32px; } #battle .order .oc img { width: 29px; height: 29px; }
+  #battle .stage-wrap { grid-column: 1; grid-row: 3; height: 100%; width: auto; max-width: 100%; aspect-ratio: 16 / 9 !important; margin: 0; justify-self: center; align-self: start; }
+  #battle .b-bar { grid-column: 2; grid-row: 3; order: 0; overflow-y: auto; align-content: start; grid-template-columns: minmax(0, 1fr); }
+  #battle #b-log { display: none; }
+  .sk { min-height: 54px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  #app:has(#battle:not([hidden])) .top { display: none; }
+  #battle .order .ord-l { display: none; }
+  #battle .b-top h2 { font-size: 1rem; }
+  /* the homebase map fits the screen height (it is landscape itself, so most of it shows at once) */
+  .home-map { margin: 0 -12px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; display: flex; justify-content: center; }
+  .home-map::-webkit-scrollbar { display: none; }
+  .home-img { width: auto; height: calc(100dvh - 64px - env(safe-area-inset-top, 0px)); flex: none; border-inline: 0; }
+  #app:has(.home-map) { padding-bottom: 0; }
+  .home-img > img { width: auto; height: 100%; }
+}
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) { #app:has(#battle:not([hidden])) { padding-top: 0; padding-bottom: 0; } #battle:not([hidden]) { box-sizing: border-box; } }
+/* campaign: the next battle lists the enemies of each phase */
+.cn-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 4px 0; }
+.cn-ph { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border-radius: 6px; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); min-width: 0; }
+.cn-ph small { font: 700 9px var(--font-tag); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.cn-ph div { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.cn-ph img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
+.cn-ph img.bossimg { width: 40px; height: 40px; }
+.cn-ph.boss { border-color: #8c2a20; box-shadow: inset 0 0 10px rgba(192, 38, 26, .25); }
+.m-act { display: none; }
+/* phones: the main action of a screen stays at the bottom */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .m-act { display: flex; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(18, 14, 21, .85), #120e15 40%); border-top: 1px solid #5c4a35; box-shadow: 0 -6px 16px rgba(0, 0, 0, .5); }
+  .m-act .btn { flex: 1; min-height: 46px; font-size: .95rem; }
+  .m-act .btn.primary { flex: 1.4; }
+  #screen:has(.m-act) { padding-bottom: 76px; }
+  .campaign .camp-next .cn-go:not(.spot-go), .campaign:has(.m-act) .teamstrip .btn[data-act="editteam"] { display: none; }
+}
+/* phones: a compact Team screen (teams and filters in single scrolling rows, small slots, the hero list a strip) */
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  #screen:has(.tm-bar) .section-head .lede { display: none; }
+  #screen:has(.tm-bar) .section-head { margin-bottom: 6px; align-items: center; }
+  #screen:has(.tm-bar) .section-head .power { padding: 4px 10px; }
+  .tm-bar { gap: 6px; margin: 0 0 8px; }
+  .tm-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 2px 12px; }
+  .tm-tabs::-webkit-scrollbar, .tm-row::-webkit-scrollbar, .roles-chk::-webkit-scrollbar, .tf-ess::-webkit-scrollbar { display: none; }
+  .tm-tab { flex: none; padding: 6px 12px; }
+  .tm-tab small { display: none; }
+  .tm-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; padding: 0 12px; }
+  .tm-lbl { display: none; }
+  .tm-mode, .tm-acts { flex: none; }
+  .tm-acts { margin-left: 4px; width: auto; }
+  .slots { gap: 6px; margin-bottom: 8px; }
+  .slot { min-height: 0; padding: 4px; }
+  .slot.filled small, .slot.filled .stars { display: none; }
+  .slot.filled b { font-size: .72rem; }
+  .roles-chk { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px 8px; padding: 0 12px; }
+  .roles-chk li { flex: none; }
+  .roles-tip { display: none; }
+  .tfilter { gap: 6px 10px; padding: 6px 8px; }
+  .tf-ess { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; max-width: 100%; }
+  .tfilter label { font-size: .72rem; }
+  .tfilter select { font-size: .85rem; padding: 2px 4px; }
+  #screen:has(.tm-bar) .d-team > .btn[data-act="toggle"] { display: none; }
+}
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) { .m-act .btn { white-space: nowrap; font-size: .85rem; padding-inline: 8px; } .tfilter label { flex-direction: row; align-items: center; } .tfilter { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .tfilter .tf-ess { grid-column: 1 / -1; } .tfilter label { display: grid; gap: 2px; } .tfilter select { width: 100%; } .tfilter .linkbtn { grid-column: 1 / -1; justify-self: start; } }
+/* homebase on a phone held upright: a gold, pulsing hint that the map scrolls sideways (until player level 10) */
+.swipe-hint { display: none; }
+@media (max-width: 760px) and (orientation: portrait) {
+  .swipe-hint { display: flex; align-items: center; gap: 8px; position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); z-index: 12; pointer-events: none;
+    padding: 6px 14px; border-radius: 999px; white-space: nowrap; font: 700 12px var(--font-tag); letter-spacing: .03em; color: #2b1905;
+    background: linear-gradient(180deg, #fbe4a0, #e2b452 45%, #b78130); border: 1px solid #1a0f04; animation: swipepulse 1.6s ease-in-out infinite; }
+  .swipe-hint span { font-size: 16px; line-height: 1; animation: swipenudge 1.6s ease-in-out infinite; }
+  .swipe-hint span:first-child { animation-direction: reverse; }
+}
+@keyframes swipepulse { 0%, 100% { box-shadow: 0 0 0 1px #d9b45a, 0 0 6px rgba(240, 180, 70, .4); } 50% { box-shadow: 0 0 0 1px #ffe3a0, 0 0 18px rgba(255, 200, 90, .95); } }
+@keyframes swipenudge { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { .swipe-hint, .swipe-hint span { animation: none; } }
+.tour-card.up { bottom: auto; top: calc(64px + env(safe-area-inset-top, 0px)); }
 </style>
 
 <div id="app">
   <header class="top">
     <div class="brand"><h1 class="logo-img"><img id="logo" alt="Fate Forged Heroes"></h1></div>
+    <button class="homebtn" id="homebtn" type="button" aria-label="Back to your homebase"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg><span>Home</span></button>
     <div class="wallet">
       <div class="res en" title="Energy"><svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg><b id="energy">0</b></div>
       <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b></div>
@@ -1742,8 +1871,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
       <button class="iconbtn" id="guide" type="button" aria-label="Guide: terms and abbreviations" title="Guide: terms and abbreviations"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M6.2 6.2a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.6"/><path d="M8 11.6v.2"/></svg><span class="lbl">Guide</span></button>
       <button class="iconbtn" id="mail" type="button" aria-label="Mail" title="Mail: gifts and friend requests"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="3.5" width="13" height="9.5" rx="1"/><path d="M2 4.5 8 9l6-4.5"/></svg><span class="lbl">Mail</span><b class="mail-n" hidden>0</b></button>
       <button class="iconbtn acc" id="account" type="button" aria-label="Your profile and account">Profile</button>
+      <button class="iconbtn" id="menubtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="mmenu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/></svg><b class="mail-n menu-n" hidden>0</b></button>
     </div>
   </header>
+  <div class="mmenu" id="mmenu" hidden></div>
   <nav class="tabs" id="tabs" role="tablist" aria-label="Main">
     <button role="tab" data-tab="campagne" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 14.5v-13M3.5 2h9l-2 3 2 3h-9"/></svg><span class="tl-l">Campaign</span><span class="tl-s">Campaign</span></button>
     <button role="tab" data-tab="kerkers" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5a5.5 5.5 0 0 1 11 0v3h-2v3h-7v-3h-2z"/><path d="M5.5 7.5h1.5v1.5h-1.5zM9 7.5h1.5v1.5h-1.5z" fill="currentColor"/><path d="M7 13.5v-2M9 13.5v-2"/></svg><span class="tl-l">Boss Hall</span><span class="tl-s">Bosses</span></button>

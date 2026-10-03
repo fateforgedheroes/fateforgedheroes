@@ -68,7 +68,9 @@
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
-    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
+    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 };
+    // heroes that gained a skill (every hero has 3 now): pad the skill levels
+    for (const id in s.roster) { const c = K.CHAMPS[id], h = s.roster[id]; if (c && Array.isArray(h.sk)) while (h.sk.length < c.skills.length) h.sk.push(0); } if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
@@ -489,17 +491,17 @@
   // (shade, spotlight and a card with Next). The last step leads back to the campaign, where the Fight button is
   // spotlighted (spotFight). S.seen.tour = done or skipped.
   const TOUR = [
-    { go: 'team', title: 'Heroes & Gear', text: 'Your heroes. Level them up, equip and upgrade the gear you win, feed spare heroes for XP and ascend them for higher level caps. Build your team of four here.' },
-    { go: 'altaar', title: 'Fate Altar', text: 'Summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
-    { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
+    { go: 'team', title: 'Heroes & Gear', text: 'Your heroes. Level them up, equip and upgrade the gear you win, feed spare heroes for XP and ascend them for higher level caps. Build up to seven teams of four here, one for each game mode.' },
+    { go: 'altaar', title: 'Summon Altar', text: 'The Fate Altar: summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
+    { go: 'kerkers', title: 'Boss Halls', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
-    { go: 'profiel', title: 'Town Hall', text: 'Your profile: name, avatar and player level, sound settings, your account and save backups. The ? Guide in the top bar explains every term.' },
-    { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (top bar) holds friend requests, gifts and arena rewards.' },
+    { go: 'profiel', title: 'Town Hall', text: 'Your profile: name, avatar and player level, sound settings, your account and save backups. The Guide (the ? in the top bar, or the ☰ menu on a phone) explains every term.' },
+    { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
-    { zone: 8, title: 'More to come', text: 'The buildings marked Coming soon will open as new game modes in future updates.' },
-    { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens the Arena and the Boss Hall. On to the next stage!' },
+    { zone: 8, title: 'Market', text: 'Coming soon: the Market will open as a new game mode in a future update.' },
+    { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Halls. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
   const tourOn = () => tab === 'home' && !S.needStarter && !firstSteps() && S.seen.home && !S.seen.tour;
@@ -508,7 +510,8 @@
   function tourCard() {
     const st = TOUR[tourStep], last = tourStep === TOUR.length - 1;
     const status = !st.go || st.go === 'campagne' ? '' : unlocked(st.go) ? '<span class="tc-open">Open now</span>' : `<span class="tc-lock">${LOCK_SVG} Opens after ${needTxt(st.go)}</span>`;
-    return `<div class="tour-card" role="dialog" aria-label="Homebase tour"><span class="tag">Homebase tour · ${tourStep + 1} / ${TOUR.length}</span><h3>${esc(st.title)}</h3><p>${esc(st.text)}</p>${status}
+    const up = zoneCentre(tourZone(st))[1] > HOME_H * 0.5; // a building in the lower half: the card moves to the top so it never hides it
+    return `<div class="tour-card ${up ? 'up' : ''}" role="dialog" aria-label="Homebase tour"><span class="tag">Homebase tour · ${tourStep + 1} / ${TOUR.length}</span><h3>${esc(st.title)}</h3><p>${esc(st.text)}</p>${status}
       <div class="tc-acts">${last ? '' : '<button class="btn small" type="button" data-act="tourskip">Skip tour</button>'}<button class="btn primary" type="button" data-act="tournext">${last ? 'Continue the campaign' : 'Next ›'}</button></div></div>`;
   }
   // a new player's campaign: the Fight button is the only thing to press (before the first battle and after the tour)
@@ -539,7 +542,7 @@
     const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
       <div class="tut-call" style="left:${pc(CAMP_AT[0], HOME_W)};top:${pc(575, HOME_H)}"><b>Start here</b><span>Your adventure begins in the Campaign</span><i aria-hidden="true"></i></div>` : '';
     const tourShade = tour ? `<div class="tut-shade" style="--x:${pc(tc[0], HOME_W)};--y:${pc(tc[1], HOME_H)}"></div>` : '';
-    return `<div class="home-map"><div class="home-img ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}${spot}${tourShade}</div></div>${tour ? tourCard() : ''}`;
+    return `<div class="home-map"><div class="home-img ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}${spot}${tourShade}</div></div>${tour ? tourCard() : ''}${!tut && !tour && S.p.lvl < 10 && !S.p.prestige ? '<div class="swipe-hint" aria-hidden="true"><span>‹</span>Swipe left and right to see every building<span>›</span></div>' : ''}`;
   }
   // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
   function backBar() {
@@ -550,6 +553,7 @@
   }
   function setTab(t) {
     tab = t;
+    document.body.dataset.tab = t; setMenu(false);
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
     render();
     if (t === 'arena') arenaEnter();
@@ -557,6 +561,7 @@
   }
   // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
+    document.body.dataset.tab = tab;
     try { renderScreen(); }
     catch (e) {
       console.error(e);
@@ -645,7 +650,7 @@
     const cont = nx ? `<section class="camp-next ${nx.boss ? 'boss' : ''}">
         <div class="cn-main"><span class="tag">Next battle${d ? ' · ' + esc(D.name) : ''}</span><h3>${stageName(next)}</h3>
           ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}
-          <div class="cn-foes">${foeImgs(nx)}</div>
+          <div class="cn-phases">${nx.phases.map((p, i) => `<div class="cn-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><div>${p.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('')}</div></div>`).join('')}</div>
           <div class="st-meta"><span class="pill">Lv ${K.diffLvl(nx, d)}</span><span class="pill">${K.PHASES} phases</span><span class="pill cn-drop"><span class="st-dic">${dropIc(nx)}</span>${dropName(nx)}</span>${nrw.length ? `<span class="cn-rw">First clear: ${nrw.join('')}</span>` : ''}</div></div>
         ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></section>`}`
       : `<section class="camp-next done"><div class="cn-main"><span class="tag">${esc(D.name)} complete</span><h3>Every stage cleared!</h3><span class="cn-sub">${K.DIFFS[d + 1] ? `${K.DIFFS[d + 1].name} is open: pick it above for better gear.` : 'You beat the hardest difficulty.'} Replay stages to farm gear.</span></div></section>`;
@@ -656,6 +661,7 @@
       ${cont}
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower(teamIds('campaign')).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
+      ${nx && !fightSpot() ? `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button><button class="btn primary" data-act="play" data-stage="${next}">⚔ Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></div>` : ''}
       <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared</span></div>
       ${setBanner(K.CHAPTERS[chap].set, D)}
       <div class="stages">${idx.slice(0, 6).map(i => tile(K.STAGES[i], i)).join('')}</div>
@@ -805,7 +811,8 @@
       ${rolesHtml(S.team)}
       <div class="champ-layout"><div>${filterBar(false)}
         ${list.length ? `<div class="grid-cards">${list.map(id => cardHtml(id, { act: 'sel', sel: id === selChamp, inteam: S.team.includes(id) })).join('')}</div>` : '<p class="empty-note">No champions match these filters.</p>'}</div>
-        ${heroDetail(selChamp)}</div>`;
+        ${heroDetail(selChamp)}</div>
+      ${S.roster[selChamp] ? `<div class="m-act"><button class="btn" data-act="toggle" data-id="${selChamp}">${S.team.includes(selChamp) ? 'Remove from team' : 'Add to team'}</button><button class="btn primary" data-act="bestgear">Equip best gear</button></div>` : ''}`;
   }
   // ----- hero filters: essence, rarity and class filter the list; power, level, rarity or name sort it.
   // own: 'owned' (Team), or on the Heroes index 'all' / 'owned' / 'missing' (TF.own) -----
@@ -1552,10 +1559,39 @@
     if ((tab === 'social' || tab === 'mail') && !B) render();
   }
   const mailCount = () => (SO.invites || []).length + (SO.friends || []).filter(f => f.kind === 'incoming').length + (SO.mail || []).filter(m => !m.claimed).length;
+  // ---------- phone menu (☰ in the header): Guide, Mail, profile, sound and music, and the currencies the slim header hides ----------
+  function menuHtml() {
+    const n = signedIn() ? mailCount() : 0;
+    const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
+    return `<div class="mm-box" role="menu">
+      ${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
+      ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}
+      <div class="mm-cur"><span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
+        <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
+  }
+  function setMenu(open) {
+    const m = $('#mmenu'), b = $('#menubtn'); if (!m || !b) return;
+    m.hidden = !open; b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) m.innerHTML = menuHtml();
+  }
+  document.addEventListener('click', e => {
+    if (e.target.closest('#menubtn')) { if (B) return; SFX.click(); setMenu($('#mmenu').hidden); return; }
+    const it = e.target.closest('[data-mm]');
+    if (it) {
+      const a = it.dataset.mm; setMenu(false);
+      if (a === 'sound') { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
+      if (a === 'music') { S.music = !S.music; save(); MUSIC.refresh(); if (tab === 'profiel') render(); return; }
+      ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
+      return;
+    }
+    if (!$('#mmenu').hidden && !e.target.closest('#mmenu')) setMenu(false);
+    if (e.target.closest('#homebtn')) { if (B) return; SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); }
+  });
   function paintMail() {
     const b = $('#mail'); if (!b) return;
     const n = signedIn() ? mailCount() : 0, badge = b.querySelector('.mail-n');
     badge.hidden = !n; badge.textContent = n > 9 ? '9+' : n; b.classList.toggle('has', n > 0);
+    const mb = document.querySelector('#menubtn .menu-n'); if (mb) { mb.hidden = !n; mb.textContent = n > 9 ? '9+' : n; }
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
@@ -2756,7 +2792,7 @@
     runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
-  const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
+  const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor, cfg.ids.length) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
     const alive = heroes.filter(u => u.alive);
@@ -2903,7 +2939,7 @@
       <div class="tw-tabs" role="group" aria-label="Towers">${tabs}</div>
       <div class="tw-prog"><div class="exp-bar"><i style="width:${prog / K.TOWER.floors * 100}%"></i></div><small class="empty-note">${twName(e)}: ${prog} of ${K.TOWER.floors} floors cleared</small></div>
       ${floor}
-      <div class="section-head"><h3 style="margin:0">${e === 'All' ? 'Your' : e} team</h3><span class="tag">${team.length} / 4 · power ${teamPower(team).toLocaleString('en-US')}</span></div>${pick}`;
+      <div class="section-head"><h3 style="margin:0">${e === 'All' ? 'Your' : e} team</h3><span class="tag">${team.length} / 4 · power ${teamPower(team).toLocaleString('en-US')}</span></div>${team.length && team.length < 4 ? `<p class="tw-warn">With ${team.length === 1 ? 'one hero' : team.length + ' heroes'} the foes are ${Math.round((K.TOWER.solo[team.length - 1] - 1) * 100)}% stronger. Bring a full team of four.</p>` : ''}${pick}`;
   }
   // ---------- Expeditions (the ship, tab `expedition`, K.EXPEDITIONS) ----------
   // S.exp = { k, ids, start, end, lvl } while a trip is out; heroes on it are away: not addable to a team, not fed

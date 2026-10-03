@@ -267,17 +267,20 @@ const K = (function () {
       skills: [
         SK('Hellfire', 'enemy', 'magic', 'fire', 0, 'Fireball of 115%.', [D(1.15)]),
         SK('Meteor', 'enemies', 'magic', 'meteor', 4, 'Hits all enemies for 90%. 50% chance of Heal Reduction for 2 turns.', [D(0.9), DB('healRed', 2, 0.5)]),
+        SK('Brand of Ruin', 'enemy', 'magic', 'fire', 3, 'Attack of 130%. 70% chance of Burn for 2 turns.', [D(1.3), DB('burn', 2, 0.7)], { startCd: 1 }),
       ] },
     vorlund: { name: 'Vorlund', faction: 'Grey Flame', role: 'Tank', rar: 1, aff: 'Radiant',
       passive: 'retribution', passiveName: 'Retribution', passiveDesc: '30% chance to counterattack when hit.',
       skills: [
         SK('Lance Thrust', 'enemy', 'melee', 'stab', 0, 'Thrust of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
         SK('Golden Bulwark', 'allies', 'buff', 'shield', 4, 'All allies gain Defense Up for 2 turns and a shield of 12% of his max HP.', [BF('defUp', 2), SH(0.12, 2)]),
+        SK('Radiant Judgment', 'enemy', 'melee', 'stab', 3, 'Strike of 130%. 60% chance of Attack Down for 2 turns.', [D(1.3), DB('atkDown', 2, 0.6)], { startCd: 1 }),
       ] },
     karnok: { name: 'Karnok', faction: 'Ironbeard Clans', role: 'Warrior', rar: 1, aff: 'Storm',
       skills: [
         SK('Hammer Blow', 'enemy', 'melee', 'smash', 0, 'Strike of 95%. 20% chance to Stun for 1 turn.', [D(0.95), DB('stun', 1, 0.2)]),
         SK('Anvil Wall', 'allies', 'buff', 'shield', 3, 'All allies gain Defense Up for 2 turns.', [BF('defUp', 2)]),
+        SK('Thunderclap', 'enemies', 'slam', 'quake', 4, 'Hits all enemies for 70%. 25% chance to Stun for 1 turn.', [D(0.7), DB('stun', 1, 0.25)], { startCd: 1 }),
       ] },
     // ----- heroes 26-50 (Fate Altar only) -----
     kaelira: { name: 'Kaelira', faction: 'Grey Flame', role: 'Mage', role2: 'Support', rar: 3, aff: 'Radiant',
@@ -825,7 +828,7 @@ const K = (function () {
   // 300 itself ~20% a try). Teams without a Legendary stop 30-70 floors earlier.
   // curve: [floor, enemy level, strength] points, straight lines in between (calibrated by simulation, see CLAUDE.md)
   const TOWERS = ['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'All'];
-  const TOWER = { floors: 300, curve: [[1, 1, 0.9], [50, 25, 2.0], [100, 45, 4.3], [200, 65, 7.4], [300, 85, 10.5]], boss: 0.45, open: 2, openBoss: 1.15 };
+  const TOWER = { floors: 300, curve: [[1, 1, 0.9], [50, 25, 2.0], [100, 45, 4.3], [200, 65, 7.4], [300, 85, 10.5]], boss: 0.45, open: 2, openBoss: 1.15, solo: [3, 1.7, 1.25, 1] };
   function towerFloor(f) {
     const c = TOWER.curve, i = Math.max(1, c.findIndex(p => p[0] >= f)), [f0, l0, s0] = c[i - 1], [f1, l1, s1] = c[i], k = (f - f0) / (f1 - f0);
     return { lvl: Math.round(l0 + (l1 - l0) * k), str: s0 + (s1 - s0) * k, boss: f % 10 === 0, t: (f - 1) / (TOWER.floors - 1) };
@@ -840,9 +843,11 @@ const K = (function () {
     if (F.boss) out[0] = BOSS_ORDER[(f / 10 - 1) % BOSS_ORDER.length];
     return out;
   }
-  function towerUnits(ess, f) {
+  // a smaller team meets tougher foes (TOWER.solo by team size), so a single strong hero cannot solo the tower
+  function towerUnits(ess, f, n) {
     const F = towerFloor(f), st = { chapter: f >= 60 ? TUNE.hitFrom : 0 };
-    return towerFoes(ess, f).map(id => attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * (BOSSES[id] ? TOWER.boss : 1) * (ess !== 'All' ? 1 : F.boss ? TOWER.openBoss : TOWER.open)), st));
+    // every tower foe enrages like a Boss Hall boss (u.hall), so a fight that neither side can win ends within ~30 turns
+    return towerFoes(ess, f).map(id => { const u = attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * (BOSSES[id] ? TOWER.boss : 1) * (ess !== 'All' ? 1 : F.boss ? TOWER.openBoss : TOWER.open) * TOWER.solo[Math.max(1, Math.min(4, n || 4)) - 1]), st); u.hall = true; return u; });
   }
   // first-clear reward of floor f: Sigils and hero XP every floor; shards and stones on boss floors and milestones
   function towerReward(f) {
@@ -1682,7 +1687,7 @@ const K = (function () {
       if (ids.has(h.id)) return 'duplicate hero'; ids.add(h.id);
       if (!isInt(h.stars, baseStars(h.id), maxStars(h.id))) return 'stars';
       if (!isInt(h.lvl, 1, maxLvl(h.stars, h.id))) return 'level';
-      if (!Array.isArray(h.sk) || h.sk.length !== c.skills.length || !h.sk.every(v => isInt(v, 0, SKILL_MAX))) return 'skills';
+      if (!Array.isArray(h.sk) || h.sk.length > c.skills.length || !h.sk.every(v => isInt(v, 0, SKILL_MAX))) return 'skills';
       if (!Array.isArray(h.items) || h.items.length > SLOTS.length) return 'items';
       const slots = new Set();
       for (const it of h.items) {
