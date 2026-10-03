@@ -467,7 +467,7 @@
     { go: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 580, 360, 223], plate: [72, 803, 226, 50] },
     { box: [380, 600, 320, 211], plate: [453, 809, 192, 50] },
     { go: 'campagne', label: 'Campaign', box: [860, 600, 330, 238], plate: [945, 838, 210, 46] },
-    { go: 'tower', label: 'Tower of Essence', name: 'Tower of Essence', icon: 'tower', box: [1200, 660, 336, 204], plate: [1273, 862, 220, 50] },
+    { go: 'tower', label: 'Tower of Essence', name: 'Tower of Essence', icon: 'tower', box: [1200, 660, 336, 204], plate: [1222, 862, 298, 50] },
   ];
   let homeScroll = null;
   // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
