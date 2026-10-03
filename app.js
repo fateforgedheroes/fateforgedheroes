@@ -25,12 +25,21 @@
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
   const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, tower: { ch: 2 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
   const PLAYER_UNLOCK = { altaar: 5 }; // the player-level ones (level-up messages)
-  const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? s.p.lvl >= u.lvl : s.cleared >= u.ch * 7 - 1); };
+  const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? effLvl(s) >= u.lvl : s.cleared >= u.ch * 7 - 1); };
   const needTxt = t => { const u = UNLOCKS[t]; return u.lvl ? `player level ${u.lvl}` : `clearing Chapter ${ROMAN[u.ch - 1]}`; };
   const needTag = t => { const u = UNLOCKS[t]; return u.lvl ? `Lv ${u.lvl}` : `Ch ${ROMAN[u.ch - 1]}`; };
-  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena', guild: 'Guilds' };
+  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena', guild: 'Guilds', expedition: 'Expeditions', tower: 'Tower of Essence' };
   // player XP per level: steeper than before (level 10, the Boss Hall, now takes ~75-130 battles instead of ~25)
   const pxNeed = l => 60 * l + 12 * l * l;
+  // Player level stops at PLAYER_MAX; there the player can prestige (S.p.prestige): back to level 1 with everything kept,
+  // a new emblem (PRESTIGE_ART[n - 1] when the art exists, else a numbered badge) and PRESTIGE_REWARD. Unlocks and max
+  // energy count a prestiged player as level PLAYER_MAX (effLvl), so a prestige never takes anything away.
+  const PLAYER_MAX = 100, PRESTIGE_REWARD = { silver: 25000, fs: { mythic: 1 } };
+  const effLvl = s => (s.p.prestige ? PLAYER_MAX : s.p.lvl);
+  const romanN = n => { let s = ''; for (const [v, r] of [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]) while (n >= v) { s += r; n -= v; } return s; };
+  const presEmblem = (n, cls) => !n ? '' : typeof PRESTIGE_ART !== 'undefined' && PRESTIGE_ART[Math.min(n, PRESTIGE_ART.length) - 1]
+    ? `<img class="pres-emb img ${cls || ''}" src="${PRESTIGE_ART[Math.min(n, PRESTIGE_ART.length) - 1]}" alt="Prestige ${n}" title="Prestige ${n}">`
+    : `<span class="pres-emb ${cls || ''}" title="Prestige ${n}">${romanN(n)}</span>`;
   // per cleared stage / Boss Hall level
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
@@ -44,7 +53,7 @@
   // ---------- Teams: up to TEAM_MAX named teams (S.teams[i] = { name, ids }); S.modeTeam says which team each game mode
   // uses. S.team is the team in use (the one on the Team screen and in the last battle): the same array as
   // S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
-  const TEAM_MAX = 3, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss']];
+  const TEAM_MAX = K.ESSENCES.length, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss']];
   function linkTeams(s) {
     if (!Array.isArray(s.teams) || !s.teams.length) s.teams = [{ name: 'Team 1', ids: Array.isArray(s.team) ? s.team : [] }];
     s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
@@ -59,7 +68,7 @@
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
-    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
+    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
@@ -428,10 +437,10 @@
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
     // no hero yet (starter choice): a plain person icon instead of an avatar
-    if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">Lv ${S.p.lvl}</span>`; return; }
+    if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
-    b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
+    b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
     b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
     if (tab === 'profiel' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = profileHtml();
   }
@@ -755,7 +764,7 @@
     }
     const cls = [opts.sel ? 'sel' : '', opts.inteam ? 'inteam' : ''].join(' ');
     const slot = S.team.indexOf(id) + 1; // --tord: team members first in the phone strip (see CSS)
-    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}"${slot ? ` data-slot="${slot}" style="--tord:${slot - 5}"` : ''}>${affChip(c.aff)}<span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
+    return `<button class="card rar-${c.rar} ${cls}" data-act="${opts.act}" data-id="${id}"${slot ? ` data-slot="${slot}"` : ''} style="--ec:${AFF_COL[c.aff]}${slot ? `;--tord:${slot - 5}` : ''}">${affChip(c.aff)}<span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<span class="nm">${esc(c.short)}</span>${starStr(S.roster[id].stars, K.maxStars(id))}<span class="sub">${roleStr(c)}</span></button>`;
   }
   const sortedIds = () => [...K.CHAMP_ORDER, ...K.DEV_HEROES.filter(id => S.roster[id]), ...K.CAPTURE_ORDER.filter(id => S.roster[id])].sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || C[b].rar - C[a].rar || ((S.roster[b]?.lvl || 0) - (S.roster[a]?.lvl || 0)));
   // what a team brings: healing (heal, shield or revive skills, or a healing passive), protection (tanks, Defense Up,
@@ -772,7 +781,7 @@
       ['Control', has(id => skillFx(id).some(t => ['stun', 'freeze', 'spdDown', 'defDown', 'atkDown', 'tmDrain'].includes(t))), 'Stuns, slows and debuffs blunt the enemy'],
     ];
   }
-  const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'}" title="${esc(tip)}">${ok ? '✓' : '✗'} ${k}</li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
+  const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'} role-${k.toLowerCase()}" title="${esc(tip)}"><i aria-hidden="true">${{ Damage: '⚔', Healing: '✚', Protection: '⛨', Control: '✦' }[k]}</i>${k}${ok ? '' : ' <small>missing</small>'}</li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
   // Team: the four slots, and every owned hero with its details (stats, skills, gear, ascend and feed) next to the list;
   // tap a hero to see it, "Add to team" / "Remove from team" in its details
   function teamHtml() {
@@ -780,13 +789,15 @@
     const slots = [0, 1, 2, 3].map(i => {
       const id = S.team[i];
       if (!id) return `<div class="slot"><small>Empty</small></div>`;
-      return `<button class="slot filled rar-${C[id].rar} ${id === selChamp ? 'sel' : ''}" data-act="sel" data-id="${id}" title="Show ${esc(C[id].short)}"><span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
+      return `<button class="slot filled rar-${C[id].rar} ${id === selChamp ? 'sel' : ''}" style="--ec:${AFF_COL[C[id].aff]}" data-act="sel" data-id="${id}" title="Show ${esc(C[id].short)}"><span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
     }).join('');
-    const tabs = S.teams.map((t, i) => `<button type="button" class="tm-tab ${i === S.tsel ? 'on' : ''}" data-act="tmsel" data-i="${i}" aria-pressed="${i === S.tsel}"><b>${esc(t.name)}</b><small>${t.ids.length}/4 · ${TEAM_MODES.filter(([m]) => S.modeTeam[m] === i).map(([, l]) => l).join(', ') || 'not used'}</small></button>`).join('')
-      + (S.teams.length < TEAM_MAX ? '<button type="button" class="tm-tab add" data-act="tmnew"><b>+ Create a team</b><small>up to 3</small></button>' : '');
+    // the favourite team (S.tfav, ★) comes first and is the one the Team screen opens on
+    const order = S.teams.map((t, i) => i).sort((a, b) => (b === S.tfav) - (a === S.tfav) || a - b);
+    const tabs = order.map(i => { const t = S.teams[i], fav = i === S.tfav; return `<button type="button" class="tm-tab ${i === S.tsel ? 'on' : ''} ${fav ? 'fav' : ''}" data-act="tmsel" data-i="${i}" aria-pressed="${i === S.tsel}"><b>${fav ? '<span class="tm-star" title="Favourite team">★</span> ' : ''}${esc(t.name)}</b><small>${t.ids.length}/4 · ${TEAM_MODES.filter(([m]) => S.modeTeam[m] === i).map(([, l]) => l).join(', ') || 'not used'}</small></button>`; }).join('')
+      + (S.teams.length < TEAM_MAX ? `<button type="button" class="tm-tab add" data-act="tmnew"><b>+ Create a team</b><small>up to ${TEAM_MAX}</small></button>` : '');
     const modes = TEAM_MODES.map(([m, l]) => { const on = S.modeTeam[m] === S.tsel; return `<button type="button" class="tm-mode ${on ? 'on' : ''}" data-act="tmmode" data-m="${m}" aria-pressed="${on}" title="${on ? `${l} uses this team` : `Use this team for ${l}`}">${on ? '✓ ' : ''}${l}</button>`; }).join('');
     const bar = `<div class="tm-bar"><div class="tm-tabs" role="group" aria-label="Your teams">${tabs}</div>
-      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}<span class="tm-acts"><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span></div></div>`;
+      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}<span class="tm-acts"><button type="button" class="linkbtn" data-act="tmfav" aria-pressed="${S.tsel === S.tfav}">${S.tsel === S.tfav ? '★ Favourite' : '☆ Make favourite'}</button><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span></div></div>`;
     const list = filteredIds('owned');
     return `<div class="section-head"><div><h2>Team</h2><p class="lede">Choose up to four champions and make them stronger: tap a hero for its stats, skills and gear, to feed it, ascend it or add it to your team. A mix of damage, protection and healing beats four attackers.</p></div><div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b></div></div>
       ${bar}
@@ -853,14 +864,14 @@
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
     }
     const inTeam = S.team.includes(id);
-    return `<div class="detail rar-${c.rar}" data-dtab="${champTab}">
+    return `<div class="detail rar-${c.rar}" data-dtab="${champTab}" style="--ec:${AFF_COL[c.aff]}">
         <div class="d-head"><img class="spr bigspr ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
           <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">Team ${S.team.indexOf(id) + 1}</span>` : ''}</h2>
           <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          <div class="d-team"><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button></div>
+          <div class="d-team"><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
         </div></div>
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
@@ -888,7 +899,7 @@
     const ids = filteredIds(TF.own), have = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
     const cards = ids.map(id => {
       const c = C[id], r = S.roster[id];
-      return `<button type="button" class="card rar-${c.rar} ${r ? '' : 'missing'}" data-act="hinfo" data-id="${id}" title="${esc(c.name)}${r ? '' : ' · not unlocked yet'}">${affChip(c.aff)}${r ? `<span class="lv" title="Level ${r.lvl}">${r.lvl}</span>` : `<span class="lockpin" aria-hidden="true">${LOCK_SVG}</span>`}${por(id)}<span class="nm">${esc(c.short)}</span>${r ? starStr(r.stars, K.maxStars(id)) : `<span class="rartxt mini">${K.RARITIES[c.rar]}</span>`}<span class="sub">${r ? roleStr(c) : esc(heroSource(id).replace(/^Unlock: /, '').replace(/ \(Easy\), or the Fate Altar$/, ' / Altar'))}</span></button>`;
+      return `<button type="button" class="card rar-${c.rar} ${r ? '' : 'missing'}" style="--ec:${AFF_COL[c.aff]}" data-act="hinfo" data-id="${id}" title="${esc(c.name)}${r ? '' : ' · not unlocked yet'}">${affChip(c.aff)}${r ? `<span class="lv" title="Level ${r.lvl}">${r.lvl}</span>` : `<span class="lockpin" aria-hidden="true">${LOCK_SVG}</span>`}${por(id)}<span class="nm">${esc(c.short)}</span>${r ? starStr(r.stars, K.maxStars(id)) : `<span class="rartxt mini">${K.RARITIES[c.rar]}</span>`}<span class="sub">${r ? roleStr(c) : esc(heroSource(id).replace(/^Unlock: /, '').replace(/ \(Easy\), or the Fate Altar$/, ' / Altar'))}</span></button>`;
     }).join('');
     return `<div class="section-head"><div><h2>Heroes</h2><p class="lede">Every hero in the game. The ones you have not unlocked yet are dimmed, with where to find them. Tap a hero for its stats and skills.</p></div><span class="tag">${have} / ${K.CHAMP_ORDER.length} unlocked${K.CAPTURE_ORDER.some(x => S.roster[x]) ? ` · ${K.CAPTURE_ORDER.filter(x => S.roster[x]).length} captured` : ''}</span></div>
       ${filterBar(true)}
@@ -1674,9 +1685,10 @@
     return `<div class="profile">
       <div class="prof-head rar-${C[av].rar}"><div class="prof-av">${por(av)}</div>
         <div class="prof-main">${nameRow}
-          <div class="prof-lv"><span class="lvbadge">${p.lvl}</span><span>Player level ${p.lvl}</span></div>
-          <div class="xpbar"><i style="width:${Math.round(p.xp / need * 100)}%"></i></div>
-          <small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP</small></div></div>
+          <div class="prof-lv"><span class="lvbadge">${p.lvl}</span><span>Player level ${p.lvl}${p.prestige ? ` · Prestige ${p.prestige}` : ''}</span>${presEmblem(p.prestige, 'lg')}</div>
+          <div class="xpbar"><i style="width:${p.lvl >= PLAYER_MAX ? 100 : Math.round(p.xp / need * 100)}%"></i></div>
+          ${p.lvl >= PLAYER_MAX ? `<div class="prestige-box"><p><b>Maximum level reached!</b> Prestige to start again at level 1 with everything you own, earn prestige emblem ${romanN((p.prestige || 0) + 1)}, ${sigils(PRESTIGE_REWARD.silver)} and a ${esc(K.SHARD.mythic.name)}, and collect every level-up reward again.</p><button class="btn primary" data-act="prestige">Prestige ${romanN((p.prestige || 0) + 1)}</button></div>`
+            : `<small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP${p.lvl >= PLAYER_MAX - 10 ? ` · at level ${PLAYER_MAX} you can prestige` : ''}</small>`}</div></div>
       <div class="prof-cols">
         <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out Sigils. Every fifth level also gives a Greater Fate Shard.</p></section>
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
@@ -1753,7 +1765,7 @@
     else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
     else if (act === 'startercancel') $('#modal').hidden = true;
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
-    else if (act === 'go') { invSlot = null; if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+    else if (act === 'go') { invSlot = null; if (a.dataset.go === 'team' && S.teams[S.tfav]) { S.tsel = S.tfav; S.team = S.teams[S.tfav].ids; } if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
     else if (act === 'tutlock') toast('Fight your first campaign battle to open the rest of your homebase.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
@@ -1823,11 +1835,13 @@
     else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
     else if (act === 'tmnew') nameBox('Create a team', `Team ${S.teams.length + 1}`, 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
     else if (act === 'tmname') nameBox('Rename team', S.teams[S.tsel].name, 'Save', name => { S.teams[S.tsel].name = name; save(); render(); });
+    else if (act === 'tmfav') { S.tfav = S.tfav === S.tsel ? null : S.tsel; save(); render(); }
     else if (act === 'tmdel') {
       const i = S.tsel, t = S.teams[i];
       confirmBox(`Delete ${esc(t.name)}?`, 'The heroes stay in your roster; only this team is removed. Game modes that used it switch to your first team.', 'Delete', () => {
         S.teams.splice(i, 1);
         for (const [m] of TEAM_MODES) S.modeTeam[m] = S.modeTeam[m] === i ? 0 : S.modeTeam[m] > i ? S.modeTeam[m] - 1 : S.modeTeam[m];
+        S.tfav = S.tfav === i ? null : S.tfav > i ? S.tfav - 1 : S.tfav;
         S.tsel = 0; linkTeams(S); save(); render();
       });
     }
@@ -1854,6 +1868,14 @@
     else if (act === 'twsel') { S.tw.cur = a.dataset.e; save(); render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
     else if (act === 'twgo') { const e = S.tw.cur || 'Ember'; startTower(e, twProg(e) + 1); }
+    else if (act === 'prestige') {
+      if (S.p.lvl < PLAYER_MAX) return;
+      const n = (S.p.prestige || 0) + 1;
+      confirmBox(`Prestige ${romanN(n)}?`, `You go back to player level 1 and keep everything else: heroes, gear, campaign progress, open buildings and your maximum energy. You earn prestige emblem ${romanN(n)}, ${PRESTIGE_REWARD.silver.toLocaleString('en-US')} Sigils and a ${esc(K.SHARD.mythic.name)}, and every level-up pays its reward again.`, `Prestige ${romanN(n)}`, () => {
+        S.p.prestige = n; S.p.lvl = 1; S.p.xp = 0; S.silver += PRESTIGE_REWARD.silver; for (const t in PRESTIGE_REWARD.fs) S.fs[t] = (S.fs[t] || 0) + PRESTIGE_REWARD.fs[t];
+        save(); hud(); render(); SFX.up(); toast(`Prestige ${romanN(n)}! A new emblem is yours. Level 1 again, with everything you own.`, false, 5000);
+      });
+    }
     else if (act === 'hinfo') heroInfo(id);
     else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; invSlot = null; champTab = 'stats'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
@@ -2943,7 +2965,7 @@
   setInterval(() => { if (!S || !S.exp) return; if (tab === 'expedition' && $('#modal').hidden) { const el = document.querySelector('.exp-left'); if (el && !expDone()) { el.textContent = `Back in ${fmtLeft(S.exp.end - Date.now())}`; const b = document.querySelector('.exp-bar i'); if (b) b.style.width = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100)) + '%'; } else if (expDone() && !document.querySelector('[data-act=expclaim]')) render(); } else if (tab === 'home' && expDone() && !document.querySelector('.hz-badge.ready')) render(); }, 30000);
   // ---------- Energy (K.ENERGY): S.energy, refilled by time from S.enAt (ms) ----------
   const EN_MS = K.ENERGY.regenMin * 60000;
-  const enMax = () => K.energyMax(S.p.lvl);
+  const enMax = () => K.energyMax(effLvl(S));
   function energyTick() {
     const now = Date.now(), max = enMax();
     if (S.energy == null || !S.enAt) { S.energy = S.energy ?? max; S.enAt = now; }
@@ -2972,12 +2994,13 @@
   function grantPlayerXp(amount) {
     const p = S.p, ups = [];
     p.xp += amount;
-    while (p.xp >= pxNeed(p.lvl)) {
+    while (p.lvl < PLAYER_MAX && p.xp >= pxNeed(p.lvl)) {
       p.xp -= pxNeed(p.lvl); p.lvl++;
       const silver = levelSilver(p.lvl), shard = p.lvl % 5 === 0 ? 'greater' : null;
       S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; energyTick(); const en = enMax(); S.energy += en;
-      ups.push([p.lvl, silver, shard, Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl) || null, en]);
+      ups.push([p.lvl, silver, shard, (!p.prestige && Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl)) || null, en]);
     }
+    if (p.lvl >= PLAYER_MAX) p.xp = 0; // the bar stops at the top: time to prestige
     return ups;
   }
   // unlock messages (S.seen remembers which were shown): speed 3× and 5×, Fate Altar, Boss Hall
@@ -3061,7 +3084,7 @@
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
-    if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
+    if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : S.p.lvl >= PLAYER_MAX ? ' · max level: prestige in the Town Hall' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
     pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     for (const [t, n] of Object.entries(stones)) if (n > 0) items.push(`<li ${d()}>${stoneIc(t)}+${n} ${stoneName(t, n)}</li>`);
