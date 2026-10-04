@@ -377,7 +377,7 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 #b-log li.enemy { color: #f0c8bc; }
 
 /* modal + toast */
-.modal { position: fixed; inset: 0; background: rgba(8,6,10,.78); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.modal { position: fixed; inset: 0; background: rgba(8,6,10,.78); display: grid; place-items: center; padding: 16px; z-index: 25; }
 .modal-box { background: var(--panel); border: 2px solid var(--gold); width: min(520px, 100%); max-height: calc(100% - 32px); overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 4px #000, 0 12px 40px rgba(0,0,0,.6); animation: pop .25s ease-out; }
 .modal-box.wide { width: min(760px, 100%); }
 .modal-box.lose { border-color: var(--bad); }
@@ -881,7 +881,7 @@ button, a, input { touch-action: manipulation; }
 .champ-layout .card { order: var(--tord, 0); }
 .champ-layout .card.lockedc { display: none; }
 .champ-layout .card.inteam { border-color: var(--gold); background: linear-gradient(#34291a, var(--panel) 70%); }
-.champ-layout .card.inteam::after { content: "Team " attr(data-slot); white-space: nowrap; }
+.champ-layout .card.inteam::after { content: "In team"; white-space: nowrap; }
 .champ-layout .card.sel { box-shadow: 0 0 0 2px var(--fg); }
 .champ-layout .card .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; overflow-wrap: normal; }
 .detail { gap: 0; }
@@ -1631,7 +1631,7 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .aff.tw-all { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 4px; background: linear-gradient(135deg, #e0631c, #5e9e2a, #3a8fc4, #c99a1c, #8a4fc4); color: #fff; font-size: 12px; line-height: 1; }
 /* painted name plates on the homebase (PLATE_ART) */
 .hz-plate-img { position: absolute; object-fit: contain; pointer-events: none; filter: drop-shadow(0 .25cqw .4cqw rgba(0, 0, 0, .55)); transition: transform .15s; }
-.hz:hover + .hz-plate-img, .hz:focus-visible + .hz-plate-img { transform: scale(1.05); }
+.hz:hover + .hz-plate-img, .hz:focus-visible + .hz-plate-img, .hz:hover + .hz-pl + .hz-plate-img, .hz:focus-visible + .hz-pl + .hz-plate-img { transform: scale(1.05); }
 .hz-plate-img.soon { filter: grayscale(.6) brightness(.75) drop-shadow(0 .25cqw .4cqw rgba(0, 0, 0, .55)); }
 .hz-badge.soon-tag { gap: .35cqw; color: #cfc4d6; }
 .hz-badge.soon-tag svg { width: 1cqw; height: 1cqw; fill: none; stroke: currentColor; stroke-width: 1.6; }

@@ -601,7 +601,7 @@
   const HZPP = (cx, cy) => [cx - 170, cy - 54, 340, 108];
   const P_BOXES = { kerkers: [[30, 20, 360, 330], HZPP(210, 340)], arena: [[570, 120, 360, 230], HZPP(760, 355)], profiel: [[290, 220, 390, 250], HZPP(485, 470)], altaar: [[650, 420, 291, 270], HZPP(765, 700)],
     team: [[0, 410, 350, 250], HZPP(180, 655)], social: [[20, 800, 380, 250], HZPP(210, 1055)], guild: [[600, 800, 341, 220], HZPP(765, 1035)], expedition: [[0, 1310, 470, 300], HZPP(240, 1590)],
-    market: [[20, 1070, 380, 240], HZPP(210, 1315)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1000, 221, 470], HZPP(765, 1480)] };
+    market: [[20, 1070, 380, 210], HZPP(210, 1285)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1095, 221, 375], HZPP(765, 1480)] };
   const HOME_ZONES_P = HOME_ZONES_L.map(z => ({ ...z, box: P_BOXES[z.art][0], plate: P_BOXES[z.art][1] }));
   const CAMP_AT_P = [570, 1160, 1030];
   const PORT_MQ = matchMedia('(max-width: 760px) and (orientation: portrait)');
@@ -649,19 +649,19 @@
     // every building has its painted name plate (PLATE_ART); a building that is not open yet gets a "Coming soon" tag on it
     const namePlate = z => `<img class="hz-plate-img ${z.go ? '' : 'soon'}" style="${at(z.plate)}" src="${PLATE_ART[z.art]}" alt="">`;
     const zones = HOME_ZONES.map(z => {
-      // one button covers the building and its plate
-      const [bx, by, bw, bh] = z.box, [px, py, pw, ph] = z.plate, x0 = Math.min(bx, px), y0 = Math.min(by, py);
-      const area = [x0, y0, Math.max(bx + bw, px + pw) - x0, Math.max(by + bh, py + ph) - y0];
-      if (tut && z.go && z.go !== 'campagne') return `<button type="button" class="hz" style="${at(area)}" data-act="tutlock" aria-label="${z.label} (opens after your first battle)"></button>${namePlate(z)}`;
-      if (tut && z.go === 'campagne') return `<button type="button" class="hz tut-go" style="${at(area)}" data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"></button>${namePlate(z)}`;
-      if (!z.go) return `<button type="button" class="hz soon" style="${at(area)}" data-act="soon" aria-label="Coming soon"></button>
+      // two buttons: one on the building, one on its plate (a single box around both overlapped the next building)
+      const [px, py, pw] = z.plate;
+      const two = (cls, attrs) => `<button type="button" class="${cls}" style="${at(z.box)}" ${attrs}></button><button type="button" class="${cls} hz-pl" style="${at(z.plate)}" tabindex="-1" aria-hidden="true" ${attrs}></button>`;
+      if (tut && z.go && z.go !== 'campagne') return `${two(`hz`, `data-act="tutlock" aria-label="${z.label} (opens after your first battle)"`)}${namePlate(z)}`;
+      if (tut && z.go === 'campagne') return `${two(`hz tut-go`, `data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"`)}${namePlate(z)}`;
+      if (!z.go) return `${two(`hz soon`, `data-act="soon" aria-label="Coming soon"`)}
         ${namePlate(z)}<span class="hz-badge lock soon-tag" style="left:${pc(px + pw / 2, HOME_W)};top:${pc(py + 4, HOME_H)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
       const locked = !unlocked(z.go);
       const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 40, HOME_W)};top:${pc(py + 4, HOME_H)}">${needTag(z.go)}</span>`
         : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}"></span>`
         : z.go === 'profiel' && thClaimN() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="Rewards to claim in the Town Hall"></span>`
         : z.go === 'expedition' && expDone() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="The ship is back"></span>` : '';
-      return `<button type="button" class="hz ${locked ? 'locked' : ''}" style="${at(area)}" data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" title="${z.label}"></button>${namePlate(z)}${badge}`;
+      return `${two(`hz ${locked ? 'locked' : ''}`, `data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" title="${z.label}"`)}${namePlate(z)}${badge}`;
     }).join('');
     // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
     const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
@@ -1102,10 +1102,9 @@
         <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
         <div>${r ? `${starStr(r.stars, K.maxStars(id))} · Level <b>${r.lvl}</b> / ${K.maxLvl(r.stars, id)} · Power <b>${power(st).toLocaleString('en-US')}</b>${S.team.includes(id) ? ' <span class="team-tag">In your team</span>' : ''}` : `<span class="tag">Not unlocked</span> <span class="empty-note">${esc(heroSource(id))}</span>`}</div>
       </div></div>
-      <h3 class="hp-h">Stats${r ? '' : ' at level 1'}</h3>
-      <dl class="stats">${row('hp')}${row('atk')}${row('def')}${row('spd')}${row('crit', 1)}${row('cdmg', 1)}${row('acc')}${row('res')}</dl>
-      <h3 class="hp-h">Skills</h3>
-      <div class="hp-skills">${skillsHtml(id, r)}</div>
+      <div class="dtabs hp-tabs" role="tablist" aria-label="Stats or skills"><button type="button" role="tab" data-act="hptab" data-t="stats" aria-selected="true">Stats</button><button type="button" role="tab" data-act="hptab" data-t="skills" aria-selected="false">Skills</button></div>
+      <section class="hp-sec" data-sec="stats">${r ? '' : '<p class="empty-note">At level 1.</p>'}<dl class="stats">${row('hp')}${row('atk')}${row('def')}${row('spd')}${row('crit', 1)}${row('cdmg', 1)}${row('acc')}${row('res')}</dl></section>
+      <section class="hp-sec" data-sec="skills" hidden><div class="hp-skills">${skillsHtml(id, r)}</div></section>
       <div class="modal-actions">${r ? `<button class="btn primary" data-act="hteam" data-id="${id}">Upgrade in Team</button>` : ''}<button class="btn" data-act="modal" data-go="close">Close</button></div></div>`;
     m.hidden = false;
     m.querySelector('.btn').focus({ preventScroll: true }); m.querySelector('.modal-box').scrollTop = 0;
@@ -2345,6 +2344,7 @@
     else if (act === 'arfight') arenaCall('start', { offer: +a.dataset.n }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } });
     else if (act === 'arlb') loadBoard(a.dataset.kind);
     else if (act === 'arclaim') claimArena().then(socialLoad);
+    else if (act === 'hptab') { const box = a.closest('.modal-box'); box.querySelectorAll('[data-act=hptab]').forEach(b => b.setAttribute('aria-selected', b === a ? 'true' : 'false')); box.querySelectorAll('.hp-sec').forEach(s => { s.hidden = s.dataset.sec !== a.dataset.t; }); }
     else if (act === 'thtab') { TH.tab = a.dataset.t; editName = false; render(); }
     else if (act === 'thclaim') thClaim(a);
     else if (act === 'mkbuy') mkBuy(a.dataset.id);
