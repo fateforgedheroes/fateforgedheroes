@@ -914,11 +914,12 @@ const K = (function () {
 
   // ---------- Energy (like RAID) ----------
   // Every campaign stage and Boss Hall level costs energy when it starts (won or lost); energy refills by 1 every
-  // regenMin minutes up to energyMax (base + player level), and a player level-up adds a full bar on top (it may go over
+  // regenMin minutes up to energyMax (base + player level), and a player level-up adds energy on top (app.js levelEnergy:
+  // a full bar up to level 15, then 60; it may go over
   // the max; it then stops refilling until it is below the max again). Easy Chapter I is free: the tutorial chapter.
   // Arena and guild boss have their own tokens and keys. Pace (campaign-sim battles × cost against ~480 a day plus
   // level-ups): Easy about a week and a half, all five difficulties a few months, as in RAID.
-  const ENERGY = { base: 100, regenMin: 3, stage: [3, 4, 5, 6, 8], boss: 6 };
+  const ENERGY = { base: 100, regenMin: 3, stage: [3, 4, 6, 8, 10], boss: 6 };
   const energyMax = plvl => ENERGY.base + (plvl || 1);
   const stageEnergy = (st, d) => (!d && st.chapter === 0 ? 0 : ENERGY.stage[d || 0]);
   const bossEnergy = n => ENERGY.boss + n;
@@ -1178,7 +1179,7 @@ const K = (function () {
   // ---------- Battle ----------
   const wait = () => Promise.resolve();
   const NOHOOKS = {
-    chooseAction: null, turnStart: wait, before: wait, after: wait, pause: wait, round() {}, hit() {}, healed() {},
+    chooseAction: null, record: null, turnStart: wait, before: wait, after: wait, pause: wait, round() {}, hit() {}, healed() {},
     float() {}, death() {}, revive() {}, log() {}, update() {}, spawn() {}, banner: wait, breakHit() {}, affinityBreak: wait, phase: wait,
   };
   const lowest = list => list.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
@@ -1278,8 +1279,13 @@ const K = (function () {
         let extra = 0;
         do {
           u.flags.crit = false;
-          const act = (u.side === 'hero' && !this.auto && this.h.chooseAction) ? await this.h.chooseAction(u, this) : this.ai(u);
+          // a manual choice may hand the turn to the AI ({ auto: true }, e.g. when auto is switched on mid-turn); record()
+          // notes every hero action (the arena sends them to the server, which replays the fight with them: arenaReplay)
+          let manual = u.side === 'hero' && !this.auto && !!this.h.chooseAction;
+          let act = manual ? await this.h.chooseAction(u, this) : this.ai(u);
           if (this.aborted) return;
+          if (act && act.auto) { act = this.ai(u); manual = false; }
+          if (u.side === 'hero' && this.h.record) this.h.record(u, act, !manual);
           used = act.skill;
           await this.perform(u, act.skill, act.target);
           if (extra === 0 && u.alive && u.flags.crit && u.sets.extraTurn && rnd() < 0.18 && !this.check()) {
@@ -1749,6 +1755,30 @@ const K = (function () {
     try { const { heroes, enemies } = arenaSetup(att, def, seed); const b = new Battle(heroes, enemies); b.auto = true; const res = await b.run(); return { win: res === 'win', turns: b.turns }; }
     finally { setRng(null); }
   }
+  // A manual arena fight: the browser plays it (from the same seed) and records every hero action as
+  // [skill index, target side 'h'/'e'/'', target slot, auto 0/1]; the server replays it with those moves and decides.
+  // An auto move lets the AI choose, exactly as it did in the browser. When the moves run out before the fight is over
+  // (the player gave up or left), the attacker loses. A move that is not possible falls back to the AI.
+  const arenaMove = (u, act) => { const t = act.target; return [u.skills.indexOf(act.skill), t ? (t.side === 'hero' ? 'h' : 'e') : '', t ? t.slot : -1]; };
+  async function arenaReplay(att, def, seed, moves) {
+    try {
+      const { heroes, enemies } = arenaSetup(att, def, seed), list = Array.isArray(moves) ? moves.slice(0, 2000) : [];
+      let i = 0;
+      const b = new Battle(heroes, enemies, { chooseAction: (u, bt) => {
+        const m = list[i++];
+        if (!Array.isArray(m)) { bt.aborted = true; return { skill: u.skills[0], target: null }; }
+        if (m[3]) return { auto: true };
+        const sk = u.skills[m[0] | 0];
+        if (!sk || !bt.usable(u, sk)) return { auto: true };
+        let t = (m[1] === 'e' ? bt.enemies : m[1] === 'h' ? bt.heroes : []).find(x => x.slot === m[2]) || null;
+        if (t && ['enemy', 'ally', 'deadAlly'].includes(sk.target) && !bt.validTargets(u, sk).includes(t)) t = null;
+        return { skill: sk, target: t };
+      } });
+      b.auto = false;
+      const res = await b.run();
+      return { win: res === 'win', turns: b.turns };
+    } finally { setRng(null); }
+  }
   // rating: Elo with K 32 for the attacker; the defender (who did not play) moves half as much
   function arenaElo(ra, rd, win) {
     const exp = 1 / (1 + Math.pow(10, (rd - ra) / 400));
@@ -1800,7 +1830,7 @@ const K = (function () {
 
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
-    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
+    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,

@@ -249,8 +249,16 @@ const SPR = (function () {
   }
   // figures painted facing left (the orc cards); mirrored at load so every figure faces right like the rest
   const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl']);
+  // their big picture (SPR.url at scale 2: starter hall, hero details, summons) is mirrored too, once at load
+  const fullFlip = {};
+  const loadFlipped = () => Promise.all([...FACES_LEFT].filter(id => ART[id] && ART[id].full).map(id => new Promise(res => {
+    const img = new Image();
+    img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); g.translate(img.width, 0); g.scale(-1, 1); g.drawImage(img, 0, 0); fullFlip[id] = c.toDataURL(); res(); };
+    img.onerror = () => res();
+    img.src = ART[id].full;
+  })));
   function preload() {
-    return Promise.all([loadChapterBgs(), ...Object.keys(ART).map(id => new Promise(res => {
+    return Promise.all([loadChapterBgs(), loadFlipped(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
       img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); if (FACES_LEFT.has(id)) { g.translate(img.width, 0); g.scale(-1, 1); } g.drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
       img.onerror = () => res();
@@ -321,7 +329,7 @@ const SPR = (function () {
   const urls = {};
   function url(id, scale, flip) {
     if (typeof HERO_POR !== 'undefined' && HERO_POR[id] && (scale || 1) < 2) return HERO_POR[id];
-    if (isHero(id)) return (scale || 1) >= 2 ? ART[id].full : ART[id].face;
+    if (isHero(id)) return (scale || 1) >= 2 ? fullFlip[id] || ART[id].full : ART[id].face;
     const k = scale || 1, key = id + '@' + k + (flip ? 'f' : '');
     if (urls[key]) return urls[key];
     const s = frame(id, 'idle0', flip ? 'flip' : '');

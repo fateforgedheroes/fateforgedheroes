@@ -39,11 +39,20 @@ async function state(K, db, me) {
   const tk = tokensNow(K, me, Date.now());
   return {
     rating: me.rating, wins: me.wins, losses: me.losses, defWins: me.def_wins, defLosses: me.def_losses,
-    tokens: tk.tokens, nextToken: tk.next, weekFights: me.week_fights,
+    tokens: tk.tokens, nextToken: tk.next, weekFights: me.week_fights, unfinished: !!me.pending,
     defense: me.defense ? preview(me.defense) : null, defensePower: me.defense_power,
     offers: (me.offers || []).map(o => ({ kind: o.kind, name: o.name, avatar: o.avatar, rating: o.rating, power: o.power, team: preview(o.team) })),
     rewards: await db.unclaimed(me.user_id),
   };
+}
+
+// applies a manual fight's result: replayed with the player's moves, or a loss when it was never finished (moves null)
+async function settle(K, db, user, me, p, moves) {
+  const r = moves ? await K.arenaReplay(p.att, p.def, p.seed, moves) : { win: false, turns: 0 };
+  const elo = K.arenaElo(me.rating, p.defRating, r.win);
+  const res = await db.apply(user.id, p.defId, elo.att, p.defId ? elo.def : 0, r.win);
+  await db.log({ attacker: user.id, defender: p.defId, attacker_name: me.name, defender_name: p.name, seed: p.seed, win: r.win, att_delta: elo.att, def_delta: p.defId ? elo.def : 0, att_team: p.att, def_team: p.def });
+  return { r, elo, res };
 }
 
 export async function handle(K, db, user, body) {
@@ -67,6 +76,43 @@ export async function handle(K, db, user, body) {
     me = await db.updatePlayer(user.id, { defense: team, defense_power: K.teamPower(team) });
     return { state: await state(K, db, me) };
   }
+  // Manual fights (the game's default): 'start' takes a token and keeps the fight (seed and both teams) in
+  // arena_players.pending; the browser plays it by hand and 'finish' sends its moves: the server replays the fight with
+  // them (K.arenaReplay) and only that result counts. A fight left unfinished counts as a loss when the next one
+  // starts, so walking away from a losing fight never saves rating.
+  if (body.action === 'start') {
+    if (!team) return { error: 'This team cannot be used (' + (bad || 'no team') + ').', status: 400 };
+    const o = (me.offers || [])[body.offer];
+    if (!o) return { error: 'That opponent is gone. Pick another one.', status: 409, state: await state(K, db, me) };
+    let defTeam = o.team, defRating = o.rating, defId = null;
+    if (o.kind === 'player') {
+      const p = await db.getPlayer(o.user_id);
+      if (!p || !p.defense) {
+        me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
+        return { error: 'That player has no defense team any more. New opponents are ready.', status: 409, state: await state(K, db, me) };
+      }
+      defTeam = p.defense; defRating = p.rating; defId = p.user_id;
+    }
+    if (me.pending) { const p = me.pending; me = await db.updatePlayer(user.id, { pending: null }); await settle(K, db, user, me, p, null); me = await db.getPlayer(user.id); }
+    const left = await db.takeToken(user.id, K.ARENA_TOKEN_MIN, K.ARENA_TOKENS);
+    if (left < 0) { me = await db.getPlayer(user.id); return { error: 'No arena tokens left. A new one comes every hour.', status: 429, state: await state(K, db, me) }; }
+    const seed = randSeed();
+    const pending = { seed, att: team, def: defTeam, defId, defRating, name: o.name, kind: o.kind, before: me.rating, at: Date.now() };
+    const patch = { pending, offers: await makeOffers(K, db, me, avgLvl(team)) };
+    if (!me.defense) { patch.defense = team; patch.defense_power = K.teamPower(team); }
+    me = await db.updatePlayer(user.id, patch);
+    return { fight: { seed, att: team, def: defTeam, manual: true, before: pending.before, opponent: { name: o.name, rating: defRating, kind: o.kind } }, state: await state(K, db, me) };
+  }
+  if (body.action === 'finish') {
+    const p = me.pending;
+    if (!p) return { error: 'This arena fight is already over.', status: 409, state: await state(K, db, me) };
+    if (!Array.isArray(body.moves)) return { error: 'Bad request.', status: 400 };
+    me = await db.updatePlayer(user.id, { pending: null }); // cleared first: the same fight can never count twice
+    const { r, elo, res } = await settle(K, db, user, me, p, body.moves);
+    me = await db.getPlayer(user.id);
+    return { fight: { seed: p.seed, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: p.before, opponent: { name: p.name, rating: p.defRating, kind: p.kind } }, state: await state(K, db, me) };
+  }
+  // the old auto fight (game versions before manual arena play)
   if (body.action === 'fight') {
     if (!team) return { error: 'This team cannot be used (' + (bad || 'no team') + ').', status: 400 };
     const o = (me.offers || [])[body.offer];

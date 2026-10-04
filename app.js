@@ -47,6 +47,10 @@
   // per cleared stage / Boss Hall level
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
+  // a level-up refills: a full bar up to level LEVEL_FULL_EN (new players never wait), then a fixed LEVEL_EN, so energy
+  // gets scarce late in the game (with Hard, Brutal and Nightmare costing more per stage), like in RAID
+  const LEVEL_FULL_EN = 15, LEVEL_EN = 60;
+  const levelEnergy = l => (l <= LEVEL_FULL_EN ? K.energyMax(l) : LEVEL_EN);
   const RENAME_COST = 2500; // the first name change is free
   const renameCost = () => (S.p.renames ? RENAME_COST : 0);
   function newPlayer() { return { name: 'Adventurer', avatar: null, renames: 0, lvl: 1, xp: 0, st: { won: 0, lost: 0, bossWon: 0, summons: 0 } }; }
@@ -66,13 +70,15 @@
     s.team = s.teams[s.tsel].ids;
     return s;
   }
+  // a new team's default name: the first "Team n" that is not taken yet (after a delete the count alone would repeat a name)
+  const freeTeamName = () => { let n = 1; while (S.teams.some(t => t.name === 'Team ' + n)) n++; return 'Team ' + n; };
   const teamIds = mode => (S.teams[S.modeTeam[mode]] || S.teams[0]).ids;
   const inAnyTeam = id => S.teams.some(t => t.ids.includes(id));
   const teamsOf = id => S.teams.filter(t => t.ids.includes(id)).map(t => t.name);
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
-    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 };
+    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; if (!(s.gems >= 0)) s.gems = 0;
     // heroes that gained a skill (every hero has 3 now): pad the skill levels
     for (const id in s.roster) { const c = K.CHAMPS[id], h = s.roster[id]; if (c && Array.isArray(h.sk)) while (h.sk.length < c.skills.length) h.sk.push(0); } if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
@@ -428,7 +434,7 @@
     clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms || 2400);
   }
   function hud() {
-    $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy();
+    $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy(); const ge = $('#gems'); if (ge) ge.textContent = (S.gems || 0).toLocaleString('en-US');
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones; $('#stones').parentElement.title = 'Ascension Stones: ' + K.STONES.map(s => `${stoneN(s.id)} ${s.name.replace(/ Ascension Stone$/, '')}`).join(', ') + '. Lesser for 2-4★, Greater for 5★, Ancient for 6★.';
     const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
@@ -467,14 +473,14 @@
   }
 
   // ---------- tabs ----------
-  let tab = 'home', selChamp = 'draelyn', invSlot = null, champTab = 'stats';
+  let tab = 'home', selChamp = 'draelyn', invSlot = null, invSet = 'all', champTab = 'stats';
 
   // ----- Home: the homebase map is the main menu. Boxes are image pixels of HOME_ART (1536x1024): the building and
   // its name plate. Zones without `go` are "Coming soon": their names are covered, so the buildings can become any mode later.
-  const HOME_W = 1536, HOME_H = 1024;
+  const HOME_W_L = 1536, HOME_H_L = 1024;
   // building box and name plate (PLATE_ART[art], drawn at `plate`) in image pixels; the plate is centred under its building
   const HZP = (cx, cy) => [cx - 130, cy - 50, 260, 100];
-  const HOME_ZONES = [
+  const HOME_ZONES_L = [
     { go: 'kerkers', art: 'kerkers', label: 'Boss Hall', box: [10, 0, 460, 300], plate: HZP(235, 285) },
     { go: 'arena', art: 'arena', label: 'Arena', box: [500, 110, 330, 215], plate: HZP(665, 330) },
     { go: 'profiel', art: 'profiel', label: 'Town Hall: profile, quests and rewards', box: [820, 0, 350, 290], plate: HZP(995, 290) },
@@ -483,7 +489,7 @@
     { go: 'social', art: 'social', label: 'Social: friends and guild', box: [900, 380, 340, 180], plate: HZP(1070, 565) },
     { go: 'guild', art: 'guild', label: 'Guild Hall: your guild and the guild boss', box: [1290, 380, 246, 210], plate: HZP(1410, 585) },
     { go: 'expedition', art: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 600, 400, 330], plate: HZP(200, 960) },
-    { art: 'market', box: [390, 580, 330, 270], plate: HZP(555, 875) },
+    { go: 'market', art: 'market', label: 'Market: spend Gems', box: [390, 580, 330, 270], plate: HZP(555, 875) },
     { go: 'campagne', art: 'campagne', label: 'Campaign', box: [860, 620, 340, 250], plate: HZP(1035, 890) },
     { go: 'tower', art: 'tower', label: 'Tower of Essence', box: [1250, 600, 286, 330], plate: HZP(1395, 965) },
   ];
@@ -491,7 +497,21 @@
   // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
   // every other building (and the profile) opens after the first campaign battle, won or lost.
   const firstSteps = () => !S.needStarter && S.cleared < 0 && !(S.p.st.won + S.p.st.lost);
-  const CAMP_AT = [1035, 745]; // centre of the Campaign building in image pixels
+  const CAMP_AT_L = [1035, 745, 575]; // centre of the Campaign building in image pixels, and where the "Start here" marker points from
+  // Phones held upright get the 9:16 map (HOME_ART_P, 941x1672): every building fits on the screen, no sideways scrolling.
+  // Same zones in the same order (the tour uses zone 8), with their own boxes and larger plates (the map is drawn much narrower).
+  const HZPP = (cx, cy) => [cx - 140, cy - 55, 280, 110];
+  const P_BOXES = { kerkers: [[15, 230, 310, 330], HZPP(170, 555)], arena: [[300, 470, 260, 190], HZPP(430, 665)], profiel: [[510, 320, 250, 220], HZPP(640, 535)], altaar: [[650, 390, 291, 370], HZPP(795, 765)],
+    team: [[0, 660, 400, 270], HZPP(190, 925)], social: [[560, 780, 230, 170], HZPP(610, 955)], guild: [[760, 850, 181, 180], HZPP(800, 1060)], expedition: [[0, 1210, 360, 350], HZPP(190, 1530)],
+    market: [[180, 1080, 320, 220], HZPP(370, 1300)], campagne: [[570, 1120, 210, 220], HZPP(670, 1355)], tower: [[770, 1050, 171, 400], HZPP(800, 1470)] };
+  const HOME_ZONES_P = HOME_ZONES_L.map(z => ({ ...z, box: P_BOXES[z.art][0], plate: P_BOXES[z.art][1] }));
+  const CAMP_AT_P = [675, 1230, 1100];
+  const PORT_MQ = matchMedia('(max-width: 760px) and (orientation: portrait)');
+  const homePort = () => typeof HOME_ART_P !== 'undefined' && PORT_MQ.matches;
+  let HOME_W = HOME_W_L, HOME_H = HOME_H_L, HOME_ZONES = HOME_ZONES_L, CAMP_AT = CAMP_AT_L;
+  function homeLayout() { const p = homePort(); HOME_W = p ? 941 : HOME_W_L; HOME_H = p ? 1672 : HOME_H_L; HOME_ZONES = p ? HOME_ZONES_P : HOME_ZONES_L; CAMP_AT = p ? CAMP_AT_P : CAMP_AT_L; return p; }
+  // turning the phone switches maps
+  PORT_MQ.addEventListener('change', () => { if (tab === 'home' && !B && S && !S.needStarter) { homeScroll = null; render(); } });
   // Homebase tour: once the homebase opens (after the first battle) a short tour shows every building, one at a time
   // (shade, spotlight and a card with Next). The last step leads back to the campaign, where the Fight button is
   // spotlighted (spotFight). S.seen.tour = done or skipped.
@@ -505,7 +525,7 @@
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
-    { zone: 8, title: 'Market', text: 'Coming soon: the Market will open as a new game mode in a future update.' },
+    { go: 'market', title: 'Market', text: 'Spend Gems on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Gems from level-ups, quest chests, missions and achievements.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Halls. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
@@ -522,6 +542,7 @@
   // a new player's campaign: the Fight button is the only thing to press (before the first battle and after the tour)
   const fightSpot = () => tab === 'campagne' && !(S.diff) && (firstSteps() || spotFight);
   function homeHtml() {
+    const port = homeLayout();
     const pc = (v, d) => (v / d * 100).toFixed(3) + '%';
     const at = ([x, y, w, h]) => `left:${pc(x, HOME_W)};top:${pc(y, HOME_H)};width:${pc(w, HOME_W)};height:${pc(h, HOME_H)}`;
     const shardsReady = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
@@ -546,9 +567,9 @@
     }).join('');
     // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
     const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
-      <div class="tut-call" style="left:${pc(CAMP_AT[0], HOME_W)};top:${pc(575, HOME_H)}"><b>Start here</b><span>Your adventure begins in the Campaign</span><i aria-hidden="true"></i></div>` : '';
+      <div class="tut-call" style="left:${pc(CAMP_AT[0], HOME_W)};top:${pc(CAMP_AT[2], HOME_H)}"><b>Start here</b><span>Your adventure begins in the Campaign</span><i aria-hidden="true"></i></div>` : '';
     const tourShade = tour ? `<div class="tut-shade" style="--x:${pc(tc[0], HOME_W)};--y:${pc(tc[1], HOME_H)}"></div>` : '';
-    return `<div class="home-map"><div class="home-img ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}"><img src="${HOME_ART}" alt="Homebase: tap a building">${zones}${spot}${tourShade}</div></div>${tour ? tourCard() : ''}${!tut && !tour && S.p.lvl < 10 && !S.p.prestige ? '<div class="swipe-hint" aria-hidden="true"><span>‹</span>Swipe left and right to see every building<span>›</span></div>' : ''}`;
+    return `<div class="home-map"><div class="home-img ${port ? 'port' : ''} ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}"><img src="${port ? HOME_ART_P : HOME_ART}" alt="Homebase: tap a building">${zones}${spot}${tourShade}</div></div>${tour ? tourCard() : ''}${!port && !tut && !tour && S.p.lvl < 10 && !S.p.prestige ? '<div class="swipe-hint" aria-hidden="true"><span>‹</span>Swipe left and right to see every building<span>›</span></div>' : ''}`;
   }
   // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
   function backBar() {
@@ -590,7 +611,7 @@
       if (loginDue()) setTimeout(showLogin, 600);
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : champsHtml());
+    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : champsHtml());
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -610,7 +631,54 @@
       <div class="sb-main"><span class="sb-tag">Set drops in this chapter</span><b class="sb-name">${esc(set.name)}</b><span class="sb-bonus"><i>${esc(need)}</i> ${esc(bonus)}</span></div>
       <div class="sb-side"><span>${rarsHtml(D.rars)}</span><small>${own ? `${own} ${own === 1 ? 'piece' : 'pieces'} owned` : 'none owned yet'}</small></div></div>`;
   }
+  // Phones get a one-screen campaign (campPhoneHtml): difficulty and chapter on one row, the chapter's set, a path of
+  // seven stage nodes, the selected stage (campSel) with its enemies per phase, and the team; Fight sits in the bottom bar.
+  const PHONE_MQ = matchMedia('(max-width: 760px)');
+  PHONE_MQ.addEventListener('change', () => { if (tab === 'campagne' && !B && S && !S.needStarter) render(); });
+  let campSel = null;
+  function campPhoneHtml() {
+    const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
+    const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
+    const chap = Math.min(S.chap ?? maxChap, maxChap), ch = K.CHAPTERS[chap];
+    const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
+    const sel = idx.includes(campSel) ? campSel : idx.includes(next) ? next : idx.filter(i => i <= cleared).pop() ?? idx[0];
+    const st = K.STAGES[sel], state = sel <= cleared ? 'cleared' : sel === next ? 'next' : 'locked';
+    const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
+    // the chapter's set, big: what it is, what it does, how many pieces you have, which rarities drop here
+    const set = K.SETS[ch.set], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length, hi = D.rars[D.rars.length - 1];
+    const setBox = `<div class="cp-set rar-${hi}"><img src="${gearArt('borstpantser', hi, 0)}" alt="">
+      <div class="cp-set-m"><small>This chapter drops</small><b>${esc(set.name)}</b><span><i>${esc(need)}</i><em>${esc(bonus)}</em></span></div>
+      <div class="cp-set-s"><small>Owned</small><b>${own}</b><span>${D.rars.map(r => `<b class="rartxt rar-${r}">${K.RARITIES[r].slice(0, r === 1 ? 3 : 9)}</b>`).join(' / ')}</span></div></div>`;
+    const nodes = idx.map((i, k) => {
+      const s = i <= cleared ? 'done' : i === next ? 'next' : 'lock', boss = k === 6;
+      return `<button type="button" class="cp-node ${s} ${i === sel ? 'sel' : ''} ${boss ? 'boss' : ''}" data-act="csel" data-stage="${i}" aria-pressed="${i === sel}" aria-label="${boss ? 'Boss stage' : `Stage ${k + 1}`}"><span class="cp-dia"><span>${s === 'done' ? '✓' : boss ? '☠' : s === 'next' ? k + 1 : LOCK_SVG}</span></span><small>${boss ? 'Boss' : `Stage ${k + 1}`}</small></button>`;
+    }).join('<i class="cp-link" aria-hidden="true"></i>');
+    const ul = K.stageUnlock(st, S.starter), firsts = sel > cleared ? [...(!d && ul && !S.roster[ul] ? [`<span class="rw">${por(ul)}${esc(C[ul].short)}</span>`] : []), `<span class="rw">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`] : [];
+    const ess = [...new Set(st.phases.flat().map(f => E[f].aff))];
+    const chapDone = cleared >= chap * 7 + 6;
+    const acts = state === 'cleared' ? `<div class="cp-acts"><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${sel}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[chap]} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
+      : state === 'locked' ? `<p class="cp-lock">${LOCK_SVG} Clear ${stageName(next)} first.</p>` : '';
+    const card = `<section class="cp-card ${st.boss ? 'boss' : ''}"><div class="cp-card-h"><b>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`}</b><span>Enemy level ${K.diffLvl(st, d)} · ${K.PHASES} phases</span></div>
+      ${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}
+      <div class="cp-phases">${st.phases.map((p, i) => `<div class="${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cp-foe" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('')}</div>
+      <div class="cp-meta"><span class="rw"><span class="st-dic">${D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="">`).join('')}</span><b>${dropName(st)}</b></span>${firsts.length ? `<span class="rw cp-first"><small>First clear</small></span>${firsts.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div>
+      ${acts}${fightSpot() && sel === next ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(st, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : ''}</section>`;
+    const tids = teamIds('campaign');
+    const team = `<button type="button" class="cp-team" data-act="editteam" data-mode="campaign" aria-label="Edit the campaign team">${tids.map(id => `<span class="cp-tm rar-${C[id].rar}">${por(id)}<i>Lv ${S.roster[id].lvl}</i></span>`).join('')}<span class="cp-pw"><small>Team power</small><b>${teamPower(tids).toLocaleString('en-US')}</b></span></button>`;
+    const fightBtn = state === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${sel}">↻ Replay${enCost(K.stageEnergy(st, d))}</button>` : state === 'next' ? `<button class="btn primary" data-act="play" data-stage="${sel}">⚔ Fight${enCost(K.stageEnergy(st, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
+    return `<div class="campaign cp ${d ? 'hardmode diff-' + D.id : ''}">
+      <div class="cp-top"><label class="cp-diff"><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select></label>
+        <div class="cp-chap"><button type="button" class="btn small" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button><b>Chapter ${ROMAN[chap]}</b><button type="button" class="btn small" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></div></div>
+      <div class="cp-title"><h2>${esc(ch.name)}</h2><small>${idx.filter(i => i <= cleared).length} / 7 stages cleared${d ? ` · ${esc(D.name)}` : ''}</small></div>
+      ${setBox}
+      <div class="cp-path">${nodes}</div>
+      ${card}
+      ${team}
+      ${fightSpot() ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${fightBtn}</div>`}
+    </div>`;
+  }
   function campaignHtml() {
+    if (PHONE_MQ.matches) return campPhoneHtml();
     const d = S.diff || 0, D = K.DIFFS[d], hard = d > 0, cleared = clearedOn(d), next = cleared + 1;
     const strip = teamIds('campaign').map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
@@ -870,8 +938,14 @@
     }).join('');
     let inv = '';
     if (invSlot) {
-      const list = S.inv.filter(x => x.slot === invSlot && x.owner !== id).sort((a, b) => b.rar - a.rar || b.il - a.il || b.lvl - a.lvl);
+      // set filter: every set that has a piece for this slot, with how many pieces of it this hero already wears
+      const all = S.inv.filter(x => x.slot === invSlot && x.owner !== id), worn = itemsOf(id);
+      const sets = [...new Set(all.map(x => x.set))].sort((a, b) => worn.filter(w => w.set === b).length - worn.filter(w => w.set === a).length || K.SETS[a].name.localeCompare(K.SETS[b].name));
+      if (invSet !== 'all' && !sets.includes(invSet)) invSet = 'all';
+      const list = all.filter(x => invSet === 'all' || x.set === invSet).sort((a, b) => b.rar - a.rar || b.il - a.il || b.lvl - a.lvl);
+      const setSel = sets.length > 1 ? `<label class="inv-set">Set <select id="inv-set"><option value="all">All sets (${all.length})</option>${sets.map(k => { const w = worn.filter(x => x.set === k).length; return `<option value="${k}" ${k === invSet ? 'selected' : ''}>${esc(K.SETS[k].name)} (${all.filter(x => x.set === k).length})${w ? ` · ${w} worn` : ''}</option>`; }).join('')}</select></label>` : '';
       inv = `<div class="inv" id="invpanel"><div class="section-head"><h3>Choose ${K.SLOT_NAMES[invSlot].toLowerCase()}</h3><div class="row" style="display:flex;gap:6px"><button class="btn small" data-act="sellbad" data-slot="${invSlot}">Sell spare common and uncommon</button><button class="btn small" data-act="invclose">Close</button></div></div>
+        ${setSel}${invSet !== 'all' ? `<p class="empty-note inv-setnote">${esc(K.SETS[invSet].desc)}</p>` : ''}
         ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemName(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
           <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}">Equip</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
@@ -879,7 +953,7 @@
     const inTeam = S.team.includes(id);
     return `<div class="detail rar-${c.rar}" data-dtab="${champTab}" style="--ec:${AFF_COL[c.aff]}">
         <div class="d-head"><img class="spr bigspr ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
-          <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">Team ${S.team.indexOf(id) + 1}</span>` : ''}</h2>
+          <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">In ${esc(S.teams[S.tsel].name)}</span>` : ''}</h2>
           <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
@@ -1111,7 +1185,7 @@
       ${AR.boardErr ? `<p class="ar-err">${esc(AR.boardErr)}</p>` : !AR.board ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
   function arenaHtml() {
-    const lede = 'Fight the defense teams of other players. The server plays every fight, so the ranking is fair. Every Monday you get a reward for your rating.';
+    const lede = 'Fight the defense teams of other players. You choose every move (or switch on auto); the server replays your fight to check it, so the ranking is fair. A fight you leave unfinished counts as a loss. Every Monday you get a reward for your rating.';
     if (!unlocked('arena')) return lockedHtml('arena', lede);
     const head = `<div class="section-head"><div><h2>Arena</h2><p class="lede">${lede}</p></div></div>`;
     const cl = cloud();
@@ -1143,6 +1217,7 @@
     m.innerHTML = `<div class="modal-box ${f.win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${f.win ? 'Victory' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)} · rating ${f.opponent.rating}</p>
       <ul class="rewards"><li><span class="aff" style="--c:var(--gold)">R</span><span>Rating ${f.before} → <b>${f.rating}</b> (${f.delta >= 0 ? '+' : ''}${f.delta})</span></li>
         ${tier !== was ? `<li class="loot lvup"><span class="aff" style="--c:var(--gold)">★</span><span><b>${tier.name}</b> tier${f.rating > f.before ? ' reached!' : ''}</span></li>` : ''}
+        ${f.error ? `<li><span class="aff" style="--c:var(--bad)">!</span><span>${esc(f.error)}</span></li>` : ''}
         <li><span class="aff" style="--c:var(--info)">T</span><span>Tokens left: ${AR.st ? AR.st.tokens : '?'} / ${K.ARENA_TOKENS}</span></li></ul>
       <div class="modal-actions"><button class="btn primary" data-act="modal" data-go="arena">Back to the arena</button></div></div>`;
     m.hidden = false;
@@ -1422,19 +1497,19 @@
   // a reward's stones as { lesser, greater, ancient }: the old field `stones` is Lesser, `st` holds the others
   const rewardStones = r => Object.assign({}, +r.stones > 0 ? { lesser: +r.stones } : {}, r.st || {});
   const stoneParts = r => Object.entries(rewardStones(r)).filter(([, n]) => n > 0);
-  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 } }];
+  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 }, gems: 30 }];
   const loginReward = n => LOGIN_REWARDS[n % 7];
   const loginDue = () => !S.needStarter && S.seen.home && S.seen.tour && (S.login ? S.login.last : -1) < today();
   let loginShown = false;
   function rewardIcons(r) {
-    return [...(r.silver ? [`${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b>`] : []), ...stoneParts(r).map(([t, n]) => `${stoneIc(t)}<b>${n}</b>`), ...Object.keys(r.fs || {}).map(k => `${shardIc(k)}<b>${r.fs[k]}</b>`)].join('');
+    return [...(r.silver ? [`${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b>`] : []), ...(r.gems ? [`${GEM_SVG}<b>${r.gems}</b>`] : []), ...stoneParts(r).map(([t, n]) => `${stoneIc(t)}<b>${n}</b>`), ...Object.keys(r.fs || {}).map(k => `${shardIc(k)}<b>${r.fs[k]}</b>`)].join('');
   }
   function showLogin() {
     if (loginShown || !loginDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
     loginShown = true;
     const n = (S.login && S.login.n) || 0, start = n - (n % 7), week = Math.floor(n / 7) + 1;
     // each reward as medallion icons and a short amount line
-    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
+    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...(r.gems ? [[GEM_SVG, `${r.gems} Gems`]] : []), ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
     const tiles = Array.from({ length: 7 }, (_, i) => {
       const k = start + i, r = loginReward(k), state = k < n ? 'done' : k === n ? 'today' : 'next', p = parts(r);
       const ribbon = state === 'today' ? '<span class="lg-rib">Today</span>' : i === 6 ? '<span class="lg-rib best">Best</span>' : '';
@@ -1482,8 +1557,8 @@
   ];
   const qOpen = t => (!t.u || unlocked(t.u)) && (!t.open || t.open()) && (!t.acc || signedIn());
   const qNeed = t => (t.u && !unlocked(t.u) ? `Opens after ${needTxt(t.u)}` : t.open && !t.open() ? `Opens after ${t.need}` : t.acc && !signedIn() ? 'Needs an account: sign in first' : '');
-  const DAILY_CHESTS = [{ at: 30, r: { energy: 20, silver: 2000 } }, { at: 60, r: { energy: 30, fs: { fate: 1 } } }, { at: 100, r: { energy: 50, fs: { greater: 1 } } }];
-  const WEEKLY_CHESTS = [{ at: 250, r: { energy: 60, fs: { greater: 2 } } }, { at: 450, r: { energy: 100, fs: { greater: 3 } } }, { at: 650, r: { energy: 140, fs: { ancient: 1 } } }];
+  const DAILY_CHESTS = [{ at: 30, r: { energy: 10, silver: 2000 } }, { at: 60, r: { energy: 20, fs: { fate: 1 } } }, { at: 100, r: { energy: 30, fs: { greater: 1 }, gems: 10 } }];
+  const WEEKLY_CHESTS = [{ at: 250, r: { energy: 40, fs: { greater: 2 }, gems: 15 } }, { at: 450, r: { energy: 60, fs: { greater: 3 }, gems: 25 } }, { at: 650, r: { energy: 80, fs: { ancient: 1 }, gems: 40 } }];
   function qState() {
     const q = S.q || (S.q = {}), d = today(), w = weekNo();
     q.tot = q.tot || {}; q.m = q.m || {}; q.col = q.col || {}; q.a = q.a || {}; q.hs = q.hs || {}; q.be = q.be || {};
@@ -1518,35 +1593,35 @@
   const everHeroes = () => K.CHAMP_ORDER.filter(id => colSync().hs[id]).length;
   // the mission path: chapters of six goals; a chapter's final reward needs all six claimed, and only the current chapter is open
   const MISSIONS = [
-    { name: 'First Steps', r: { energy: 50, fs: { greater: 2 } }, list: [
+    { name: 'First Steps', r: { energy: 50, fs: { greater: 2 }, gems: 50 }, list: [
       { t: 'Clear Chapter I on Easy', v: () => S.cleared + 1, n: 7, r: { energy: 30, silver: 2000 } },
       { t: 'Have 4 heroes', v: () => heroesAt(() => true), n: 4, r: { fs: { fate: 2 } } },
       { t: 'Upgrade gear 5 times', v: () => tot('upg'), n: 5, r: { silver: 3000 } },
       { t: 'Reach player level 5', v: () => effLvl(S), n: 5, r: { fs: { greater: 1 } } },
       { t: 'Summon a hero at the Fate Altar', v: () => S.p.st.summons, n: 1, r: { energy: 30 } },
       { t: 'Feed a hero or train a skill', v: () => tot('feed'), n: 1, r: { stones: 5 } }] },
-    { name: 'Rising Power', r: { hero: 'epic', energy: 50 }, list: [
+    { name: 'Rising Power', r: { hero: 'epic', energy: 50, gems: 75 }, list: [
       { t: 'Clear Chapter III on Easy', v: () => S.cleared + 1, n: 21, r: { fs: { greater: 1 } } },
       { t: 'Bring a hero to level 30', v: () => bestHero('lvl'), n: 30, r: { energy: 50 } },
       { t: 'Upgrade a piece of gear to +8', v: bestGear, n: 8, r: { silver: 5000 } },
       { t: 'Win 50 battles', v: () => S.p.st.won, n: 50, r: { energy: 40 } },
       { t: 'Send out an expedition', v: () => tot('exp'), n: 1, r: { fs: { fate: 2 } } },
       { t: 'Ascend a hero to 4★', v: () => bestHero('stars'), n: 4, r: { stones: 10 } }] },
-    { name: 'Proving Grounds', r: { energy: 100, fs: { ancient: 1 } }, list: [
+    { name: 'Proving Grounds', r: { energy: 100, fs: { ancient: 1 }, gems: 100 }, list: [
       { t: 'Clear Chapter V on Easy', v: () => S.cleared + 1, n: 35, r: { fs: { ancient: 1 } } },
       { t: 'Beat 3 different Boss Hall bosses', v: () => bhAt(1), n: 3, r: { fs: { greater: 2 } } },
       { t: 'Reach floor 25 in a Tower of Essence', v: bestTower, n: 25, r: { energy: 60 } },
       { t: 'Have 4 heroes at level 40', v: () => heroesAt(h => h.lvl >= 40), n: 4, r: { fs: { greater: 1 } } },
       { t: 'Upgrade a piece of gear to +12', v: bestGear, n: 12, r: { silver: 10000 } },
       { t: 'Win 10 Boss Hall battles', v: () => S.p.st.bossWon, n: 10, r: { energy: 60 } }] },
-    { name: 'Champion of Fate', r: { hero: 'epic', fs: { ancient: 1 } }, list: [
+    { name: 'Champion of Fate', r: { hero: 'epic', fs: { ancient: 1 }, gems: 150 }, list: [
       { t: 'Finish the campaign on Easy', v: () => S.cleared + 1, n: 70, r: { fs: { ancient: 1 } } },
       { t: 'Ascend a hero to 5★', v: () => bestHero('stars'), n: 5, r: { energy: 80, st: { greater: 2 } } },
       { t: 'Beat Boss Hall level 5 of any boss', v: () => bhAt(5), n: 1, r: { fs: { greater: 3 } } },
       { t: 'Reach floor 75 in a Tower of Essence', v: bestTower, n: 75, r: { fs: { ancient: 1 } } },
       { t: 'Upgrade a piece of gear to +16', v: bestGear, n: 16, r: { silver: 20000 } },
       { t: 'Reach player level 30', v: () => effLvl(S), n: 30, r: { fs: { greater: 2 } } }] },
-    { name: 'Legend', r: { hero: 'legendary' }, list: [
+    { name: 'Legend', r: { hero: 'legendary', gems: 200 }, list: [
       { t: 'Finish the campaign on Normal', v: () => (S.dcl[1] ?? -1) + 1, n: 70, r: { fs: { ancient: 2 } } },
       { t: 'Ascend a hero to 6★', v: () => bestHero('stars'), n: 6, r: { energy: 120, st: { ancient: 2 } } },
       { t: 'Beat Boss Hall level 8 of any boss', v: () => bhAt(8), n: 1, r: { fs: { ancient: 1 } } },
@@ -1566,13 +1641,13 @@
     const q = colSync(), have = ids => ids.filter(id => q.hs[id]).length, nb = BEASTS.filter(id => q.be[id]).length, nh = everHeroes();
     return [
       ...COL_HEROES.map(([n, r]) => ({ id: 'h' + n, t: `Collect ${n} heroes`, v: nh, n, r })),
-      ...K.ESSENCES.filter(e => essHeroes(e).length).map(e => ({ id: 'e' + e, t: `Every ${e} hero`, v: have(essHeroes(e)), n: essHeroes(e).length, r: { fs: { ancient: 1 } }, ess: e })),
+      ...K.ESSENCES.filter(e => essHeroes(e).length).map(e => ({ id: 'e' + e, t: `Every ${e} hero`, v: have(essHeroes(e)), n: essHeroes(e).length, r: { fs: { ancient: 1 }, gems: 30 }, ess: e })),
       ...RAR_FULL.map(([ra, r]) => ({ id: 'r' + ra, t: `Every ${K.RARITIES[ra]} hero`, v: have(rarHeroes(ra)), n: rarHeroes(ra).length, r, rar: ra })),
       ...COL_BEASTS.map(([n, r]) => ({ id: 'b' + n, t: `Capture ${n} kinds of enemies`, v: nb, n, r })),
     ];
   }
   // achievements: tiers with growing rewards
-  const ACH_RW = [{ energy: 40 }, { energy: 60, fs: { greater: 1 } }, { energy: 80, fs: { greater: 2 } }, { energy: 100, fs: { ancient: 1 } }, { energy: 120, fs: { ancient: 1 } }];
+  const ACH_RW = [{ energy: 40, gems: 10 }, { energy: 60, fs: { greater: 1 }, gems: 20 }, { energy: 80, fs: { greater: 2 }, gems: 30 }, { energy: 100, fs: { ancient: 1 }, gems: 50 }, { energy: 120, fs: { ancient: 1 }, gems: 75 }];
   const diffsDone = () => { let n = 0; while (n < K.DIFFS.length && clearedOn(n) >= K.STAGES.length - 1) n++; return n; };
   const plural = (n, one, many) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
   const ACH = [
@@ -1609,6 +1684,7 @@
   function rwChips(r) {
     const out = [];
     if (r.energy) out.push(`<span class="rw en">${EN_SVG}<b>${r.energy}</b></span>`);
+    if (r.gems) out.push(`<span class="rw gem">${GEM_SVG}<b>${r.gems}</b></span>`);
     for (const k of RW_KEYS) if (r.fs && r.fs[k]) out.push(`<span class="rw" title="${esc(K.SHARD[k].name)}">${shardIc(k)}<b>${r.fs[k]}</b></span>`);
     for (const [t, n] of stoneParts(r)) out.push(`<span class="rw" title="${esc(stoneName(t, n))}">${stoneIc(t)}<b>${n}</b></span>`);
     if (r.silver) out.push(`<span class="rw">${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b></span>`);
@@ -1714,6 +1790,61 @@
     const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements]];
     const bar = `<div class="dtabs th-tabs" role="tablist" aria-label="Town Hall">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-act="thtab" data-t="${k}" aria-selected="${TH.tab === k}">${l}${dot(n)}</button>`).join('')}</div>`;
     return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : profileHtml());
+  }
+
+  // ================= GEMS AND THE MARKET =================
+  // Gems (S.gems) are the premium currency: earned from level-ups (LEVEL_GEMS), the daily and weekly quest chests,
+  // missions, achievements, collection, login day 7 and mail gifts ({ "gems": n }); spent in the Market (the tree
+  // building on the homebase). Every offer has a limit per UTC day or week (S.mk); the energy refill gets dearer per buy.
+  const LEVEL_GEMS = 10;
+  const GEM_SVG = '<svg class="gem-ic" viewBox="0 0 16 16" aria-hidden="true"><path class="g1" d="M4.2 1.8h7.6L15 6l-7 8.6L1 6z"/><path class="g2" d="M1 6h14M5.6 1.8 4.6 6 8 14.6M10.4 1.8l1 4.2L8 14.6"/></svg>';
+  const MARKET = [
+    { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar. Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
+    { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
+    { id: 'greater', group: 'Fate Shards', name: K.SHARD.greater.name, desc: 'Better odds on Rare and Epic heroes.', r: { fs: { greater: 1 } }, price: 90, limit: 3, per: 'day' },
+    { id: 'ancient', group: 'Fate Shards', name: K.SHARD.ancient.name, desc: 'Epic and Legendary heroes; counts for the Epic pity.', r: { fs: { ancient: 1 } }, price: 300, limit: 1, per: 'week' },
+    { id: 'sil10', group: 'Sigils', name: '10,000 Sigils', desc: 'For gear upgrades, ascending and Fate Shards.', r: { silver: 10000 }, price: 25, limit: 5, per: 'day' },
+    { id: 'sil50', group: 'Sigils', name: '50,000 Sigils', desc: 'A big pouch: a little cheaper per Sigil.', r: { silver: 50000 }, price: 110, limit: 2, per: 'day' },
+    { id: 'stl', group: 'Ascension Stones', name: '10 Lesser Ascension Stones', desc: 'Ascend heroes to 2-4★.', r: { stones: 10 }, price: 30, limit: 3, per: 'day' },
+    { id: 'stg', group: 'Ascension Stones', name: '2 Greater Ascension Stones', desc: 'Ascend heroes to 5★.', r: { st: { greater: 2 } }, price: 80, limit: 2, per: 'week' },
+  ];
+  function mkState() {
+    const m = S.mk || (S.mk = {}), d = today(), w = weekNo();
+    if (m.day !== d) { m.day = d; m.d = {}; }
+    if (m.wk !== w) { m.wk = w; m.w = {}; }
+    return m;
+  }
+  const mkBought = it => { const m = mkState(); return (it.per === 'week' ? m.w : m.d)[it.id] || 0; };
+  const mkLimit = it => (Array.isArray(it.price) ? it.price.length : it.limit);
+  const mkPrice = it => (Array.isArray(it.price) ? it.price[Math.min(mkBought(it), it.price.length - 1)] : it.price);
+  function mkBuy(id) {
+    const it = MARKET.find(x => x.id === id); if (!it) return;
+    const n = mkBought(it), price = mkPrice(it);
+    if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
+    if (S.gems < price) { toast(`Not enough Gems: this costs ${price}, you have ${S.gems}.`, true); return; }
+    const go = () => {
+      if (S.gems < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
+      const m = mkState(), book = it.per === 'week' ? m.w : m.d;
+      S.gems -= mkPrice(it); book[it.id] = (book[it.id] || 0) + 1;
+      grantGift(it.r); save(); hud(); SFX.up(); render();
+      toast(`Bought: ${giftParts(it.r).join(' · ')}.`, false, 3000);
+    };
+    if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Gems</b>. You have ${S.gems}.`, `Buy for ${price} Gems`, go); else go();
+  }
+  function marketHtml() {
+    const icon = it => it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
+    const card = it => {
+      const n = mkBought(it), lim = mkLimit(it), left = lim - n, price = mkPrice(it), out = left <= 0;
+      return `<li class="mk-card ${out ? 'out' : ''}">${icon(it)}<div class="mk-main"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small><span class="mk-left">${out ? `Sold out ${it.per === 'week' ? 'this week' : 'today'}` : `${left} of ${lim} left ${it.per === 'week' ? 'this week' : 'today'}`}</span></div>
+        <button type="button" class="btn ${out ? '' : 'primary'} mk-buy" data-act="mkbuy" data-id="${it.id}" ${out || S.gems < price ? 'disabled' : ''}>${GEM_SVG}${price}</button></li>`;
+    };
+    const groups = [...new Set(MARKET.map(x => x.group))].map(g => `<section class="mk-sec"><h3>${g}</h3><ul class="mk-list">${MARKET.filter(x => x.group === g).map(card).join('')}</ul></section>`).join('');
+    const dayLeft = fmtLeft(86400000 - Date.now() % 86400000);
+    return `<div class="section-head"><div><h2>Market</h2><p class="lede">Spend Gems on Energy, Fate Shards, Sigils and Ascension Stones. Daily offers come back at midnight (UTC, in ${dayLeft}), weekly ones on Monday.</p></div>
+        <div class="mk-bal">${GEM_SVG}<b>${S.gems.toLocaleString('en-US')}</b><small>Gems</small></div></div>
+      ${groups}
+      <section class="mk-sec"><h3>Gear</h3><p class="empty-note">Coming soon: gear pieces for Gems.</p></section>
+      <p class="empty-note mk-how">Get Gems from every player level (+${LEVEL_GEMS}), the daily and weekly quest chests, missions, achievements, your hero collection and day 7 of the login rewards. All in the Town Hall.</p>`;
   }
 
   // the guild info counter while the Guildmaster types
@@ -1842,7 +1973,8 @@
     return `<div class="mm-box" role="menu">
       ${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
       ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}
-      <div class="mm-cur"><span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
+      <div class="mm-cur"><span class="tag">Gems</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Gems</small></span>
+        <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
         <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
   }
   function setMenu(open) {
@@ -1871,11 +2003,12 @@
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
-  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.energy > 0 ? [`${(+r.energy).toLocaleString("en-US")} Energy`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
+  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.energy > 0 ? [`${(+r.energy).toLocaleString("en-US")} Energy`] : []), ...(+r.gems > 0 ? [`${(+r.gems).toLocaleString('en-US')} Gems`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
   function grantGift(r) {
     // a hero gift (e.g. the developer hero): joins the roster, or becomes a spare copy when already owned
     if (r.hero && C[r.hero]) { if (!S.roster[r.hero]) S.roster[r.hero] = newHero(r.hero); else S.fodder[r.hero] = (S.fodder[r.hero] || 0) + 1; }
     if (+r.silver > 0) S.silver += Math.floor(+r.silver);
+    if (+r.gems > 0) S.gems += Math.floor(+r.gems);
     if (+r.energy > 0) { energyTick(); S.energy += Math.floor(+r.energy); paintEnergy(); } // may go above the cap; regen waits until it drops below
     addStones(rewardStones(r));
     for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
@@ -2016,6 +2149,8 @@
 
   // ---------- screen events ----------
   document.addEventListener('change', e => {
+    if (e.target.id === 'inv-set') { invSet = e.target.value; render(); const p = document.getElementById('invpanel'); if (p) p.scrollIntoView({ block: 'nearest' }); return; }
+    if (e.target.id === 'cp-diff') { S.diff = +e.target.value; delete S.chap; campSel = null; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
@@ -2088,11 +2223,12 @@
     else if (act === 'arstate') arenaCall('state');
     else if (act === 'arrefresh') arenaCall('refresh');
     else if (act === 'ardef') arenaCall('defense').then(r => { if (r.state) toast('Your current team now defends you in the arena.'); });
-    else if (act === 'arfight') arenaCall('fight', { offer: +a.dataset.n }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } });
+    else if (act === 'arfight') arenaCall('start', { offer: +a.dataset.n }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } });
     else if (act === 'arlb') loadBoard(a.dataset.kind);
     else if (act === 'arclaim') claimArena().then(socialLoad);
     else if (act === 'thtab') { TH.tab = a.dataset.t; editName = false; render(); }
     else if (act === 'thclaim') thClaim(a);
+    else if (act === 'mkbuy') mkBuy(a.dataset.id);
     else if (act === 'soctab') { SO.tab = a.dataset.t; if (SO.tab === 'guild') { GD.view = 'home'; guildLoad(); } render(); }
     else if (act === 'gjoin') guildAct('guild_join', { gid: +id }, { ok: 'Welcome to the guild!', full: 'That guild is full.', closed: 'That guild is closed.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.', not_found: 'That guild no longer exists.' });
     else if (act === 'gleave') confirmBox('Leave guild?', `Leave <b>${esc(GD.mine ? GD.mine.name : '')}</b>? ${GD.mine && GD.mine.role === 'leader' ? 'The lead passes to the longest-serving officer or member. ' : ''}Your guild boss points of this week still count for your own chest.`, 'Leave', () => guildAct('guild_leave', {}, { ok: 'You left the guild.' }, () => { GD.view = 'home'; }));
@@ -2124,8 +2260,9 @@
     else if (act === 'mailclaim') claimMail(a.dataset.id);
     else if (act === 'startover') confirmBox('Start over?', `All your heroes, gear, Sigils, shards and progress will be gone and you begin again at the starter choice. Your name stays.<br><br>A backup of your current progress is kept on this device (Town Hall → Backups), just in case.`, 'Yes, start over', startOver);
     else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
-    else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; save(); render(); }
+    else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; campSel = null; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
+    else if (act === 'csel') { campSel = +a.dataset.stage; render(); }
     else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
     else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
     else if (act === 'bhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
@@ -2148,7 +2285,7 @@
     else if (act === 'tmsel') { S.tsel = +a.dataset.i; S.team = S.teams[S.tsel].ids; if (!S.team.includes(selChamp)) selChamp = S.team[0] || selChamp; invSlot = null; save(); render(); }
     else if (act === 'tmmode') { S.modeTeam[a.dataset.m] = S.tsel; save(); render(); }
     else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
-    else if (act === 'tmnew') nameBox('Create a team', `Team ${S.teams.length + 1}`, 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
+    else if (act === 'tmnew') nameBox('Create a team', freeTeamName(), 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
     else if (act === 'tmname') nameBox('Rename team', S.teams[S.tsel].name, 'Save', name => { S.teams[S.tsel].name = name; save(); render(); });
     else if (act === 'tmfav') { S.tfav = S.tfav === S.tsel ? null : S.tsel; save(); render(); }
     else if (act === 'tmdel') {
@@ -2874,6 +3011,8 @@
       selSkill = u.skills.findIndex(s => b.usable(u, s));
       refreshChoice(); coachTurn(u, b);
     }),
+    // manual arena fights: every hero action goes to the server at the end (K.arenaReplay)
+    record: (u, act, auto) => { if (B && B.moves && B.cfg.type === 'arena') B.moves.push([...K.arenaMove(u, act), auto ? 1 : 0]); },
     turnStart: async u => { await bannerQ; R.active = u; renderBar(u); updateOverlay(); await sleep(u.side === 'enemy' ? 300 : 110); },
     before: animBefore,
     after: animAfter,
@@ -3023,14 +3162,16 @@
   });
   // Auto battle opens after the first clear of Chapter I · Stage 1: the first battle is played by hand, with the coach
   const autoOk = () => S.cleared >= 0;
-  function setAutoBtn() { const b = $('#b-auto'), on = S.auto && autoOk(); b.classList.toggle('on', on); b.classList.toggle('locked', !autoOk()); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = autoOk() ? 'Auto battle: ' + (on ? 'on' : 'off') : 'Auto battle unlocks when you clear Chapter I · Stage 1'; }
+  function setAutoBtn() { const b = $('#b-auto'), on = B && B.cfg.type === 'arena' ? B.b.auto : S.auto && autoOk(); b.classList.toggle('on', on); b.classList.toggle('locked', !autoOk()); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = autoOk() ? 'Auto battle: ' + (on ? 'on' : 'off') : 'Auto battle unlocks when you clear Chapter I · Stage 1'; }
   function setSpeedBtn() { const b = $('#b-speed'); b.innerHTML = `<b>${spd}×</b>`; b.classList.toggle('on', spd > 1); b.title = 'Battle speed ' + spd + '×' + (speedHint() ? '. ' + speedHint() : ''); b.setAttribute('aria-label', b.title); SFX.calm = calm(); }
   $('#b-auto').addEventListener('click', () => {
-    if (B && (B.cfg.type === 'arena' || B.cfg.type === 'gboss')) { toast(B.cfg.type === 'gboss' ? 'Guild boss fights always play on auto.' : 'Arena fights always play on auto.'); return; }
-    if (!autoOk()) { toast('Auto battle unlocks when you clear Chapter I · Stage 1.'); return; }
-    S.auto = !S.auto; save(); setAutoBtn();
-    if (B) B.b.auto = S.auto;
-    if (S.auto && pending) { const { u, res, b } = pending; pending = null; R.hl = new Set(); updateOverlay(); $('#b-hint').textContent = 'Auto is playing this turn.'; res(b.ai(u)); }
+    if (B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)))) { toast(B.cfg.type === 'gboss' ? 'Guild boss fights always play on auto.' : 'Arena fights always play on auto.'); return; }
+    // arena: auto only for this fight (every arena fight starts by hand)
+    const arenaFight = B && B.cfg.type === 'arena';
+    if (!arenaFight && !autoOk()) { toast('Auto battle unlocks when you clear Chapter I · Stage 1.'); return; }
+    if (arenaFight) B.b.auto = !B.b.auto; else { S.auto = !S.auto; save(); if (B) B.b.auto = S.auto; }
+    setAutoBtn();
+    if (B && B.b.auto && pending) { const { res } = pending; pending = null; R.hl = new Set(); updateOverlay(); $('#b-hint').textContent = 'Auto is playing this turn.'; res({ auto: true }); }
   });
   $('#b-speed').addEventListener('click', () => {
     if (speeds.length === 1) { toast(speedHint()); return; }
@@ -3050,7 +3191,7 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGuidePop(); });
   $('#b-quit').addEventListener('click', () => {
     // arena: the result is already known, so this skips ahead (fast forward) instead of surrendering
-    if (B && (B.cfg.type === 'arena' || B.cfg.type === 'gboss')) { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
+    if (B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)))) { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
     const btn = $('#b-quit');
     if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to give up'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up'); }, 3000); return; }
     quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up');
@@ -3093,8 +3234,8 @@
   }
   async function runBattle(cfg) {
     SFX.unlock(); MUSIC.play(null);
-    // Arena: a replay of the fight the server already played. Both teams come from the server's snapshots and the dice
-    // from its seed (K.arenaSetup), so this plays out exactly like on the server; both sides play on auto.
+    // Arena: both teams come from the server's snapshots and the dice from its seed (K.arenaSetup). A manual fight
+    // (cfg.fight.manual) is played here by hand and its moves go to the server, which replays it (K.arenaReplay) and decides.
     // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
     const gb = cfg.type === 'gboss', arena = cfg.type === 'arena' || gb, nPh = arena ? 1 : cfg.nPh || K.PHASES;
     let heroes, enemies;
@@ -3114,9 +3255,11 @@
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
-    b.auto = arena || !!cfg.rep || (S.auto && autoOk());
+    // a manual arena fight starts by hand every time (auto can be switched on for that fight only); its moves go to the server
+    const manualArena = cfg.type === 'arena' && cfg.fight && cfg.fight.manual;
+    b.auto = manualArena ? false : arena || !!cfg.rep || (S.auto && autoOk());
     if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
-    B = { b, cfg, ph: 0, nPh };
+    B = { b, cfg, ph: 0, nPh, moves: [] };
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -3127,7 +3270,7 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? 'Arena · both teams fight on auto' : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
@@ -3157,7 +3300,12 @@
     b.stats = tot; b.turns = tot.turns; b.meterAll = meter;
     // arena: the server's result counts (the replay should always agree; warn if it ever does not)
     if (gb) { finishGboss(cfg, b); return; }
-    if (arena && (res === 'win') !== cfg.win) console.warn('Arena replay differs from the server result', cfg.seed);
+    if (manualArena) {
+      // the server replays the fight with the recorded moves; only its result counts
+      const r = await arenaCall('finish', { moves: B.moves });
+      if (r.fight) { cfg.fight = { ...cfg.fight, ...r.fight }; cfg.win = r.fight.win; if (cfg.win !== (res === 'win' && !b.aborted)) console.warn('Arena replay differs from the server result', cfg.seed); }
+      else { cfg.fight = { ...cfg.fight, win: false, delta: 0, rating: cfg.fight.before, error: r.error || 'The result could not be saved.' }; cfg.win = false; }
+    } else if (arena && (res === 'win') !== cfg.win) console.warn('Arena replay differs from the server result', cfg.seed);
     const win = arena ? cfg.win : res === 'win' && !b.aborted;
     if (win) {
       SFX.win();
@@ -3308,7 +3456,7 @@
   // pay for a battle; false (with a message) when there is not enough
   function spendEnergy(cost) {
     energyTick();
-    if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}.`, true, 4200); return false; }
+    if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}, or buy a refill with Gems in the Market.`, true, 5000); return false; }
     track('energy', cost || 0);
     S.energy -= cost || 0; save(); paintEnergy(); return true;
   }
@@ -3325,7 +3473,7 @@
     while (p.lvl < PLAYER_MAX && p.xp >= pxNeed(p.lvl)) {
       p.xp -= pxNeed(p.lvl); p.lvl++;
       const silver = levelSilver(p.lvl), shard = p.lvl % 5 === 0 ? 'greater' : null;
-      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; energyTick(); const en = enMax(); S.energy += en;
+      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; energyTick(); const en = levelEnergy(p.lvl); S.energy += en; S.gems += LEVEL_GEMS;
       ups.push([p.lvl, silver, shard, (!p.prestige && Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl)) || null, en]);
     }
     if (p.lvl >= PLAYER_MAX) p.xp = 0; // the bar stops at the top: time to prestige
@@ -3416,7 +3564,7 @@
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : S.p.lvl >= PLAYER_MAX ? ' · max level: prestige in the Town Hall' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
-    pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
+    pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Gems${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     for (const [t, n] of Object.entries(stones)) if (n > 0) items.push(`<li ${d()}>${stoneIc(t)}+${n} ${stoneName(t, n)}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
