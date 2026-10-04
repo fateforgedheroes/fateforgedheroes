@@ -1798,10 +1798,19 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 }
 @media (max-width: 760px), (max-height: 500px) and (orientation: landscape) { #app:has(#battle:not([hidden])) { padding-top: 0; padding-bottom: 0; } #battle:not([hidden]) { box-sizing: border-box; } }
 /* campaign: the next battle lists the enemies of each phase */
-.cn-phases { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 4px 0; }
-.cn-ph { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px; border-radius: 6px; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); min-width: 0; }
-.cn-ph small { font: 700 9px var(--font-tag); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.cn-ph div { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.cn-phases { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.cn-foe { width: 52px; height: 52px; border: 2px solid #4a3d52; background: #0f0c12; overflow: hidden; display: block; }
+.cn-foe.boss { width: 64px; height: 64px; border-color: #8c2a20; box-shadow: 0 0 10px rgba(192, 38, 26, .45); }
+.cn-foe img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cn-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cn-meta .rw { padding: 3px 8px; font-size: .85rem; }
+.cn-meta .rw small { color: var(--muted); margin-right: 2px; }
+.cn-meta .gt-ic { width: 20px; height: 20px; }
+.cn-meta .rw img.spr { width: 22px; height: 22px; }
+.cn-first { border: 0; background: none; padding: 0 2px !important; }
+.cn-ph { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 6px; background: rgba(0, 0, 0, .3); border: 1px solid var(--line); min-width: 0; }
+.cn-ph small { font: 700 10px var(--font-tag); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.cn-ph div { display: flex; gap: 4px; align-items: flex-end; flex-wrap: wrap; justify-content: center; }
 .cn-ph img { width: 30px; height: 30px; object-fit: contain; image-rendering: pixelated; }
 .cn-ph img.bossimg { width: 40px; height: 40px; }
 .cn-ph.boss { border-color: #8c2a20; box-shadow: inset 0 0 10px rgba(192, 38, 26, .25); }
