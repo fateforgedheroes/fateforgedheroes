@@ -1894,6 +1894,16 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .st-fig.st12 img { flex: none; height: calc(84% - 1.7em); width: auto; max-width: 150%; object-fit: contain; margin-top: auto; }
 .st-fig .st-nm { font-size: clamp(.62rem, 1.4vw, .9rem); margin-top: 1px; }
 @media (max-width: 760px) { .st-fig.st12 { left: calc(12.5% + var(--c4) * 25%); top: calc(2% + var(--r4) * 32.5%); height: 32%; width: 25%; z-index: calc(1 + var(--r4)); } }
+/* ===== Discord popup and links ===== */
+.dc-ic { width: 20px; height: 20px; fill: currentColor; flex: none; }
+.dc-card { border-color: #5865f2; box-shadow: 0 0 0 4px #000, 0 0 40px -6px #5865f2; background: radial-gradient(circle at 50% 0, #262a5c, var(--panel) 70%); }
+.dc-card > .dc-ic { width: 54px; height: 54px; color: #8c95ff; filter: drop-shadow(0 0 10px rgba(88, 101, 242, .7)); }
+.dc-card h2 { color: #c3c8ff; }
+.btn.dc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #5865f2; border-color: #7983ff; color: #fff; font-weight: 700; text-decoration: none; }
+.btn.dc-btn:hover { background: #6b77ff; }
+.dc-card .dc-btn { min-width: 220px; margin-top: 4px; }
+.mm-it .dc-ic { width: 16px; height: 16px; color: #8c95ff; }
+a.mm-it { text-decoration: none; color: inherit; }
 /* ===== Gems and the Market ===== */
 .gem-ic { width: 18px; height: 18px; flex: none; vertical-align: -3px; filter: drop-shadow(0 0 3px rgba(120, 220, 255, .55)); }
 .gem-ic .g1 { fill: #4fd8f0; stroke: #e8fbff; stroke-width: .8; stroke-linejoin: round; }

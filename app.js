@@ -501,11 +501,11 @@
   // Phones held upright get the 9:16 map (HOME_ART_P, 941x1672): every building fits on the screen, no sideways scrolling.
   // Same zones in the same order (the tour uses zone 8), with their own boxes and larger plates (the map is drawn much narrower).
   const HZPP = (cx, cy) => [cx - 140, cy - 55, 280, 110];
-  const P_BOXES = { kerkers: [[15, 230, 310, 330], HZPP(170, 555)], arena: [[300, 470, 260, 190], HZPP(430, 665)], profiel: [[510, 320, 250, 220], HZPP(640, 535)], altaar: [[650, 390, 291, 370], HZPP(795, 765)],
-    team: [[0, 660, 400, 270], HZPP(190, 925)], social: [[560, 780, 230, 170], HZPP(610, 955)], guild: [[760, 850, 181, 180], HZPP(800, 1060)], expedition: [[0, 1210, 360, 350], HZPP(190, 1530)],
-    market: [[180, 1080, 320, 220], HZPP(370, 1300)], campagne: [[570, 1120, 210, 220], HZPP(670, 1355)], tower: [[770, 1050, 171, 400], HZPP(800, 1470)] };
+  const P_BOXES = { kerkers: [[30, 20, 360, 330], HZPP(210, 340)], arena: [[570, 120, 360, 230], HZPP(750, 355)], profiel: [[290, 220, 390, 250], HZPP(485, 470)], altaar: [[650, 420, 291, 270], HZPP(790, 700)],
+    team: [[0, 410, 350, 250], HZPP(180, 655)], social: [[20, 800, 380, 250], HZPP(210, 1055)], guild: [[600, 800, 341, 220], HZPP(770, 1035)], expedition: [[0, 1310, 470, 300], HZPP(240, 1590)],
+    market: [[20, 1070, 380, 240], HZPP(210, 1315)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1000, 221, 470], HZPP(800, 1480)] };
   const HOME_ZONES_P = HOME_ZONES_L.map(z => ({ ...z, box: P_BOXES[z.art][0], plate: P_BOXES[z.art][1] }));
-  const CAMP_AT_P = [675, 1230, 1100];
+  const CAMP_AT_P = [570, 1160, 1030];
   const PORT_MQ = matchMedia('(max-width: 760px) and (orientation: portrait)');
   const homePort = () => typeof HOME_ART_P !== 'undefined' && PORT_MQ.matches;
   let HOME_W = HOME_W_L, HOME_H = HOME_H_L, HOME_ZONES = HOME_ZONES_L, CAMP_AT = CAMP_AT_L;
@@ -608,7 +608,7 @@
       map.scrollLeft = firstSteps() ? CAMP_AT[0] / HOME_W * map.scrollWidth - map.clientWidth / 2 : tourOn() ? zoneCentre(tourZone(TOUR[tourStep]))[0] / HOME_W * map.scrollWidth - map.clientWidth / 2 : homeScroll ?? (map.scrollWidth - map.clientWidth) / 2;
       map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
-      if (loginDue()) setTimeout(showLogin, 600);
+      if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
     el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : champsHtml());
@@ -1526,6 +1526,7 @@
       const r = loginReward(n);
       grantGift(r); S.login = { last: today(), n: n + 1 }; save(); hud(); SFX.up();
       el.remove(); toast(`Daily reward: ${giftParts(r).join(' · ')}`, false, 3500);
+      setTimeout(showDiscord, 1500);
       if (tab === 'home') render();
     });
     el.querySelector('button').focus();
@@ -1847,6 +1848,25 @@
       <p class="empty-note mk-how">Get Gems from every player level (+${LEVEL_GEMS}), the daily and weekly quest chests, missions, achievements, your hero collection and day 7 of the login rewards. All in the Town Hall.</p>`;
   }
 
+  // ================= DISCORD =================
+  // A popup on the homebase invites players to the Discord, at most once every DISCORD_DAYS days (S.disc = UTC day it
+  // was last shown), never during the first steps or the tour, and after the daily reward. The link is also in the
+  // ☰ menu and the Town Hall.
+  const DISCORD_URL = 'https://discord.gg/xCybP7kkDj', DISCORD_DAYS = 3;
+  const DISCORD_SVG = '<svg class="dc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.7 15.7 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.7a11 11 0 0 1-1.8-.9l.4-.3a12 12 0 0 0 11.6 0l.4.3a11 11 0 0 1-1.8.9l1.1 1.7a17 17 0 0 0 5.2-2.6c.4-4.4-.6-8.3-3.1-11.7zM8.7 14.7c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2zm6.6 0c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2z"/></svg>';
+  const discordDue = () => !S.needStarter && S.seen.home && S.seen.tour && !loginDue() && today() - (S.disc ?? -99) >= DISCORD_DAYS;
+  function showDiscord() {
+    if (tab !== 'home' || !discordDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
+    S.disc = today(); save();
+    const el = document.createElement('div');
+    el.className = 'unlock-pop dc-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Join our Discord');
+    el.innerHTML = `<div class="unlock-card dc-card">${DISCORD_SVG}<span class="tag">Community</span><h2>Join our Discord</h2>
+      <p>Chat with other heroes, find a guild, share your best pulls, report bugs and hear about updates first.</p>
+      <a class="btn dc-btn" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Join the Discord</a><button class="btn small" type="button">Not now</button></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button, a')) el.remove(); });
+  }
+
   // the guild info counter while the Guildmaster types
   document.addEventListener('input', e => { if (e.target.id === 'g-info') { const c = $('#g-count'); if (c) c.textContent = e.target.value.length; } });
   function finishGboss(cfg, b) {
@@ -1971,7 +1991,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      ${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
       ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}
       <div class="mm-cur"><span class="tag">Gems</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Gems</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -2141,6 +2161,7 @@
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
       <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button><button class="btn small" data-act="musictoggle" aria-pressed="${S.music}">Music: ${S.music ? "on" : "off"}</button></div></section>
+      <section class="prof-acc"><h3>Community</h3><p class="empty-note">Chat with other players, find a guild and hear about updates first.</p><div class="row"><a class="btn small dc-btn" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Join the Discord</a></div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
       ${startOverHtml()}
       ${backupsHtml()}
