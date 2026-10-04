@@ -262,85 +262,183 @@
   })();
 
   // ---------- music ----------
-  // 8-bit background music made live with WebAudio, like an old console sound chip: a pulse-wave lead (25% duty), a
-  // square arpeggio, a triangle bass and noise drums. Tracks are written as notes per eighth note ('-' holds the note
-  // before, '.' is a rest); bass and arpeggio follow the chord of each bar. A Web Worker tick schedules ahead, so the
-  // music keeps time in a hidden tab too. S.music switches it on or off (separate from the sound effects).
+  // Background music made live with WebAudio: small synthesised instruments (strings, cellos, violin, horns, choir,
+  // harp, lute, flute, upright bass, timpani, taiko, frame drum, tambourine, cymbal swell) through a hall reverb.
+  // Three tracks: 'home' (a relaxed tavern tune in 6/8 for the homebase and menus), 'battle' (epic orchestral) and
+  // 'boss' (darker and heavier). A track is a list of chords (one per bar) and a melody written as notes per eighth note
+  // ('-' holds the note before, '.' is a rest); its acc() adds the accompaniment for every bar. A Web Worker tick
+  // schedules ahead, so the music keeps time in a hidden tab too. S.music switches it on or off.
   const MUSIC = (() => {
-    const TRACKS = {
-      home: {
-        bpm: 100,
-        chords: 'C G Am F C G F G Am F C G Am F G C',
-        lead: [
-          'E5 - G5 - C6 - B5 A5', 'G5 - - - D5 - G5 -', 'A5 - B5 C6 B5 - A5 G5', 'A5 - - - F5 - . .',
-          'E5 - G5 - C6 - D6 E6', 'D6 - B5 - G5 - B5 -', 'C6 - A5 - F5 - A5 C6', 'B5 - - - G5 - - -',
-          'A4 - C5 - E5 - A5 -', 'G5 F5 E5 - F5 - C5 -', 'E5 - G5 - E5 - C5 -', 'D5 - - - B4 - D5 -',
-          'C5 - E5 - A5 - C6 -', 'B5 A5 G5 - A5 - F5 -', 'G5 - A5 B5 D6 - B5 -', 'C6 - - - - - . .',
-        ],
-        // drums per bar: k kick, s snare, h hi-hat (first half calm, second half with snare)
-        drums: ['k . h . k . h .', 'k h s h k h s h'],
-        drumBars: [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1],
-      },
-    };
     const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
     const freq = n => { const m = /^([A-G]#?)(\d)$/.exec(n); return 440 * Math.pow(2, (NOTE[m[1]] + (+m[2] + 1) * 12 - 69) / 12); };
-    const CHORD = { C: ['C', 'E', 'G'], G: ['G', 'B', 'D'], Am: ['A', 'C', 'E'], F: ['F', 'A', 'C'], Dm: ['D', 'F', 'A'], Em: ['E', 'G', 'B'], E: ['E', 'G#', 'B'] };
-    // a track as a list of events per channel: { step, f, len } in eighth notes
+    const CHORD = { C: ['C', 'E', 'G'], D: ['D', 'F#', 'A'], G: ['G', 'B', 'D'], A: ['A', 'C#', 'E'], Bm: ['B', 'D', 'F#'], Em: ['E', 'G', 'B'],
+      Dm: ['D', 'F', 'A'], Bb: ['A#', 'D', 'F'], F: ['F', 'A', 'C'], Gm: ['G', 'A#', 'D'], Cm: ['C', 'D#', 'G'], Ab: ['G#', 'C', 'D#'], Fm: ['F', 'G#', 'C'] };
+    // chord tone k (0 root, 1 third, 2 fifth, 3 root an octave up) in octave o, kept above the root
+    const tone = (ch, k, o) => { const c = CHORD[ch], r = NOTE[c[0]]; const n = c[k % 3]; return freq(n + (o + (k >= 3 ? 1 : 0) + (NOTE[n] < r ? 1 : 0))); };
+    const TRACKS = {
+      // the homebase: a relaxed tavern tune in 6/8 (six eighths a bar): lute, upright bass, frame drum and tambourine;
+      // a flute has the tune first, a fiddle the second time
+      home: {
+        bpm: 108, bar: 6, vol: 0.55,
+        chords: 'D G D A Bm G A D D G D A Bm G A D',
+        lead: [
+          'A4 - D5 F#5 - E5', 'D5 - B4 G4 - B4', 'A4 - D5 F#5 - A5', 'E5 - - . . .',
+          'F#5 - E5 D5 - B4', 'G4 - B4 D5 - G5', 'E5 - C#5 A4 - C#5', 'D5 - - . . .',
+          'F#5 - A5 D6 - A5', 'B5 - G5 D5 - G5', 'F#5 - E5 D5 - F#5', 'E5 - - C#5 - A4',
+          'B4 - D5 F#5 - D5', 'G5 - F#5 E5 - D5', 'C#5 - E5 A5 - G5', 'F#5 - - D5 - .',
+        ],
+        leadInst: b => (b < 8 ? 'flute' : 'fiddle'),
+        acc(add, b, ch) {
+          add(0, 'ubass', tone(ch, 0, 2), 3, 0.5); add(3, 'ubass', tone(ch, 2, 2), 3, 0.42);
+          for (const s of [0, 3]) for (let k = 0; k < 3; k++) add(s + k * 0.04, 'lute', tone(ch, k, 3), 2.5, 0.16);
+          add(1, 'lute', tone(ch, 2, 4), 1, 0.1); add(2, 'lute', tone(ch, 1, 4), 1, 0.09); add(4, 'lute', tone(ch, 3, 3), 1, 0.1); add(5, 'lute', tone(ch, 1, 4), 1, 0.09);
+          add(0, 'frame', 0, 1, 0.5); add(3, 'frame', 0, 1, 0.3);
+          if (b >= 4) { add(2, 'tamb', 0, 1, 0.16); add(5, 'tamb', 0, 1, 0.2); }
+          if (b >= 8) for (let k = 0; k < 3; k++) add(0, 'strings', tone(ch, k, 3), 6, 0.035);
+        },
+      },
+      // battles: epic and driving, D minor; strings ostinato, then horns with choir and taiko for the second half
+      battle: {
+        bpm: 136, bar: 8, vol: 0.5,
+        chords: 'Dm Bb F C Dm Bb C A Dm Bb F C Gm Bb A Dm',
+        lead: [
+          'D5 - - - A4 - D5 E5', 'F5 - - - E5 - D5 -', 'C5 - - - F5 - A5 -', 'G5 - - - - - . .',
+          'A5 - - - G5 - F5 E5', 'D5 - - - F5 - D5 -', 'G4 - A#4 - D5 - G5 -', 'E5 - - - C#5 - A4 -',
+          'D5 - - - F5 - A5 -', 'A#5 - - - A5 - G5 -', 'A5 - - - G5 - F5 -', 'G5 - - - E5 - C5 -',
+          'D5 - G5 - A#5 - D6 -', 'C6 - A#5 - A5 - F5 -', 'E5 - - - A5 - C#6 -', 'D6 - - - - - - -',
+        ],
+        leadInst: b => (b < 8 ? 'violin' : 'brass'),
+        acc(add, b, ch) {
+          const big = b >= 8;
+          [0, 3, 2, 0, 0, 3, 2, 1].forEach((k, i) => add(i, 'stacc', tone(ch, k, 3), 0.7, i % 4 === 0 ? 0.11 : 0.075));
+          add(0, 'cello', tone(ch, 0, 2), 8, 0.2);
+          for (let k = 0; k < 3; k++) add(0, 'strings', tone(ch, k, 4), 8, big ? 0.05 : 0.035);
+          if (big) { for (let k = 0; k < 3; k++) add(0, 'choir', tone(ch, k, 4), 8, 0.035); 'T.t.TTt.'.split('').forEach((d, i) => { if (d !== '.') add(i, 'taiko', 0, 1, d === 'T' ? 0.9 : 0.5); }); }
+          else { add(0, 'timp', tone(ch, 0, 2), 2, 0.5); if (b % 2) add(4, 'timp', tone(ch, 2, 1), 2, 0.35); }
+          if (b === 7 || b === 15) add(4, 'swell', 0, 4, 0.12);
+        },
+      },
+      // bosses: darker and heavier, C minor; hammering low strings, horn stabs, choir throughout, taiko every bar
+      boss: {
+        bpm: 120, bar: 8, vol: 0.52,
+        chords: 'Cm Cm Ab Ab Fm Fm G G Cm Ab Fm G Cm Ab G Cm',
+        lead: [
+          'C5 - - - D#5 - D5 C5', 'G4 - - - - - . .', 'G#4 - C5 - D#5 - G5 -', 'F5 - D#5 - C5 - . .',
+          'F4 - G#4 - C5 - F5 -', 'D#5 - C5 - G#4 - . .', 'G4 - B4 - D5 - F5 -', 'D5 - B4 - G4 - . .',
+          'G5 - - - D#5 - C5 -', 'D#5 - - - C5 - G#4 -', 'C5 - - - G#4 - F4 -', 'B4 - D5 - G5 - F5 -',
+          'D#5 - G5 - C6 - D#6 -', 'D6 - C6 - G#5 - G5 -', 'B5 - - - D6 - F6 -', 'C6 - - - - - - -',
+        ],
+        leadInst: b => (b < 8 ? 'violin' : 'brass'),
+        acc(add, b, ch) {
+          const big = b >= 8;
+          [0, 0, 2, 0, 0, 2, 0, 1].forEach((k, i) => add(i, 'stacc', tone(ch, k, 2), 0.6, i % 3 === 0 ? 0.13 : 0.08));
+          add(0, 'cello', tone(ch, 0, 1), 8, 0.22);
+          for (let k = 0; k < 3; k++) add(0, 'choir', tone(ch, k, big ? 4 : 3), 8, big ? 0.04 : 0.03);
+          if (big) { add(0, 'brassStab', tone(ch, 0, 3), 1.5, 0.12); add(3, 'brassStab', tone(ch, 2, 3), 1.5, 0.1); for (let k = 0; k < 3; k++) add(0, 'strings', tone(ch, k, 4), 8, 0.04); }
+          'T.T.TtTt'.split('').forEach((d, i) => { if (d !== '.') add(i, 'taiko', 0, 1, d === 'T' ? (big ? 1 : 0.7) : 0.45); });
+          add(0, 'timp', tone(ch, 0, 2), 2, 0.55);
+          if (b === 7 || b === 15) add(4, 'swell', 0, 4, 0.14);
+        },
+      },
+    };
+    // a track as events per eighth note: byStep[step] = [{ off, inst, f, len, vol }] (off: a fraction of a step, for strums)
     function build(t) {
-      const ev = { lead: [], arp: [], bass: [], drum: [] }, chords = t.chords.split(' ');
-      t.lead.forEach((bar, b) => bar.split(' ').forEach((tok, i) => {
-        const step = b * 8 + i;
-        if (tok === '-') { const last = ev.lead[ev.lead.length - 1]; if (last) last.len++; } else if (tok !== '.') ev.lead.push({ step, f: freq(tok), len: 1 });
-      }));
-      chords.forEach((c, b) => {
-        const [r, th, fi] = CHORD[c], low = fi + (NOTE[fi] < NOTE[r] ? 3 : 2);
-        // bass: root, fifth below, and a pickup on the last eighth
-        ev.bass.push({ step: b * 8, f: freq(r + 3), len: 3 }, { step: b * 8 + 4, f: freq(low), len: 3 }, { step: b * 8 + 7, f: freq(r + 3), len: 1 });
-        [r, th, fi, th].forEach((n, k) => { const oct = NOTE[n] < NOTE[r] ? 5 : 4; ev.arp.push({ step: b * 8 + k, f: freq(n + oct), len: 1 }, { step: b * 8 + 4 + k, f: freq(n + oct), len: 1 }); });
-        t.drums[t.drumBars[b]].split(' ').forEach((d, i) => { if (d !== '.') ev.drum.push({ step: b * 8 + i, d }); });
-      });
-      return { ev, steps: chords.length * 8, spb: 60 / t.bpm / 2 };
+      const chords = t.chords.split(' '), steps = chords.length * t.bar, byStep = Array.from({ length: steps }, () => []);
+      const add = (b, s, inst, f, len, vol) => { const st = b * t.bar + Math.floor(s); byStep[st % steps].push({ off: s - Math.floor(s), inst, f, len, vol }); };
+      t.lead.forEach((bar, b) => { let last = null; bar.split(' ').forEach((tok, i) => {
+        if (tok === '-') { if (last) last.len++; } else if (tok === '.') last = null;
+        else { last = { off: 0, inst: t.leadInst(b), f: freq(tok), len: 1, vol: 1 }; byStep[b * t.bar + i].push(last); }
+      }); });
+      chords.forEach((ch, b) => t.acc((s, inst, f, len, vol) => add(b, s, inst, f, len, vol), b, ch));
+      return { byStep, steps, spb: 60 / t.bpm / 2, vol: t.vol };
     }
-    let ctx = null, out = null, pulse = null, noiseBuf = null, cur = null, want = null, startAt = 0, next = 0, timer = null;
+    let ctx = null, out = null, dry = null, wet = null, noiseBuf = null, cur = null, want = null, startAt = 0, next = 0;
     function init() {
       if (ctx) return ctx;
       try {
         ctx = new (window.AudioContext || window.webkitAudioContext)();
-        out = ctx.createGain(); out.gain.value = 0; out.connect(ctx.destination);
-        const N = 32, re = new Float32Array(N), im = new Float32Array(N);
-        for (let n = 1; n < N; n++) re[n] = 2 * Math.sin(n * Math.PI * 0.25) / (n * Math.PI);
-        pulse = ctx.createPeriodicWave(re, im);
+        out = ctx.createGain(); out.gain.value = 0;
+        const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 3;
+        out.connect(comp); comp.connect(ctx.destination);
+        // a hall: a convolution reverb from a decaying stereo noise burst
+        const rev = ctx.createConvolver(), len = Math.floor(ctx.sampleRate * 2.8), ir = ctx.createBuffer(2, len, ctx.sampleRate);
+        for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2); }
+        rev.buffer = ir;
+        dry = ctx.createGain(); dry.gain.value = 0.8; dry.connect(out);
+        wet = ctx.createGain(); wet.gain.value = 0.42; wet.connect(rev); rev.connect(out);
         noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
         const w = new Worker(URL.createObjectURL(new Blob(['setInterval(() => postMessage(0), 100);'], { type: 'text/javascript' })));
         w.onmessage = () => schedule();
       } catch (e) { ctx = null; }
       return ctx;
     }
-    function note(f, t, dur, wave, vol) {
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      if (wave === 'pulse') o.setPeriodicWave(pulse); else o.type = wave;
-      o.frequency.setValueAtTime(f, t);
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.006); g.gain.linearRampToValueAtTime(vol * 0.6, t + 0.08);
-      g.gain.setValueAtTime(vol * 0.6, t + Math.max(0.09, dur - 0.03)); g.gain.linearRampToValueAtTime(0, t + dur);
-      o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.02);
+    // building blocks
+    const bus = (node, send) => { node.connect(dry); const s = ctx.createGain(); s.gain.value = send; node.connect(s); s.connect(wet); };
+    function env(g, t, a, peak, sus, dur, rel) { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a); g.gain.linearRampToValueAtTime(sus, t + a + 0.12); g.gain.setValueAtTime(sus, t + Math.max(a + 0.13, dur)); g.gain.linearRampToValueAtTime(0, t + dur + rel); }
+    function oscs(f, t, stop, type, cents, dest, vib) {
+      for (const c of cents) {
+        const o = ctx.createOscillator(); o.type = type; o.frequency.setValueAtTime(f, t); o.detune.setValueAtTime(c, t);
+        if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = vib[0]; lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(vib[1], t + 0.35); l.connect(lg); lg.connect(o.detune); l.start(t); l.stop(stop); }
+        o.connect(dest); o.start(t); o.stop(stop);
+      }
     }
-    function drum(d, t) {
-      if (d === 'k') { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.15); o.connect(g); g.connect(out); o.start(t); o.stop(t + 0.16); return; }
-      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), len = d === 's' ? 0.12 : 0.035;
-      s.buffer = noiseBuf; f.type = 'highpass'; f.frequency.value = d === 's' ? 1200 : 7000;
-      g.gain.setValueAtTime(d === 's' ? 0.22 : 0.09, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
-      s.connect(f); f.connect(g); g.connect(out); s.start(t, Math.random() * 0.5); s.stop(t + len + 0.01);
+    function lowpass(f, q) { const n = ctx.createBiquadFilter(); n.type = 'lowpass'; n.frequency.value = f; n.Q.value = q || 0.7; return n; }
+    function noise(t, dur, type, fq, vol, decay, send) {
+      const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+      s.buffer = noiseBuf; f.type = type; f.frequency.value = fq; g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0005, t + decay);
+      s.connect(f); f.connect(g); bus(g, send); s.start(t, Math.random() * 0.4); s.stop(t + decay + 0.02);
+    }
+    // one note of an instrument at time t for dur seconds
+    function play(inst, f, t, dur, vol) {
+      const g = ctx.createGain();
+      switch (inst) {
+        case 'strings': { const lp = lowpass(1500); env(g, t, 0.45, vol, vol * 0.9, dur, 0.6); oscs(f, t, t + dur + 0.7, 'sawtooth', [-9, 0, 8], lp, [5, 6]); lp.connect(g); bus(g, 0.7); break; }
+        case 'cello': { const lp = lowpass(650); env(g, t, 0.2, vol, vol * 0.85, dur, 0.5); oscs(f, t, t + dur + 0.6, 'sawtooth', [-6, 6], lp, [4.5, 5]); lp.connect(g); bus(g, 0.5); break; }
+        case 'stacc': { const lp = lowpass(2400); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + dur + 0.08); oscs(f, t, t + dur + 0.1, 'sawtooth', [-7, 7], lp); lp.connect(g); bus(g, 0.35); break; }
+        case 'violin': { const lp = lowpass(3000); env(g, t, 0.09, vol * 0.11, vol * 0.1, dur, 0.25); oscs(f, t, t + dur + 0.3, 'sawtooth', [0, 5], lp, [5.6, 14]); lp.connect(g); bus(g, 0.55); break; }
+        case 'fiddle': { const lp = lowpass(2600, 1.4); env(g, t, 0.04, vol * 0.1, vol * 0.08, dur, 0.15); oscs(f, t, t + dur + 0.2, 'sawtooth', [0], lp, [6, 12]); lp.connect(g); bus(g, 0.3); break; }
+        case 'brass': case 'brassStab': {
+          const lp = lowpass(500, 1.2), stab = inst === 'brassStab', d = stab ? Math.min(dur, 0.25) : dur;
+          lp.frequency.setValueAtTime(400, t); lp.frequency.linearRampToValueAtTime(stab ? 2600 : 2100, t + 0.09); lp.frequency.linearRampToValueAtTime(stab ? 900 : 1400, t + 0.35);
+          env(g, t, 0.05, (stab ? vol : vol * 0.13), (stab ? vol * 0.6 : vol * 0.11), d, stab ? 0.18 : 0.3);
+          oscs(f, t, t + d + 0.4, 'sawtooth', [-5, 5], lp, stab ? null : [5, 8]); if (!stab) oscs(f / 2, t, t + d + 0.4, 'sawtooth', [0], lp);
+          lp.connect(g); bus(g, 0.5); break;
+        }
+        case 'choir': {
+          const m = ctx.createGain(); m.gain.value = 1;
+          for (const [fq, q] of [[700, 6], [1150, 8], [2600, 10]]) { const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fq; bp.Q.value = q; oscs(f, t, t + dur + 0.9, 'sawtooth', [-10, 10], bp, [5, 9]); bp.connect(m); }
+          env(g, t, 0.6, vol * 3, vol * 2.7, dur, 0.8); m.connect(g); bus(g, 0.8); break;
+        }
+        case 'flute': { const lp = lowpass(3200); env(g, t, 0.06, vol * 0.13, vol * 0.11, dur, 0.15); oscs(f, t, t + dur + 0.2, 'triangle', [0], lp, [5.2, 10]); oscs(f * 2, t, t + dur + 0.2, 'sine', [0], lp); lp.connect(g); bus(g, 0.45); noise(t, 0.12, 'bandpass', f * 2, vol * 0.02, 0.12, 0.3); break; }
+        case 'lute': case 'harp': {
+          const lp = lowpass(inst === 'lute' ? 3200 : 2400, 1.5), dec = inst === 'lute' ? 0.6 : 1.4;
+          lp.frequency.setValueAtTime(inst === 'lute' ? 3800 : 2800, t); lp.frequency.exponentialRampToValueAtTime(500, t + dec);
+          g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.001, t + dec);
+          oscs(f, t, t + dec + 0.05, 'sawtooth', [0], lp); oscs(f, t, t + dec + 0.05, 'triangle', [3], lp); lp.connect(g); bus(g, 0.35); break;
+        }
+        case 'ubass': { const lp = lowpass(900); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.001, t + Math.max(0.5, dur)); oscs(f, t, t + dur + 0.6, 'triangle', [0], lp); oscs(f, t, t + dur + 0.6, 'sine', [0], lp); lp.connect(g); bus(g, 0.2); break; }
+        case 'timp': {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(f * 1.04, t); o.frequency.exponentialRampToValueAtTime(f, t + 0.15);
+          g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + 1.4); o.connect(g); bus(g, 0.5); o.start(t); o.stop(t + 1.5);
+          noise(t, 0.2, 'lowpass', 500, vol * 0.4, 0.2, 0.4); break;
+        }
+        case 'taiko': {
+          const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.3);
+          g.gain.setValueAtTime(vol * 0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.7); o.connect(g); bus(g, 0.45); o.start(t); o.stop(t + 0.75);
+          noise(t, 0.12, 'lowpass', 300, vol * 0.5, 0.12, 0.4); break;
+        }
+        case 'frame': { const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(70, t + 0.2); g.gain.setValueAtTime(vol * 0.6, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.35); o.connect(g); bus(g, 0.3); o.start(t); o.stop(t + 0.4); break; }
+        case 'tamb': noise(t, 0.15, 'highpass', 6500, vol, 0.15, 0.3); noise(t, 0.08, 'bandpass', 9000, vol * 0.7, 0.09, 0.2); break;
+        case 'swell': { const s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(); s.buffer = noiseBuf; s.loop = true; hp.type = 'highpass'; hp.frequency.value = 3500; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.08); s.connect(hp); hp.connect(g); bus(g, 0.8); s.start(t); s.stop(t + dur + 0.1); break; }
+      }
     }
     // schedules every eighth note that starts within the look-ahead window
     function schedule() {
       if (!cur || !ctx) return;
       const ahead = ctx.currentTime + 1.2;
       while (startAt + next * cur.spb < ahead) {
-        const step = next % cur.steps, t = startAt + next * cur.spb;
-        for (const e of cur.ev.lead) if (e.step === step) note(e.f, t, e.len * cur.spb * 0.95, 'pulse', 0.1);
-        for (const e of cur.ev.arp) if (e.step === step) note(e.f, t, cur.spb * 0.6, 'square', 0.025);
-        for (const e of cur.ev.bass) if (e.step === step) note(e.f, t, e.len * cur.spb * 0.9, 'triangle', 0.22);
-        for (const e of cur.ev.drum) if (e.step === step) drum(e.d, t);
+        const t = startAt + next * cur.spb;
+        for (const e of cur.byStep[next % cur.steps]) play(e.inst, e.f, t + e.off * cur.spb, e.len * cur.spb * 0.96, e.vol);
         next++;
       }
     }
@@ -358,7 +456,7 @@
       out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(0.5, now + 1.5);
     }
     return {
-      // play a track ('home') or null for silence; starts for real after the first click (browser rule)
+      // play a track ('home', 'battle', 'boss') or null for silence; starts for real after the first click (browser rule)
       play(name) { want = name && TRACKS[name] ? name : null; apply(); },
       unlock() { if (S && S.music && init()) apply(); },
       refresh() { if (S && S.music) init(); apply(); },
@@ -479,7 +577,7 @@
   // its name plate. Zones without `go` are "Coming soon": their names are covered, so the buildings can become any mode later.
   const HOME_W_L = 1536, HOME_H_L = 1024;
   // building box and name plate (PLATE_ART[art], drawn at `plate`) in image pixels; the plate is centred under its building
-  const HZP = (cx, cy) => [cx - 130, cy - 50, 260, 100];
+  const HZP = (cx, cy) => [cx - 128, cy - 41, 256, 82];
   const HOME_ZONES_L = [
     { go: 'kerkers', art: 'kerkers', label: 'Boss Hall', box: [10, 0, 460, 300], plate: HZP(235, 285) },
     { go: 'arena', art: 'arena', label: 'Arena', box: [500, 110, 330, 215], plate: HZP(665, 330) },
@@ -489,7 +587,7 @@
     { go: 'social', art: 'social', label: 'Social: friends and guild', box: [900, 380, 340, 180], plate: HZP(1070, 565) },
     { go: 'guild', art: 'guild', label: 'Guild Hall: your guild and the guild boss', box: [1290, 380, 246, 210], plate: HZP(1410, 585) },
     { go: 'expedition', art: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 600, 400, 330], plate: HZP(200, 960) },
-    { go: 'market', art: 'market', label: 'Market: spend Gems', box: [390, 580, 330, 270], plate: HZP(555, 875) },
+    { go: 'market', art: 'market', label: 'Market: spend Crystals', box: [390, 580, 330, 270], plate: HZP(555, 875) },
     { go: 'campagne', art: 'campagne', label: 'Campaign', box: [860, 620, 340, 250], plate: HZP(1035, 890) },
     { go: 'tower', art: 'tower', label: 'Tower of Essence', box: [1250, 600, 286, 330], plate: HZP(1395, 965) },
   ];
@@ -500,10 +598,10 @@
   const CAMP_AT_L = [1035, 745, 575]; // centre of the Campaign building in image pixels, and where the "Start here" marker points from
   // Phones held upright get the 9:16 map (HOME_ART_P, 941x1672): every building fits on the screen, no sideways scrolling.
   // Same zones in the same order (the tour uses zone 8), with their own boxes and larger plates (the map is drawn much narrower).
-  const HZPP = (cx, cy) => [cx - 140, cy - 55, 280, 110];
-  const P_BOXES = { kerkers: [[30, 20, 360, 330], HZPP(210, 340)], arena: [[570, 120, 360, 230], HZPP(750, 355)], profiel: [[290, 220, 390, 250], HZPP(485, 470)], altaar: [[650, 420, 291, 270], HZPP(790, 700)],
-    team: [[0, 410, 350, 250], HZPP(180, 655)], social: [[20, 800, 380, 250], HZPP(210, 1055)], guild: [[600, 800, 341, 220], HZPP(770, 1035)], expedition: [[0, 1310, 470, 300], HZPP(240, 1590)],
-    market: [[20, 1070, 380, 240], HZPP(210, 1315)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1000, 221, 470], HZPP(800, 1480)] };
+  const HZPP = (cx, cy) => [cx - 170, cy - 54, 340, 108];
+  const P_BOXES = { kerkers: [[30, 20, 360, 330], HZPP(210, 340)], arena: [[570, 120, 360, 230], HZPP(760, 355)], profiel: [[290, 220, 390, 250], HZPP(485, 470)], altaar: [[650, 420, 291, 270], HZPP(765, 700)],
+    team: [[0, 410, 350, 250], HZPP(180, 655)], social: [[20, 800, 380, 250], HZPP(210, 1055)], guild: [[600, 800, 341, 220], HZPP(765, 1035)], expedition: [[0, 1310, 470, 300], HZPP(240, 1590)],
+    market: [[20, 1070, 380, 240], HZPP(210, 1315)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1000, 221, 470], HZPP(765, 1480)] };
   const HOME_ZONES_P = HOME_ZONES_L.map(z => ({ ...z, box: P_BOXES[z.art][0], plate: P_BOXES[z.art][1] }));
   const CAMP_AT_P = [570, 1160, 1030];
   const PORT_MQ = matchMedia('(max-width: 760px) and (orientation: portrait)');
@@ -525,7 +623,7 @@
     { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
-    { go: 'market', title: 'Market', text: 'Spend Gems on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Gems from level-ups, quest chests, missions and achievements.' },
+    { go: 'market', title: 'Market', text: 'Spend Crystals on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Crystals from level-ups, quest chests, missions and achievements.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Halls. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
@@ -1509,7 +1607,7 @@
     loginShown = true;
     const n = (S.login && S.login.n) || 0, start = n - (n % 7), week = Math.floor(n / 7) + 1;
     // each reward as medallion icons and a short amount line
-    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...(r.gems ? [[GEM_SVG, `${r.gems} Gems`]] : []), ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
+    const parts = r => [...(r.silver ? [[ic('coin'), `${r.silver.toLocaleString('en-US')} Sigils`]] : []), ...(r.gems ? [[GEM_SVG, `${r.gems} Crystals`]] : []), ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]), ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name.replace(' Fate Shard', '').replace('Fate Shard', 'Fate')} ${r.fs[k] === 1 ? 'Shard' : 'Shards'}`])];
     const tiles = Array.from({ length: 7 }, (_, i) => {
       const k = start + i, r = loginReward(k), state = k < n ? 'done' : k === n ? 'today' : 'next', p = parts(r);
       const ribbon = state === 'today' ? '<span class="lg-rib">Today</span>' : i === 6 ? '<span class="lg-rib best">Best</span>' : '';
@@ -1540,7 +1638,7 @@
   //   tot: { counter: lifetime count }, m: { mission or 'f<chapter>': 1 }, col: { milestone: 1 }, a: { achievement: tiers claimed },
   //   hs: { hero ever owned: 1 }, be: { enemy ever captured: 1 } }
   const TH = { tab: 'profile' };
-  const EN_SVG = '<svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg>';
+  const EN_SVG = typeof ENERGY_ART !== 'undefined' ? `<img class="en-ic" src="${ENERGY_ART}" alt="">` : '<svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg>';
   const weekNo = () => Math.floor((today() + 3) / 7); // weeks start on Monday 00:00 UTC
   // daily quests: points per quest; quests for modes that are still locked show what opens them
   const QUESTS = [
@@ -1794,11 +1892,11 @@
   }
 
   // ================= GEMS AND THE MARKET =================
-  // Gems (S.gems) are the premium currency: earned from level-ups (LEVEL_GEMS), the daily and weekly quest chests,
+  // Crystals (S.gems) are the premium currency: earned from level-ups (LEVEL_GEMS), the daily and weekly quest chests,
   // missions, achievements, collection, login day 7 and mail gifts ({ "gems": n }); spent in the Market (the tree
   // building on the homebase). Every offer has a limit per UTC day or week (S.mk); the energy refill gets dearer per buy.
   const LEVEL_GEMS = 10;
-  const GEM_SVG = '<svg class="gem-ic" viewBox="0 0 16 16" aria-hidden="true"><path class="g1" d="M4.2 1.8h7.6L15 6l-7 8.6L1 6z"/><path class="g2" d="M1 6h14M5.6 1.8 4.6 6 8 14.6M10.4 1.8l1 4.2L8 14.6"/></svg>';
+  const GEM_SVG = typeof CRYSTAL_ART !== 'undefined' ? `<img class="gem-ic" src="${CRYSTAL_ART}" alt="">` : '';
   const MARKET = [
     { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar. Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
     { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
@@ -1822,7 +1920,7 @@
     const it = MARKET.find(x => x.id === id); if (!it) return;
     const n = mkBought(it), price = mkPrice(it);
     if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
-    if (S.gems < price) { toast(`Not enough Gems: this costs ${price}, you have ${S.gems}.`, true); return; }
+    if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
     const go = () => {
       if (S.gems < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
       const m = mkState(), book = it.per === 'week' ? m.w : m.d;
@@ -1830,7 +1928,7 @@
       grantGift(it.r); save(); hud(); SFX.up(); render();
       toast(`Bought: ${giftParts(it.r).join(' · ')}.`, false, 3000);
     };
-    if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Gems</b>. You have ${S.gems}.`, `Buy for ${price} Gems`, go); else go();
+    if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Crystals</b>. You have ${S.gems}.`, `Buy for ${price} Crystals`, go); else go();
   }
   function marketHtml() {
     const icon = it => it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
@@ -1841,11 +1939,11 @@
     };
     const groups = [...new Set(MARKET.map(x => x.group))].map(g => `<section class="mk-sec"><h3>${g}</h3><ul class="mk-list">${MARKET.filter(x => x.group === g).map(card).join('')}</ul></section>`).join('');
     const dayLeft = fmtLeft(86400000 - Date.now() % 86400000);
-    return `<div class="section-head"><div><h2>Market</h2><p class="lede">Spend Gems on Energy, Fate Shards, Sigils and Ascension Stones. Daily offers come back at midnight (UTC, in ${dayLeft}), weekly ones on Monday.</p></div>
-        <div class="mk-bal">${GEM_SVG}<b>${S.gems.toLocaleString('en-US')}</b><small>Gems</small></div></div>
+    return `<div class="section-head"><div><h2>Market</h2><p class="lede">Spend Crystals on Energy, Fate Shards, Sigils and Ascension Stones. Daily offers come back at midnight (UTC, in ${dayLeft}), weekly ones on Monday.</p></div>
+        <div class="mk-bal">${GEM_SVG}<b>${S.gems.toLocaleString('en-US')}</b><small>Crystals</small></div></div>
       ${groups}
-      <section class="mk-sec"><h3>Gear</h3><p class="empty-note">Coming soon: gear pieces for Gems.</p></section>
-      <p class="empty-note mk-how">Get Gems from every player level (+${LEVEL_GEMS}), the daily and weekly quest chests, missions, achievements, your hero collection and day 7 of the login rewards. All in the Town Hall.</p>`;
+      <section class="mk-sec"><h3>Gear</h3><p class="empty-note">Coming soon: gear pieces for Crystals.</p></section>
+      <p class="empty-note mk-how">Get Crystals from every player level (+${LEVEL_GEMS}), the daily and weekly quest chests, missions, achievements, your hero collection and day 7 of the login rewards. All in the Town Hall.</p>`;
   }
 
   // ================= DISCORD =================
@@ -1993,7 +2091,7 @@
     return `<div class="mm-box" role="menu">
       <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
       ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}
-      <div class="mm-cur"><span class="tag">Gems</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Gems</small></span>
+      <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
         <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
   }
@@ -2023,7 +2121,7 @@
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
-  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.energy > 0 ? [`${(+r.energy).toLocaleString("en-US")} Energy`] : []), ...(+r.gems > 0 ? [`${(+r.gems).toLocaleString('en-US')} Gems`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
+  const giftParts = r => [...(r.hero && C[r.hero] ? [`Hero: ${C[r.hero].name}`] : []), ...(+r.silver > 0 ? [`${(+r.silver).toLocaleString('en-US')} Sigils`] : []), ...(+r.energy > 0 ? [`${(+r.energy).toLocaleString("en-US")} Energy`] : []), ...(+r.gems > 0 ? [`${(+r.gems).toLocaleString('en-US')} Crystals`] : []), ...stoneParts(r).map(([t, n]) => `${n} ${stoneName(t, n)}`), ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => `${+r.fs[k]} ${K.SHARD[k].name}${+r.fs[k] > 1 ? "s" : ""}`)];
   function grantGift(r) {
     // a hero gift (e.g. the developer hero): joins the roster, or becomes a spare copy when already owned
     if (r.hero && C[r.hero]) { if (!S.roster[r.hero]) S.roster[r.hero] = newHero(r.hero); else S.fodder[r.hero] = (S.fodder[r.hero] || 0) + 1; }
@@ -3254,7 +3352,7 @@
     updateOverlay();
   }
   async function runBattle(cfg) {
-    SFX.unlock(); MUSIC.play(null);
+    SFX.unlock(); MUSIC.play(cfg.type === 'gboss' || cfg.type === 'boss' || (cfg.stage && cfg.stage.boss) ? 'boss' : 'battle');
     // Arena: both teams come from the server's snapshots and the dice from its seed (K.arenaSetup). A manual fight
     // (cfg.fight.manual) is played here by hand and its moves go to the server, which replays it (K.arenaReplay) and decides.
     // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
@@ -3472,12 +3570,12 @@
   const fmtMins = m => m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
   // minutes until the bar holds `need` energy (0 if it already does)
   function energyWait(need) { energyTick(); const short = need - S.energy; return short <= 0 ? 0 : Math.max(1, Math.ceil((short * EN_MS - (Date.now() - S.enAt)) / 60000)); }
-  const enIc = () => `<svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="${FXP.bolt}"/></svg>`;
+  const enIc = () => EN_SVG;
   const enCost = c => c ? `<span class="en-cost" title="Costs ${c} energy">${enIc()}${c}</span>` : '';
   // pay for a battle; false (with a message) when there is not enough
   function spendEnergy(cost) {
     energyTick();
-    if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}, or buy a refill with Gems in the Market.`, true, 5000); return false; }
+    if (cost && S.energy < cost) { toast(`Not enough energy: this battle costs ${cost}, you have ${S.energy}. You get 1 every ${K.ENERGY.regenMin} minutes, enough in ${fmtMins(energyWait(cost))}, or buy a refill with Crystals in the Market.`, true, 5000); return false; }
     track('energy', cost || 0);
     S.energy -= cost || 0; save(); paintEnergy(); return true;
   }
@@ -3585,7 +3683,7 @@
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : S.p.lvl >= PLAYER_MAX ? ' · max level: prestige in the Town Hall' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
-    pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Gems${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
+    pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Crystals${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
     for (const t of gotShards) items.push(`<li class="loot rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}" ${d()}>${shardIc(t)}+1 ${esc(K.SHARD[t].name)}</li>`);
     for (const [t, n] of Object.entries(stones)) if (n > 0) items.push(`<li ${d()}>${stoneIc(t)}+${n} ${stoneName(t, n)}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
@@ -3714,7 +3812,7 @@
     });
     save();
     $('#logo').src = LOGO_URL;
-    $('#ic-coin').src = SIGIL_ART; $('#ic-coin').className = 'sigil-ic'; $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic';
+    $('#ic-coin').src = SIGIL_ART; $('#ic-coin').className = 'sigil-ic'; $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic'; if (typeof CRYSTAL_ART !== 'undefined') $('#ic-crystal').src = CRYSTAL_ART; if (typeof ENERGY_ART !== 'undefined') $('#ic-energy').src = ENERGY_ART;
     render();
     // new mail (gifts, friend requests, arena rewards) is checked every 2 minutes while the game is open
     paintMail(); setInterval(() => { if (!B && document.visibilityState === 'visible') socialLoad(); }, 120000);

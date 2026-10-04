@@ -1533,7 +1533,7 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .res.en .en-ic { width: 18px; height: 18px; fill: #ffd76a; filter: drop-shadow(0 0 3px rgba(255, 200, 80, .6)); }
 .res.en b { font-variant-numeric: tabular-nums; }
 .en-cost { display: inline-flex; align-items: center; gap: 1px; margin-left: 6px; padding: 0 5px 0 3px; border-radius: 999px; background: rgba(0, 0, 0, .35); font-size: .82em; font-variant-numeric: tabular-nums; line-height: 1.5; vertical-align: middle; }
-.en-cost .en-ic { width: 11px; height: 11px; fill: #ffd76a; }
+.en-cost .en-ic { width: 14px; height: 14px; fill: #ffd76a; object-fit: contain; }
 .res.en small { font-size: .8em; opacity: .75; }
 @media (max-width: 480px) { .res.en .en-ic { width: 14px; height: 14px; } .res.en small, .wallet .res:has(#ic-shard) { display: none; } }
 /* Heroes index: every hero, the ones not unlocked yet dimmed (grey portrait, lock pin, where to find them) */
@@ -1894,6 +1894,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .st-fig.st12 img { flex: none; height: calc(84% - 1.7em); width: auto; max-width: 150%; object-fit: contain; margin-top: auto; }
 .st-fig .st-nm { font-size: clamp(.62rem, 1.4vw, .9rem); margin-top: 1px; }
 @media (max-width: 760px) { .st-fig.st12 { left: calc(12.5% + var(--c4) * 25%); top: calc(2% + var(--r4) * 32.5%); height: 32%; width: 25%; z-index: calc(1 + var(--r4)); } }
+/* energy icon art (ENERGY_ART): no yellow glow from the old bolt, a bit larger in the header */
+img.en-ic { filter: none; object-fit: contain; }
+.res.en img.en-ic { width: 22px; height: 22px; }
+@media (max-width: 480px) { .res.en img.en-ic { width: 18px; height: 18px; } }
 /* ===== Discord popup and links ===== */
 .dc-ic { width: 20px; height: 20px; fill: currentColor; flex: none; }
 .dc-card { border-color: #5865f2; box-shadow: 0 0 0 4px #000, 0 0 40px -6px #5865f2; background: radial-gradient(circle at 50% 0, #262a5c, var(--panel) 70%); }
@@ -1904,10 +1908,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .dc-card .dc-btn { min-width: 220px; margin-top: 4px; }
 .mm-it .dc-ic { width: 16px; height: 16px; color: #8c95ff; }
 a.mm-it { text-decoration: none; color: inherit; }
-/* ===== Gems and the Market ===== */
-.gem-ic { width: 18px; height: 18px; flex: none; vertical-align: -3px; filter: drop-shadow(0 0 3px rgba(120, 220, 255, .55)); }
-.gem-ic .g1 { fill: #4fd8f0; stroke: #e8fbff; stroke-width: .8; stroke-linejoin: round; }
-.gem-ic .g2 { fill: none; stroke: #1b7c9c; stroke-width: .8; }
+/* ===== Crystals and the Market ===== */
+.gem-ic { width: 20px; height: 20px; flex: none; vertical-align: -4px; object-fit: contain; }
+
+
 .res.gems b { color: #9fefff; }
 @media (max-width: 480px) { .wallet .res.gems { display: none; } }
 .rw.gem { border-color: #2c7d94; color: #bff4ff; }
@@ -2116,9 +2120,9 @@ a.mm-it { text-decoration: none; color: inherit; }
     <div class="brand"><h1 class="logo-img"><img id="logo" alt="Fate Forged Heroes"></h1></div>
     <button class="homebtn" id="homebtn" type="button" aria-label="Back to your homebase"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg><span>Home</span></button>
     <div class="wallet">
-      <div class="res en" title="Energy"><svg class="en-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9h4.2L6 15l7-8.5H8.8z"/></svg><b id="energy">0</b></div>
+      <div class="res en" title="Energy"><img id="ic-energy" class="en-ic" alt="Energy"><b id="energy">0</b></div>
       <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b></div>
-      <div class="res gems" title="Gems: spend them in the Market"><svg class="gem-ic" viewBox="0 0 16 16" aria-hidden="true"><path class="g1" d="M4.2 1.8h7.6L15 6l-7 8.6L1 6z"/><path class="g2" d="M1 6h14M5.6 1.8 4.6 6 8 14.6M10.4 1.8l1 4.2L8 14.6"/></svg><b id="gems">0</b></div>
+      <div class="res gems" title="Crystals: spend them in the Market"><img id="ic-crystal" class="gem-ic" alt="Crystals"><b id="gems">0</b></div>
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b></div>
       <button class="iconbtn" id="sound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">Sound</button>
