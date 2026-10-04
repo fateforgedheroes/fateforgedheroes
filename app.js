@@ -820,8 +820,8 @@
     // the one big call to action: the next stage on this difficulty
     const nx = K.STAGES[next], nrw = nx ? firstRewards(nx, next) : [];
     const cont = nx ? `<section class="camp-next ${nx.boss ? 'boss' : ''}">
-        <div class="cn-main"><span class="tag">Next battle${d ? ' · ' + esc(D.name) : ''}</span><h3>${stageName(next)}</h3>
-          ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}
+        <div class="cn-main"><div class="cn-head"><span class="tag">Next battle${d ? ' · ' + esc(D.name) : ''}</span><h3>${stageName(next)}</h3>
+          ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}</div>
           <div class="cn-phases">${nx.phases.map((p, i) => `<div class="cn-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><div>${p.map(f => `<span class="cn-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div></div>`).join('')}</div>
           <div class="cn-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(nx, d)}</b></span><span class="rw cn-drop"><span class="st-dic">${dropIc(nx)}</span><b>${dropName(nx)}</b></span>${nrw.length ? `<span class="rw cn-first"><small>First clear</small></span>${nrw.join('')}` : ''}<span class="rw"><small>Enemies</small>${[...new Set(nx.phases.flat().map(f => E[f].aff))].map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div></div>
         ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></section>`}`
