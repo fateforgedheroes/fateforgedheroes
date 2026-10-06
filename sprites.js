@@ -196,33 +196,18 @@ const SPR = (function () {
   const CUSTOM = { imp, wolf, nevelgeest: ghost, larve: larva, pop: doll, roestreus: golem, uthrak: () => worm(false) };
   const WAIST = 22;
 
-  // the own hero's art (pc_<class>_<m|f>, see engine PC_CLASSES): borrowed from existing heroes until its own art is drawn
-  const PC_ART_FROM = { pc_tank_m: 'vorlund', pc_tank_f: 'draelyn', pc_warrior_m: 'karnok', pc_warrior_f: 'astraea', pc_mage_m: 'celesthyr', pc_mage_f: 'ithyra', pc_ranger_m: 'bloodsnarl', pc_ranger_f: 'valkessa',
-    pc_rogue_m: 'skavren', pc_rogue_f: 'zephara', pc_healer_m: 'zulgroth', pc_healer_f: 'liora' };
-  // heroes and enemies with an animated sheet (sheets.js HERO_SHEET): its first idle frame and first portrait are their
-  // picture everywhere (an enemy's or boss's in its own table, which would otherwise win in ART below)
+  // every character's picture: heroes, enemies and bosses with an animated sheet (sheets.js HERO_SHEET: its first idle frame
+  // and portrait) or redrawn in manga style (manga.js MANGA_ART: a figure k times finer than the battle grid and a
+  // portrait; the figure is also the big picture). ART_K says how much finer each manga picture is; POR holds the portraits.
+  const ART = {}, POR = {}, ART_K = {};
   if (typeof HERO_SHEET !== 'undefined') for (const id in HERO_SHEET) {
-    const sh = HERO_SHEET[id], a = { body: sh.idle[0], full: sh.idle[0], face: sh.por[0] };
-    const T = [typeof ENEMY_ART !== 'undefined' && ENEMY_ART, typeof BOSS_ART !== 'undefined' && BOSS_ART].find(t => t && t[id]) || (typeof HERO_ART !== 'undefined' && HERO_ART);
-    if (T) T[id] = a;
-    if (typeof HERO_POR !== 'undefined') HERO_POR[id] = sh.por[0];
-    delete PC_ART_FROM[id]; // its own art: never borrowed (nor mirrored like a borrowed orc)
+    const sh = HERO_SHEET[id]; ART[id] = { body: sh.idle[0], full: sh.idle[0], face: sh.por[0] }; POR[id] = sh.por[0];
   }
-  // heroes, enemies and bosses redrawn in manga style (manga.js MANGA_ART): a figure k times finer than the battle grid and a
-  // portrait replace the old art (the figure is also the big picture); ART_K says how much finer each picture is
-  const ART_K = {};
   if (typeof MANGA_ART !== 'undefined') for (const id in MANGA_ART) {
-    const m = MANGA_ART[id], a = { body: m.body, full: m.body, face: m.por };
-    for (const T of [typeof HERO_ART !== 'undefined' && HERO_ART, typeof ENEMY_ART !== 'undefined' && ENEMY_ART, typeof BOSS_ART !== 'undefined' && BOSS_ART]) if (T && T[id]) T[id] = a;
-    if (typeof HERO_POR !== 'undefined') HERO_POR[id] = m.por;
-    ART_K[id] = m.k || 1;
-  }
-  for (const [id, src] of Object.entries(PC_ART_FROM)) {
-    if (typeof HERO_ART !== 'undefined' && !HERO_ART[id]) { const a = HERO_ART[src] || (typeof ENEMY_ART !== 'undefined' && ENEMY_ART[src]); if (a) HERO_ART[id] = a; }
-    if (typeof HERO_POR !== 'undefined' && !HERO_POR[id] && HERO_POR[src]) HERO_POR[id] = HERO_POR[src];
+    const m = MANGA_ART[id]; if (ART[id]) continue;
+    ART[id] = { body: m.body, full: m.body, face: m.por }; POR[id] = m.por; ART_K[id] = m.k || 1;
   }
   const cache = {};
-  const ART = Object.assign({}, typeof HERO_ART !== 'undefined' ? HERO_ART : {}, typeof ENEMY_ART !== 'undefined' ? ENEMY_ART : {}, typeof BOSS_ART !== 'undefined' ? BOSS_ART : {});
   const heroCv = {};
   const isHero = id => !!ART[id];
   function up2(s) { const c = canvas(s.width * 2, s.height * 2), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return c; }
@@ -272,16 +257,6 @@ const SPR = (function () {
       img.src = src;
     })));
   }
-  // figures painted facing left (the orc cards); mirrored at load so every figure faces right like the rest
-  const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl'].filter(id => !ART_K[id])); // a manga redraw faces right
-  // their big picture (SPR.url at scale 2: starter hall, hero details, summons) is mirrored too, once at load
-  const fullFlip = {};
-  const loadFlipped = () => Promise.all([...FACES_LEFT, ...Object.keys(PC_ART_FROM).filter(id => FACES_LEFT.has(PC_ART_FROM[id]))].filter(id => ART[id] && ART[id].full).map(id => new Promise(res => {
-    const img = new Image();
-    img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); g.translate(img.width, 0); g.scale(-1, 1); g.drawImage(img, 0, 0); fullFlip[id] = c.toDataURL(); res(); };
-    img.onerror = () => res();
-    img.src = ART[id].full;
-  })));
   // animated heroes (sheets.js): the picture everywhere comes from the inline idle frame (k times finer, scaled down for the
   // battle grid), fullCrop is that frame cropped square for big pictures; every move is loaded from sheets/<id>.js the first
   // time the battle asks for the hero (sheet(id) answers null until then, so the still picture is drawn meanwhile)
@@ -317,12 +292,11 @@ const SPR = (function () {
     og.drawImage(c, x0 - (s - (x1 - x0)) / 2, y0 - (s - (y1 - y0)), s, s, 0, 0, s, s); fullCrop[id] = o.toDataURL('image/webp', 0.92);
   }));
   function preload() {
-    return Promise.all([loadChapterBgs(), loadFlipped(), cropSheets(), ...Object.keys(ART).map(id => new Promise(res => {
+    return Promise.all([loadChapterBgs(), cropSheets(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
       img.onload = () => {
         // a fine picture (k > 1: manga figures, animated heroes) stays fine and is not sharpened; app.js draws it k times smaller
         const k = SHEET_K(id), c = canvas(img.width, img.height), g = c.getContext('2d');
-        if (FACES_LEFT.has(id) || FACES_LEFT.has(PC_ART_FROM[id])) { g.translate(c.width, 0); g.scale(-1, 1); }
         g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); if (k === 1) sharpen(c); heroCv[id] = c; res();
       };
       img.onerror = () => res();
@@ -392,8 +366,8 @@ const SPR = (function () {
   function get(id) { return frame(id, 'idle0'); }
   const urls = {};
   function url(id, scale, flip) {
-    if (typeof HERO_POR !== 'undefined' && HERO_POR[id] && (scale || 1) < 2) return HERO_POR[id];
-    if (isHero(id)) return (scale || 1) >= 2 ? fullFlip[id] || fullCrop[id] || ART[id].full : ART[id].face;
+    if (POR[id] && (scale || 1) < 2) return POR[id];
+    if (isHero(id)) return (scale || 1) >= 2 ? fullCrop[id] || ART[id].full : ART[id].face;
     const k = scale || 1, key = id + '@' + k + (flip ? 'f' : '');
     if (urls[key]) return urls[key];
     const s = frame(id, 'idle0', flip ? 'flip' : '');

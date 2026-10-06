@@ -1,6 +1,6 @@
 // Heroes, enemies and bosses redrawn in manga style: per character its figure (standing, facing right, feet at the bottom,
-// k = 2 times finer than the battle grid, so 2x its battle height) and a portrait (160 px). sprites.js puts them in place of
-// the old art in HERO_ART / ENEMY_ART / BOSS_ART and HERO_POR; app.js draws them smoothly with the usual animations.
+// k = 2 times finer than the battle grid, so 2x its battle height) and a portrait (160 px). sprites.js makes them the
+// characters' pictures and portraits; app.js draws them smoothly with the usual animations.
 // poses: 1 = it also has real poses (attack 1, attack 2, block, hurt, dead) in poses/<id>.js, on the same canvas as body.
 // Cut from batch images (magenta background, one labelled row per character).
 const MANGA_ART = {

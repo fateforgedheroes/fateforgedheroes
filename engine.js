@@ -1722,7 +1722,7 @@ const K = (function () {
   const GBOSS = {
     keys: 3, turns: 30,
     ess: ['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'Aether'],
-    // the boss of each essence: five guild bosses of their own (art in bosses.js), Storm and Radiant borrow a Boss Hall boss
+    // the boss of each essence: five guild bosses of their own (animated sheets in sheets/), Storm and Radiant borrow a Boss Hall boss
     art: { Ember: 'zaroth', Verdant: 'blightedtitan', Storm: 'stormbehemoth', Frost: 'frostborn', Radiant: 'celestial', Umbral: 'seraphimfallen', Aether: 'endlessoracle' },
     lvl: [18, 34, 48, 60, 72], f: [1, 1.5, 2.1, 2.4, 2.9], mult: [1, 2.5, 5, 9, 16],
     skills: [
