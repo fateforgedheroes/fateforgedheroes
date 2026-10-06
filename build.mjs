@@ -5,7 +5,7 @@
 //   SUPABASE_URL       e.g. https://abcdefgh.supabase.co
 //   SUPABASE_ANON_KEY  the public anon or publishable key (safe in browsers; data is protected by Row Level Security)
 // Without them the game builds in offline mode (browser saves only).
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'node:fs';
 
 const DIRS = ['./src/', './src/assets/', './assets/', './public/', './'];
 const missing = [];
@@ -16,7 +16,7 @@ const find = name => {
 };
 const read = name => { const p = find(name); return p ? readFileSync(p, 'utf8') : ''; };
 
-const assets = ['heroes', 'enemies', 'bosses', 'portraits', 'shards', 'logo', 'stone', 'sigil', 'home', 'gear', 'devhero', 'chbg'].map(n => read(n + '.js')).join('\n');
+const assets = ['heroes', 'enemies', 'bosses', 'portraits', 'shards', 'logo', 'stone', 'sigil', 'home', 'gear', 'devhero', 'chbg', 'sheets'].map(n => read(n + '.js')).join('\n');
 const shellSrc = read('shell.html'), engine = read('engine.js'), bgs = read('bgs.js'), sprites = read('sprites.js'), cloud = read('cloud.js'), app = read('app.js');
 if (missing.length) {
   console.error(`\nMissing files: ${missing.join(', ')}\nUpload them to the GitHub repository (in src/ or in the root).\n`);
@@ -52,4 +52,10 @@ for (const f of ['privacy.html', 'favicon.png', 'email-logo.png']) {
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);
 }
+// Animated heroes: every move of each hero (sheets/<id>.js), loaded by the game when that hero is in a battle
+const sheetDir = DIRS.find(d => existsSync(new URL(d + 'sheets/', import.meta.url)));
+if (sheetDir) {
+  mkdirSync(new URL('sheets/', out), { recursive: true });
+  for (const f of readdirSync(new URL(sheetDir + 'sheets/', import.meta.url))) if (f.endsWith('.js')) copyFileSync(new URL(sheetDir + 'sheets/' + f, import.meta.url), new URL('sheets/' + f, out));
+} else console.warn('Note: sheets/ not found, animated heroes stand still.');
 console.log(`Built dist/index.html (${config.supabaseUrl ? 'online: ' + config.supabaseUrl : 'offline mode, no SUPABASE_URL set'})`);

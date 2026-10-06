@@ -1,4 +1,4 @@
-// Balance test: for every starter hero, an auto-played new player must be able to finish the campaign, and it must
+// Balance test: for every class of the own hero (PC_CLASSES), an auto-played new player must be able to finish the campaign, and it must
 // take a real grind (replaying stages for gear, upgrading, ascending and summoning heroes).
 // Run: npm test
 const fs = require('fs'), path = require('path');
@@ -9,8 +9,8 @@ const score = it => K.gearStats(it).reduce((s, [k, v]) => s + (W[k] || 0) * v, 0
 const newHero = id => ({ lvl: 1, xp: 0, stars: K.baseStars(id), sk: K.CHAMPS[id].skills.map(() => 0) });
 // same formula as the game's team power, without gear: gear moves to whoever is in the team
 const power = (st, id) => { const s = K.heroStats(id, st.roster[id], []); return s.hp * 0.12 + s.atk * 1.8 + s.def * 1.3 + s.spd * 4 + s.crit * 5 + s.cdmg * 2 + (s.acc + s.res) * 0.8; };
-// a new player starts with only the chosen starter
-function newState(starter) { return { starter, roster: { [starter]: newHero(starter) }, team: [starter], inv: [], cleared: -1, silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
+// a new player starts with only their own hero (6 stars, skills that follow its level), always first in the team
+function newState(starter) { return { starter, roster: { [starter]: { lvl: 1, xp: 0, stars: K.pcStars(1), sk: K.pcSkills(starter, 1) } }, team: [starter], inv: [], cleared: -1, silver: 400, stones: { lesser: 0, greater: 0, ancient: 0 }, nid: 1, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 } }; }
 // a stage is 3 phases in a row; survivors carry their HP over (with the small rest in between)
 async function fight(st, S) {
   const heroes = st.team.map(id => K.heroUnit(id, st.roster[id], st.inv.filter(i => i.owner === id)));
@@ -25,6 +25,7 @@ const addHero = (st, id) => { const h = newHero(id); h.lvl = Math.max(1, Math.mi
 function reward(st, S, first) {
   // the team gets full XP; heroes on the bench get half (a player feeds fodder and rotates heroes in)
   for (const id in st.roster) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); if (h.lvl >= cap || K.CHAMPS[id].captured) continue; h.xp += K.winXp(S.lvl) * (st.team.includes(id) ? 1 : 0.5); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
+  { const h = st.roster[st.starter]; h.stars = K.pcStars(h.lvl); h.sk = K.pcSkills(st.starter, h.lvl); }
   // first clears can unlock a hero, who joins the team while it has fewer than 4 (same rule as the game)
   { const u = K.stageUnlock(S, st.starter); if (first && u && !st.roster[u]) { addHero(st, u); if (st.team.length < 4) st.team.push(u); } }
   // Fate Shards: guaranteed on a first clear, random drops on every win; summon and bring new heroes up
@@ -39,15 +40,15 @@ function reward(st, S, first) {
   // then gear, ascension and upgrades
   const next = K.STAGES[Math.min(st.cleared + 1, K.STAGES.length - 1)], foes = next.phases.flat().map(f => K.ALL_UNITS[f].aff);
   const edge = id => { const a = K.CHAMPS[id].aff; return 1 + 0.2 * (foes.filter(e => K.BEATS[a] === e).length - foes.filter(e => K.BEATS[e] === a).length) / foes.length; };
-  const byPow = Object.keys(st.roster).filter(id => !K.CHAMPS[id].captured).sort((a, b) => power(st, b) * edge(b) - power(st, a) * edge(a));
-  st.team = byPow.slice(0, 4);
+  const byPow = Object.keys(st.roster).filter(id => !K.CHAMPS[id].captured && !K.CHAMPS[id].pc).sort((a, b) => power(st, b) * edge(b) - power(st, a) * edge(a));
+  st.team = [st.starter, ...byPow.slice(0, 3)];
   // a sensible player brings a healer once fights get long (Chapter IV on): the best one replaces the fourth attacker
   const heals = id => K.CHAMPS[id].skills.some(s => s.fx.some(f => f.t === 'heal' || f.t === 'shield' || f.t === 'revive'));
   if (next.chapter >= 3 && st.team.length === 4 && !st.team.some(heals)) { const h = byPow.find(heals); if (h && power(st, h) >= 0.5 * power(st, st.team[3])) st.team[3] = h; }
   for (const it of st.inv) if (it.owner && !st.team.includes(it.owner)) it.owner = null;
   for (const id of st.team) for (const slot of K.SLOTS) { const cur = st.inv.find(i => i.owner === id && i.slot === slot); const best = st.inv.filter(i => i.slot === slot && (!i.owner || i.owner === id)).sort((a, b) => score(b) - score(a))[0]; if (best && best !== cur) { if (cur) cur.owner = null; best.owner = id; } }
   // ascend capped heroes: the team first, then the best heroes on the bench
-  for (const id of [...st.team, ...byPow.slice(4, 10)]) { const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones[c.tier] >= c.stones && st.silver >= c.silver) { st.stones[c.tier] -= c.stones; st.silver -= c.silver; h.stars++; } }
+  for (const id of [...st.team, ...byPow.slice(3, 10)]) { if (K.CHAMPS[id].pc) continue; const h = st.roster[id], c = K.rankCost(h.stars); if (h.lvl >= K.maxLvl(h.stars, id) && h.stars < K.maxStars(id) && st.stones[c.tier] >= c.stones && st.silver >= c.silver) { st.stones[c.tier] -= c.stones; st.silver -= c.silver; h.stars++; } }
   // gear upgrades, keeping enough silver aside for the next ascension
   const keep = 2000 + Math.max(...st.team.map(id => st.roster[id].stars < K.maxStars(id) ? K.rankCost(st.roster[id].stars).silver : 0));
   let sp = true; while (sp) { sp = false; for (const it of st.inv.filter(i => i.owner)) { const c = K.upgradeCost(it); if (it.lvl < K.MAX_GEAR_LVL && st.silver >= c + keep) { st.silver -= c; if (Math.random() < K.upgradeChance(it)) { it.lvl++; K.upgradeMilestone(it); } sp = true; } } }
@@ -73,6 +74,6 @@ async function campaign(starter) {
 }
 (async () => {
   let ok = true;
-  for (const s of K.STARTERS) ok = (await campaign(s)) && ok;
+  for (const k in K.PC_CLASSES) ok = (await campaign(`pc_${k}_m`)) && ok;
   process.exit(ok ? 0 : 1);
 })();

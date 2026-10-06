@@ -62,10 +62,21 @@
   // uses. S.team is the team in use (the one on the Team screen and in the last battle): the same array as
   // S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
   const TEAM_MAX = K.ESSENCES.length, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss']];
+  // The own hero (S.hero = { id, name, g, cls }; engine PC_CLASSES): made at the start, always first in every team and every
+  // Tower team (keepHero), 6 stars and skills that follow its level (syncHero, run on every save).
+  const heroId = () => (S && S.hero && S.roster[S.hero.id] ? S.hero.id : null);
+  const noHero = () => !heroId();
+  function keepHero(ids, hid) { if (!hid) return ids; const out = ids.filter(x => x !== hid); out.unshift(hid); ids.splice(0, ids.length, ...out.slice(0, 4)); return ids; }
+  function syncHero(s) {
+    const id = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (!id) return;
+    const h = s.roster[id], sk = K.pcSkills(id, h.lvl); h.stars = K.pcStars(h.lvl); h.sk = sk.map((v, i) => Math.min(v, Math.max(v, (h.sk || [])[i] || 0)));
+    C[id].name = C[id].short = s.hero.name;
+  }
   function linkTeams(s) {
     if (!Array.isArray(s.teams) || !s.teams.length) s.teams = [{ name: 'Team 1', ids: Array.isArray(s.team) ? s.team : [] }];
     s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
     s.modeTeam = s.modeTeam || {};
+    { const hid = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (hid) s.teams.forEach(t => keepHero(t.ids, hid)); }
     for (const [m] of TEAM_MODES) if (!(s.modeTeam[m] < s.teams.length)) s.modeTeam[m] = 0;
     s.team = s.teams[s.tsel].ids;
     return s;
@@ -78,7 +89,12 @@
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
-    linkTeams(s); s.stx = s.stx || { greater: 0, ancient: 0 }; if (!(s.gems >= 0)) s.gems = 0;
+    // the Support class was dropped before release: a test save's Support hero becomes a Healer (same id everywhere)
+    if (s.hero && s.hero.cls === 'support') {
+      const o = `"pc_support_${s.hero.g}"`, n = `"pc_healer_${s.hero.g}"`, t = JSON.parse(JSON.stringify(s).split(o).join(n));
+      for (const k of Object.keys(s)) delete s[k]; Object.assign(s, t); s.hero.cls = 'healer';
+    }
+    linkTeams(s); syncHero(s); s.stx = s.stx || { greater: 0, ancient: 0 }; if (!(s.gems >= 0)) s.gems = 0;
     // heroes that gained a skill (every hero has 3 now): pad the skill levels
     for (const id in s.roster) { const c = K.CHAMPS[id], h = s.roster[id]; if (c && Array.isArray(h.sk)) while (h.sk.length < c.skills.length) h.sk.push(0); } if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
@@ -97,9 +113,9 @@
   }
   const clearedOn = d => (d ? S.dcl[d] ?? -1 : S.cleared);
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
-  // A new save has no heroes yet: the player first picks one of K.STARTERS (needStarter), the rest is earned in Chapter I.
+  // A new save has no heroes yet: the player first creates their own hero (createHtml), the rest is earned in Chapter I.
   function fresh() {
-    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], needStarter: true, inv: [], nid: 1, cleared: -1, dcl: [null, -1, -1, -1, -1], diff: 0, seen: {}, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true, music: true };
+    const s = { v: 7, reset: RESET, p: newPlayer(), silver: 400, fs: { fate: 3, greater: 1, ancient: 0, mythic: 0, legendary: 0 }, stones: 0, roster: {}, team: [], inv: [], nid: 1, cleared: -1, dcl: [null, -1, -1, -1, -1], diff: 0, seen: {}, bh: {}, bhSel: {}, bhCur: K.BOSS_ORDER[0], auto: false, speed: 1, sound: true, music: true };
     for (let i = 0; i < 4; i++) s.inv.push(K.genGear({ il: 1 }, s.nid++));
     return s;
   }
@@ -199,7 +215,7 @@
     return fresh();
   }
   let S;
-  function save() { S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); }
+  function save() { syncHero(S); S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); }
 
   // ---------- sound ----------
   const SFX = (() => {
@@ -547,7 +563,7 @@
   function paintAccount() {
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
-    // no hero yet (starter choice): a plain person icon instead of an avatar
+    // no hero yet (hero creation): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
@@ -594,7 +610,7 @@
   let homeScroll = null;
   // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
   // every other building (and the profile) opens after the first campaign battle, won or lost.
-  const firstSteps = () => !S.needStarter && S.cleared < 0 && !(S.p.st.won + S.p.st.lost);
+  const firstSteps = () => !noHero() && S.cleared < 0 && !(S.p.st.won + S.p.st.lost);
   const CAMP_AT_L = [1035, 745, 575]; // centre of the Campaign building in image pixels, and where the "Start here" marker points from
   // Phones held upright get the 9:16 map (HOME_ART_P, 941x1672): every building fits on the screen, no sideways scrolling.
   // Same zones in the same order (the tour uses zone 8), with their own boxes and larger plates (the map is drawn much narrower).
@@ -609,7 +625,7 @@
   let HOME_W = HOME_W_L, HOME_H = HOME_H_L, HOME_ZONES = HOME_ZONES_L, CAMP_AT = CAMP_AT_L;
   function homeLayout() { const p = homePort(); HOME_W = p ? 941 : HOME_W_L; HOME_H = p ? 1672 : HOME_H_L; HOME_ZONES = p ? HOME_ZONES_P : HOME_ZONES_L; CAMP_AT = p ? CAMP_AT_P : CAMP_AT_L; return p; }
   // turning the phone switches maps
-  PORT_MQ.addEventListener('change', () => { if (tab === 'home' && !B && S && !S.needStarter) { homeScroll = null; render(); } });
+  PORT_MQ.addEventListener('change', () => { if (tab === 'home' && !B && S && !noHero()) { homeScroll = null; render(); } });
   // Homebase tour: once the homebase opens (after the first battle) a short tour shows every building, one at a time
   // (shade, spotlight and a card with Next). The last step leads back to the campaign, where the Fight button is
   // spotlighted (spotFight). S.seen.tour = done or skipped.
@@ -627,7 +643,7 @@
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Halls. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
-  const tourOn = () => tab === 'home' && !S.needStarter && !firstSteps() && S.seen.home && !S.seen.tour;
+  const tourOn = () => tab === 'home' && !noHero() && !firstSteps() && S.seen.home && !S.seen.tour;
   const tourZone = st => (st.go ? HOME_ZONES.find(z => z.go === st.go) : HOME_ZONES[st.zone]);
   const zoneCentre = z => [z.box[0] + z.box[2] / 2, z.box[1] + z.box[3] / 2];
   function tourCard() {
@@ -698,7 +714,7 @@
     if (!B) MUSIC.play('home');
     hud();
     const el = $('#screen');
-    if (S.needStarter) { el.innerHTML = starterHtml(); paintDungeonArt(); return; }
+    if (noHero()) { el.innerHTML = createHtml(); return; }
     if (tab === 'home') {
       el.innerHTML = homeHtml();
       // phones: the map scrolls sideways; start in the middle, later keep where the player left it
@@ -732,7 +748,7 @@
   // Phones get a one-screen campaign (campPhoneHtml): difficulty and chapter on one row, the chapter's set, a path of
   // seven stage nodes, the selected stage (campSel) with its enemies per phase, and the team; Fight sits in the bottom bar.
   const PHONE_MQ = matchMedia('(max-width: 760px)');
-  PHONE_MQ.addEventListener('change', () => { if (tab === 'campagne' && !B && S && !S.needStarter) render(); });
+  PHONE_MQ.addEventListener('change', () => { if (tab === 'campagne' && !B && S && !noHero()) render(); });
   let campSel = null;
   function campPhoneHtml() {
     const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
@@ -984,7 +1000,7 @@
       <div class="champ-layout"><div>${filterBar(false)}
         ${list.length ? `<div class="grid-cards">${list.map(id => cardHtml(id, { act: 'sel', sel: id === selChamp, inteam: S.team.includes(id) })).join('')}</div>` : '<p class="empty-note">No champions match these filters.</p>'}</div>
         ${heroDetail(selChamp)}</div>
-      ${S.roster[selChamp] ? `<div class="m-act"><button class="btn" data-act="toggle" data-id="${selChamp}">${S.team.includes(selChamp) ? 'Remove from team' : 'Add to team'}</button><button class="btn primary" data-act="bestgear">Equip best gear</button></div>` : ''}`;
+      ${S.roster[selChamp] ? `<div class="m-act"><button class="btn" data-act="toggle" data-id="${selChamp}" ${C[selChamp].pc ? 'disabled' : ''}>${C[selChamp].pc ? 'Always in your team' : S.team.includes(selChamp) ? 'Remove from team' : 'Add to team'}</button><button class="btn primary" data-act="bestgear">Equip best gear</button></div>` : ''}`;
   }
   // ----- hero filters: essence, rarity and class filter the list; power, level, rarity or name sort it.
   // own: 'owned' (Team), or on the Heroes index 'all' / 'owned' / 'missing' (TF.own) -----
@@ -1019,7 +1035,8 @@
     const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
     const skills = skillsHtml(id, r);
     let rank = '', canRank = false;
-    if (r.stars < mxs) {
+    if (C[id].pc) rank = `<div class="rank"><span class="empty-note">Your hero gains stars by itself: 5★ at level 40, 6★ at level 50. Its skills grow every 12 levels.</span></div>`;
+    else if (r.stars < mxs) {
       const rc = K.rankCost(r.stars), ok = atCap && stoneN(rc.tier) >= rc.stones && S.silver >= rc.silver;
       canRank = ok;
       rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${stoneIc(rc.tier)} ${rc.stones} ${stoneName(rc.tier, rc.stones)} (you have ${stoneN(rc.tier)}) · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
@@ -1056,7 +1073,7 @@
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}">${inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
+          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${C[id].pc ? 'disabled title="Your hero always fights with you"' : ''}>${C[id].pc ? 'Always in your team' : inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
         </div></div>
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['gear', `Gear <small>${items.length}/${K.SLOTS.length}</small>`], ['upgrade', 'Upgrade' + (canRank ? '<span class="dot"></span>' : '')]].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
@@ -1173,59 +1190,71 @@
     return h.lvl - l0;
   }
 
-  // ----- starter choice (new players) -----
-  const STARTER_PITCH = {
-    bromir: 'The bear tank. Thick fur takes less damage, a growl taunts the whole enemy team, and his mauling strike slows a foe down.',
-    grythor: 'The scaled brawler. Tough scales and heavy blows: a simple, sturdy fighter who keeps hitting.',
-    skavren: 'The rat assassin. Fast and sneaky, he finishes off wounded enemies and hits harder the lower they are.',
-    draelyn: 'The healer. A shield-maiden who keeps the team alive, cleanses debuffs and stands firm when hurt.',
-    vaessa: 'The blood witch. Lowers enemy Defense, steals their turn meter and supports the team; very hard to kill.',
-    brukkar: 'The raging brute. Part warrior, part tank: the more he bleeds, the harder he hits.',
-    karnok: 'The dwarf warrior. Hammer blows that stun, a wall of Defense for the team and a thunderclap on every enemy.',
-    vorlund: 'The golden knight. A tank who taunts, shields the whole team and strikes back when hit.',
-    grimtar: 'The orc shaman. His spirits poison every enemy, cripple their healing and tear down their Defense for the team.',
-    krogash: 'The orc fire mage. Burns that hurt half again as much, an ash storm on every enemy and a huge fire blast.',
-    zulgroth: 'The orc void priest. A healer who mends the weakest ally every turn, shields and cleanses the team.',
-    bloodsnarl: 'The orc hunter and his wolf. Bleeding arrows, a wolf that finishes the weakest foe, and more damage on the wounded.',
-  };
-  // the twelve starters stand in rows in a dungeon hall (2 × 6, on phones 3 × 4); tapping one shows its details below, "Choose" asks to confirm
+  // ----- Create your hero (replaces the old starter choice) -----
+  // One of six classes (engine PC_CLASSES; always Aether), the gender (only the look) and a name. The six classes are
+  // cards (one row on wide screens, a grid on phones); tapping one shows its kit below. New players and older saves without a hero see this
+  // first; an older save's hero starts at the level of its best hero, so it is useful straight away.
   const STARTER_BG = 4; // chapter background: the brick-and-lava dungeon hall
-  let starterSel = null;
-  function starterHtml() {
-    const st = id => K.heroStats(id, newHero(id), []);
+  let pcSel = { g: 'm', cls: null, name: '' };
+  const pcName = () => (pcSel.name || '').replace(/[<>&"]/g, '').trim().slice(0, 16);
+  const pcReady = () => !!(pcSel.cls && pcName());
+  function createHtml() {
+    const ids = Object.keys(K.PC_CLASSES).map(k => `pc_${k}_${pcSel.g}`);
+    const st = id => K.heroStats(id, { lvl: 1, xp: 0, stars: K.pcStars(1), sk: [0, 0, 0] }, []);
     const top = { hp: 0, atk: 0, def: 0, spd: 0 };
-    for (const id of K.STARTERS) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
+    for (const id of ids) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
     const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
-    const figs = K.STARTERS.map((id, i) => `<button type="button" class="st-fig st12 ${id === starterSel ? 'sel' : ''}" style="--c6:${i % 6};--r6:${Math.floor(i / 6)};--c4:${i % 4};--r4:${Math.floor(i / 4)}" data-act="starterpick" data-id="${id}" aria-pressed="${id === starterSel}" aria-label="${esc(C[id].name)}">
-        <img class="spr" src="${SPR.url(id, 2)}" alt=""><span class="st-ring"></span><span class="st-nm">${esc(C[id].short)}</span></button>`).join('');
-    const c = starterSel && C[starterSel];
-    const info = c ? `<div class="st-card rar-${c.rar}">
-        <div class="starter-top">${por(starterSel)}<div><h3>${esc(c.name)}</h3><div class="tags">${affChip(c.aff)} ${c.aff} · ${roleStr(c)}</div><span class="rartxt tag">${K.RARITIES[c.rar]}</span></div></div>
-        <p class="st-pitch">${STARTER_PITCH[starterSel]}</p>
-        <div class="st-cols"><div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(starterSel, k)).join('')}</div>
-        <div><div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>
-        <ul class="starter-sk">${c.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)} <span>${esc(s.desc)}</span></li>`).join('')}</ul></div></div>
-      </div>` : '<p class="empty-note st-hint">Tap a hero to see what they can do.</p>';
-    // returning players on a new device should load their account before picking
+    const PC_TAG = { tank: 'Front line · taunts and shields', warrior: 'Heavy hits · cleaves groups', mage: 'Spells on every enemy', ranger: 'Arrows and crits from afar', rogue: 'Stealth and executes', healer: 'Keeps the team alive' };
+    const cards = ids.map(id => { const k = C[id].pcClass; return `<button type="button" class="pc-card ${k === pcSel.cls ? 'sel' : ''}" data-act="pcclass" data-k="${k}" aria-pressed="${k === pcSel.cls}"><span class="pc-por">${por(id)}</span><b>${K.PC_CLASSES[k].name}</b><small>${PC_TAG[k]}</small></button>`; }).join('');
+    const p = pcSel.cls && K.PC_CLASSES[pcSel.cls], id = p && `pc_${pcSel.cls}_${pcSel.g}`, c = id && C[id];
+    const info = p ? `<div class="st-card rar-3">
+        <div class="starter-top">${por(id)}<div><h3 id="pc-h">${esc(pcName() || p.name)}</h3><div class="tags">${affChip('Aether')} Aether · ${roleStr(c)}</div><span class="tag">Your hero</span></div></div>
+        <p class="st-pitch">${esc(p.pitch)}</p>
+        <div class="st-cols"><div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(id, k)).join('')}</div>
+        <div><div class="skill passive"><b>Passive · ${esc(p.passiveName)}</b><p>${esc(p.passiveDesc)}</p></div>
+        <ul class="starter-sk">${p.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)} <span>${esc(s.desc)}</span></li>`).join('')}</ul></div></div>
+      </div>` : '<p class="empty-note st-hint">Tap a class to see what your hero can do.</p>';
     const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
-    const signin = cl && cl.enabled && !cl.email ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
-    return `<h2 class="st-title">Choose your starter hero</h2>
-      <div class="st-scene ${starterSel ? 'has-sel' : ''}"><canvas data-bg="${STARTER_BG}" width="480" height="270"></canvas>${figs}</div>
+    const signin = cl && cl.enabled && !cl.email && !Object.keys(S.roster).length ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
+    const g = (k, label) => `<button type="button" class="btn ${pcSel.g === k ? 'primary' : ''}" data-act="pcgender" data-g="${k}" aria-pressed="${pcSel.g === k}">${label}</button>`;
+    return `<h2 class="st-title">Create your hero</h2>
+      <p class="lede pc-lede">Your hero is forged by fate: <b>Aether</b>, never strong or weak against anyone, and always at your side in every fight. Choose well: the class can't be changed later.</p>
+      <div class="pc-row"><span class="tag">1 · Choose a class</span></div>
+      <div class="pc-cards">${cards}</div>
+      <div class="pc-row"><span class="tag">2 · Your hero is</span><div class="seg pc-g">${g('m', 'Male')}${g('f', 'Female')}</div></div>
       <div class="st-info">${info}</div>
-      <div class="st-go"><button class="btn primary" data-act="starterchoose" ${starterSel ? '' : 'disabled'}>${c ? `Choose ${esc(c.short)}` : 'Choose'}</button></div>${signin}`;
+      <div class="pc-row pc-namerow"><label class="tag" for="pc-name">3 · Name your hero</label><input id="pc-name" maxlength="16" autocomplete="off" placeholder="Your hero's name" value="${esc(pcSel.name)}"></div>
+      <div class="st-go"><button class="btn primary" id="pc-go" data-act="pccreate" ${pcReady() ? '' : 'disabled'}>${pcReady() ? `Create ${esc(pcName())}` : 'Create your hero'}</button></div>${signin}`;
   }
-  function confirmStarter() {
-    const c = C[starterSel], m = $('#modal');
-    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="st-q"><h2 id="st-q">Are you sure?</h2>
-      <p class="lede">Begin your adventure with <b>${esc(c.name)}</b>? Your starter hero can't be changed later.</p>
-      <div class="modal-actions"><button class="btn primary" data-act="starterok">Yes, choose ${esc(c.short)}</button><button class="btn" data-act="startercancel">Cancel</button></div></div>`;
+  // the name box updates the Create button without a re-render (keeps the focus)
+  document.addEventListener('input', e => {
+    if (e.target.id !== 'pc-name') return;
+    pcSel.name = e.target.value; const b = document.getElementById('pc-go');
+    if (b) { b.disabled = !pcReady(); b.textContent = pcReady() ? `Create ${pcName()}` : 'Create your hero'; }
+    const h = document.getElementById('pc-h'); if (h && pcSel.cls) h.textContent = pcName() || K.PC_CLASSES[pcSel.cls].name; // the card shows the hero by its own name
+  });
+  function confirmHero() {
+    const p = K.PC_CLASSES[pcSel.cls], m = $('#modal');
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pc-q"><h2 id="pc-q">Are you sure?</h2>
+      <p class="lede">Create <b>${esc(pcName())}</b>, a ${pcSel.g === 'f' ? 'female' : 'male'} <b>${esc(p.name)}</b>? Your hero's class can't be changed later.</p>
+      <div class="modal-actions"><button class="btn primary" data-act="pcok">Yes, create ${esc(pcName())}</button><button class="btn" data-act="pccancel">Cancel</button></div></div>`;
     m.hidden = false; m.querySelector('.btn').focus();
   }
-  function pickStarter(id) {
-    S.roster[id] = newHero(id); S.teams = [{ name: 'Team 1', ids: [id] }]; S.tsel = 0; S.modeTeam = {}; linkTeams(S); S.starter = id; delete S.needStarter; starterSel = null;
+  function createHero() {
+    if (!pcReady()) return;
+    const k = pcSel.cls, g = pcSel.g, name = pcName(), id = `pc_${k}_${g}`;
+    const others = Object.keys(S.roster).filter(x => C[x] && !C[x].pc), old = others.length > 0;
+    const lvl = Math.min(60, Math.max(1, ...others.map(x => S.roster[x].lvl)));
+    S.roster[id] = { lvl, xp: 0, stars: K.pcStars(lvl), sk: K.pcSkills(id, lvl) };
+    S.hero = { id, name, g, cls: k };
+    if (!Array.isArray(S.teams) || !S.teams.length) { S.teams = [{ name: 'Team 1', ids: [] }]; S.tsel = 0; S.modeTeam = {}; }
+    if (!S.starter) S.starter = id;
+    delete S.needStarter;
+    linkTeams(S); syncHero(S);
+    pcSel = { g: 'm', cls: null, name: '' };
     tab = 'home'; homeScroll = null; save(); render();
     const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    toast(`${C[id].name} joins you. Tap the Campaign to begin your adventure.`, false, 4500);
+    toast(old ? `${name} joins your teams and will fight at your side in every battle.` : `${name} is ready. Tap the Campaign to begin your adventure.`, false, 4500);
   }
 
   // ----- player profile -----
@@ -1596,7 +1625,7 @@
   const stoneParts = r => Object.entries(rewardStones(r)).filter(([, n]) => n > 0);
   const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 }, gems: 30 }];
   const loginReward = n => LOGIN_REWARDS[n % 7];
-  const loginDue = () => !S.needStarter && S.seen.home && S.seen.tour && (S.login ? S.login.last : -1) < today();
+  const loginDue = () => !noHero() && S.seen.home && S.seen.tour && (S.login ? S.login.last : -1) < today();
   let loginShown = false;
   function rewardIcons(r) {
     return [...(r.silver ? [`${ic('coin')}<b>${r.silver.toLocaleString('en-US')}</b>`] : []), ...(r.gems ? [`${GEM_SVG}<b>${r.gems}</b>`] : []), ...stoneParts(r).map(([t, n]) => `${stoneIc(t)}<b>${n}</b>`), ...Object.keys(r.fs || {}).map(k => `${shardIc(k)}<b>${r.fs[k]}</b>`)].join('');
@@ -1671,7 +1700,7 @@
     if (was < t.n && was + n >= t.n) { q.dp += t.pts; q.wp += t.pts; if (!quiet) toast(`Daily quest done: ${t.t} · +${t.pts} points`, false, 3000); }
   }
   // count an action for the quests and achievements (k: a QUESTS id, or a lifetime-only counter such as 'asc', 'flaw')
-  function track(k, n = 1) { if (!S || S.needStarter || !(n > 0)) return; qAdd(qState(), k, n); }
+  function track(k, n = 1) { if (!S || noHero() || !(n > 0)) return; qAdd(qState(), k, n); }
   const qBest = (k, v) => { const q = qState(); q.tot[k] = Math.max(q.tot[k] || 0, v); };
   // collection: heroes and captured enemies ever owned (feeding one away keeps it in the collection)
   const isHeroId = id => C[id] && !C[id].captured && !C[id].dev;
@@ -1769,7 +1798,7 @@
   ];
   // what can be claimed right now, per tab (badges on the Town Hall and its tabs)
   function thClaims() {
-    if (!S || S.needStarter) return { quests: 0, missions: 0, collection: 0, achievements: 0 };
+    if (!S || noHero()) return { quests: 0, missions: 0, collection: 0, achievements: 0 };
     const q = qState(), c = misChapter(), mc = MISSIONS[c];
     const quests = DAILY_CHESTS.filter((x, i) => q.dp >= x.at && !q.dc.includes(i)).length + WEEKLY_CHESTS.filter((x, i) => q.wp >= x.at && !q.wc.includes(i)).length;
     const missions = mc ? mc.list.filter((m, i) => !q.m[c + '.' + i] && misDone(m)).length + (mc.list.every((m, i) => q.m[c + '.' + i]) ? 1 : 0) : 0;
@@ -1951,7 +1980,7 @@
   // ☰ menu and the Town Hall.
   const DISCORD_URL = 'https://discord.gg/xCybP7kkDj', DISCORD_DAYS = 3;
   const DISCORD_SVG = '<svg class="dc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.7 15.7 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.7a11 11 0 0 1-1.8-.9l.4-.3a12 12 0 0 0 11.6 0l.4.3a11 11 0 0 1-1.8.9l1.1 1.7a17 17 0 0 0 5.2-2.6c.4-4.4-.6-8.3-3.1-11.7zM8.7 14.7c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2zm6.6 0c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2z"/></svg>';
-  const discordDue = () => !S.needStarter && S.seen.home && S.seen.tour && !loginDue() && today() - (S.disc ?? -99) >= DISCORD_DAYS;
+  const discordDue = () => !noHero() && S.seen.home && S.seen.tour && !loginDue() && today() - (S.disc ?? -99) >= DISCORD_DAYS;
   function showDiscord() {
     if (tab !== 'home' || !discordDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
     S.disc = today(); save();
@@ -2196,18 +2225,18 @@
     toast(`Claimed: ${giftParts(r).join(' · ') || 'a gift'}.`, false, 4000);
     socialLoad();
   }
-  // Start over: a player may wipe their own progress and pick a starter again, at any time.
+  // Start over: a player may wipe their own progress and create a new hero, at any time.
   // The current progress is kept as a backup first.
   function startOverHtml() {
-    return `<section class="prof-bk"><h3>Start over</h3><p class="empty-note">Wipe your progress and begin again from the starter choice: heroes, gear, Sigils, shards, campaign and Boss Hall progress and player level all reset. Your name stays. Your current progress is saved as a backup on this device first.</p>
+    return `<section class="prof-bk"><h3>Start over</h3><p class="empty-note">Wipe your progress and begin again by creating a new hero: heroes, gear, Sigils, shards, campaign and Boss Hall progress and player level all reset. Your name stays. Your current progress is saved as a backup on this device first.</p>
       <div class="row"><button class="btn small danger" data-act="startover">Start over</button></div></section>`;
   }
   function startOver() {
-    if (S.needStarter) return;
+    if (noHero()) return;
     backupRaw(JSON.stringify(S), true);
     const s = linkTeams(resetSave(S)); delete s.wasReset;
     S = s; homeScroll = null; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });
-    toast('Your adventure starts over. Choose your starter hero!', false, 5000);
+    toast('Your adventure starts over. Create your hero!', false, 5000);
   }
   function backupsHtml() {
     const rows = readBackups().map((b, i) => {
@@ -2316,7 +2345,7 @@
     const tb = e.target.closest('#tabs button');
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
-    if (e.target.closest('.brand') && !B && !S.needStarter) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('.brand') && !B && !noHero()) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#guide')) { if (B) return; SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; TH.tab = 'profile'; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
@@ -2326,10 +2355,11 @@
     if (act !== 'modal') SFX.click();
     if (act === 'tfaff') { TF.aff = a.dataset.aff; render(); }
     else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all', own: 'all' }); render(); }
-    else if (act === 'starterpick') { starterSel = id; render(); }
-    else if (act === 'starterchoose') { if (starterSel) confirmStarter(); }
-    else if (act === 'starterok') { $('#modal').hidden = true; if (starterSel) pickStarter(starterSel); }
-    else if (act === 'startercancel') $('#modal').hidden = true;
+    else if (act === 'pcgender') { pcSel.g = a.dataset.g; render(); }
+    else if (act === 'pcclass') { pcSel.cls = a.dataset.k; render(); }
+    else if (act === 'pccreate') { if (pcReady()) confirmHero(); }
+    else if (act === 'pcok') { $('#modal').hidden = true; createHero(); }
+    else if (act === 'pccancel') $('#modal').hidden = true;
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
     else if (act === 'go') { invSlot = null; if (a.dataset.go === 'team' && S.teams[S.tfav]) { S.tsel = S.tfav; S.team = S.teams[S.tfav].ids; } if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
@@ -2377,7 +2407,7 @@
     else if (act === 'frdecline') friendAct('friend_respond', { other: id, accept: false }, 'Request declined.');
     else if (act === 'frremove') { if (a.dataset.name) confirmBox('Remove friend?', `Remove <b>${esc(a.dataset.name)}</b> from your friends?`, 'Remove', () => friendAct('friend_remove', { other: id }, 'Friend removed.')); else friendAct('friend_remove', { other: id }, 'Request cancelled.'); }
     else if (act === 'mailclaim') claimMail(a.dataset.id);
-    else if (act === 'startover') confirmBox('Start over?', `All your heroes, gear, Sigils, shards and progress will be gone and you begin again at the starter choice. Your name stays.<br><br>A backup of your current progress is kept on this device (Town Hall → Backups), just in case.`, 'Yes, start over', startOver);
+    else if (act === 'startover') confirmBox('Start over?', `All your heroes, gear, Sigils, shards and progress will be gone and you begin again by creating a new hero. Your name stays.<br><br>A backup of your current progress is kept on this device (Town Hall → Backups), just in case.`, 'Yes, start over', startOver);
     else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; campSel = null; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
@@ -2393,6 +2423,7 @@
     else if (act === 'bhplay') startDungeon(id, +a.dataset.n);
     else if (act === 'summon') doSummon(+a.dataset.n, a.dataset.type);
     else if (act === 'buyshard') { if (S.silver >= K.SHARD_PRICE) { S.silver -= K.SHARD_PRICE; S.fs.fate++; save(); render(); toast('Fate Shard bought.'); } }
+    else if (act === 'toggle' && id === heroId()) toast('Your hero is always at your side: they fight in every team.');
     else if (act === 'toggle') {
       const i = S.team.indexOf(id);
       if (i >= 0) { if (S.team.length > 1) S.team.splice(i, 1); else toast('Your team needs at least one champion.', true); }
@@ -2438,7 +2469,7 @@
     else if (act === 'expclaim') expClaim();
     else if (act === 'exprecall') confirmBox('Recall the ship?', 'The crew comes home now, without any rewards.', 'Recall', () => { S.exp = null; save(); render(); });
     else if (act === 'twsel') { S.tw.cur = a.dataset.e; save(); render(); }
-    else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
+    else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
     else if (act === 'twgo') { const e = S.tw.cur || 'Ember'; startTower(e, twProg(e) + 1); }
     else if (act === 'prestige') {
       if (S.p.lvl < PLAYER_MAX) return;
@@ -2564,6 +2595,7 @@
       selChamp = S.team[0]; save(); render(); toast(`${C[id].name} is now a spare copy. Capture another to use it as a hero again.`);
     } else if (act === 'rank') {
       const h = S.roster[selChamp], rc = K.rankCost(h.stars);
+      if (C[selChamp].pc) return; // the own hero gains its stars by itself (pcStars)
       if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || stoneN(rc.tier) < rc.stones || S.silver < rc.silver) return;
       if (rc.tier === 'lesser') S.stones -= rc.stones; else S.stx[rc.tier] -= rc.stones; S.silver -= rc.silver; h.stars++; track('asc'); SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
     } else if (act === 'modal') modalAction(a.dataset.go);
@@ -2665,6 +2697,7 @@
   document.addEventListener('visibilitychange', () => [...TWEENS].forEach(t => t.kick()));
   const ease = k => 1 - (1 - k) * (1 - k);
   const VIEW = { x: 0, w: 480 };
+  let RS = 1; // device pixels per game pixel on the battle canvas (set in runBattle)
   const pctX = x => ((x - VIEW.x) / VIEW.w * 100) + '%', pctW = w => (w / VIEW.w * 100) + '%', pctY = y => (y / H * 100) + '%';
 
   // sprite metrics: feet offset + content box, from the idle frame
@@ -2967,12 +3000,25 @@
     if (u.effects.some(e => e.k === 'stun' || e.k === 'broken')) P.rot += 0.05 * Math.sin(t * 9);
     return P;
   }
+  // An animated hero's frame for this moment: dead plays its frames once and stays on the last; attack 1 (basics) and
+  // attack 2 (skills, heals and other casts) play over the pose's time, and a sheet with a skill row (the ranger's special shot) plays
+  // that for its third skill; a hit shows blocking when the sheet has it and the hero a shield or Defense Up, else the
+  // first two hurt frames (the last two lie on the ground); otherwise the idle frame stands (or loops, if there are more).
+  function sheetFrame(u, SH, now) {
+    const rs = u._rs, at = (list, k) => list[Math.min(list.length - 1, Math.floor(k * list.length))];
+    if (!u.alive) { const k = rs.deadAt ? (now - rs.deadAt) / (760 / spd) : 1; return at(SH.dead, Math.max(0, Math.min(0.999, k))); }
+    const active = rs.pose && now < rs.poseUntil, k = active ? Math.min(0.999, (now - rs.poseAt) / Math.max(1, rs.poseUntil - rs.poseAt)) : 0;
+    if (active && (rs.pose === 'atk' || (rs.pose === 'cast' && rs.skIdx === 0))) return at(SH.atk1, k); // a basic spell is attack 1 too
+    if (active && (rs.pose === 'atk2' || rs.pose === 'cast')) return at(SH.skill && rs.skIdx === 2 ? SH.skill : SH.atk2, k);
+    if (active && rs.pose === 'hit') return SH.block && u.effects.some(e => e.k === 'shield' || e.k === 'defUp') ? at(SH.block, k) : SH.hurt[Math.min(1, Math.floor(k * 3))];
+    return SH.idle[Math.floor(now / 260 + rs.phase * 4) % SH.idle.length];
+  }
   function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
     R.shake *= 0.86;
-    g.setTransform(1, 0, 0, 1, -VIEW.x, 0);
+    g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0);
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     g.drawImage(SPR.bg(R.bg || R.area), sh, shy);
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
@@ -2994,9 +3040,17 @@
       const px = Math.round(rs.x + rs.ox + P.dx * dir) + sh, py = Math.round(rs.y + rs.oy - rs.jump + P.dy) + shy;
       const draw = (img, a) => { g.globalAlpha = a; g.save(); g.translate(px, py); if (P.rot) g.rotate(P.rot * dir); if (P.sx !== 1 || P.sy !== 1) g.scale(P.sx, P.sy); g.drawImage(img, -Math.round(m.w / 2), -m.fy); g.restore(); };
       const a = (u.alive ? rs.alpha : 0.85) * (u.id === 'nevelgeest' && u.alive ? 0.9 : 1);
-      draw(SPR.frame(u.id, fr, flip ? 'flip' : ''), a);
-      if (P.dim > 0) draw(SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim);
-      if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= 0.8; }
+      const SH = SPR.sheet(u.id);
+      if (SH) {
+        // an animated hero (sheets.js): this moment's frame of its move, feet on the spot, mirrored on the enemy side
+        const img = sheetFrame(u, SH, now), sx = rs.x + rs.ox + (u.alive ? P.dx * dir : 0) + sh, sy = rs.y + rs.oy - rs.jump + (u.alive ? P.dy : 0) + shy;
+        if (img) { g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(img, -SH.w / 2, -SH.h + 1 / SH.k, SH.w, SH.h); g.restore(); g.imageSmoothingEnabled = false; }
+        if (rs.flash > 0.02) rs.flash *= 0.8;
+      } else {
+        draw(SPR.frame(u.id, fr, flip ? 'flip' : ''), a);
+        if (P.dim > 0) draw(SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim);
+        if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= 0.8; }
+      }
       if (rs.glow > 0.02) { g.globalAlpha = rs.glow * 0.8; pxEllipse(Math.round(rs.x + rs.ox) + sh, Math.round(rs.y - m.top / 2), Math.round(m.cw / 2) + 4, Math.round(m.top / 2) + 3, AFF_COL[u.aff], true); }
       g.globalAlpha = 1;
       if (R.active === u && u.alive && !rs.walking) {
@@ -3059,6 +3113,7 @@
   const SELF_KINDS = ['heal', 'shield', 'buff', 'revive', 'dust'];
   async function animBefore(u, skill, targets) {
     const rs = u._rs, dir = u.side === 'hero' ? 1 : -1, v = skill.vfx || '';
+    rs.skIdx = u.skills.indexOf(skill); // which skill (an animated sheet may have its own row for the third)
     if (skill.anim === 'melee') {
       SFX.swing();
       const tx = targets.reduce((s, t) => s + t._rs.x, 0) / targets.length - dir * ((u.big ? 30 : 22) + Math.max(...targets.map(t => t.immortal ? Math.round(t._rs.m.cw * 0.38) : t.big ? 20 : 8)));
@@ -3368,7 +3423,10 @@
     R.area = cfg.area; R.bg = cfg.bg;
     const narrow = window.innerWidth < 640;
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
-    cvs.width = VIEW.w; g.imageSmoothingEnabled = false;
+    // the canvas is drawn at the screen's own resolution (RS device pixels per game pixel): pixel-art backgrounds stay
+    // blocky (smoothing off), animated heroes are drawn smoothly from their finer frames
+    RS = Math.max(1, Math.min(3, Math.ceil((cvs.getBoundingClientRect().width || VIEW.w * 2) * (window.devicePixelRatio || 1) / VIEW.w)));
+    cvs.width = VIEW.w * RS; cvs.height = H * RS; g.imageSmoothingEnabled = false;
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
@@ -3456,10 +3514,10 @@
   // of that essence only. S.tw = { prog: { essence: highest floor cleared }, team: { essence: [ids] }, cur } ----------
   const twProg = e => (S.tw.prog[e] || 0);
   const twName = e => (e === 'All' ? 'Tower of Fate' : `Tower of ${e}`);
-  const twFits = (id, e) => e === 'All' || C[id].aff === e;
+  const twFits = (id, e) => e === 'All' || C[id].aff === e || !!C[id].pc; // the own hero (Aether) is a joker in every tower
   const twChip = e => (e === 'All' ? '<span class="aff tw-all" title="Every essence">✦</span>' : affChip(e));
   // the tower's team: owned heroes of that essence that are not away on an expedition, at most 4
-  function twTeam(e) { const t = (S.tw.team[e] || []).filter(id => S.roster[id] && twFits(id, e) && !onExp(id)).slice(0, 4); S.tw.team[e] = t; return t; }
+  function twTeam(e) { const t = (S.tw.team[e] || []).filter(id => S.roster[id] && twFits(id, e) && !onExp(id)).slice(0, 4); keepHero(t, heroId()); S.tw.team[e] = t; return t; }
   function startTower(e, f) {
     const ids = twTeam(e);
     if (!ids.length) { toast(`Pick heroes for the ${twName(e)} first.`, true); render(); return; }
@@ -3528,7 +3586,7 @@
     }
     for (const id of [...EXSEL]) if (!S.roster[id] || inAnyTeam(id)) EXSEL.delete(id);
     // every hero can be picked; one in a team asks first whether to take it out of that team (expsel)
-    const free = Object.keys(S.roster).filter(id => C[id]).sort((a, b) => !!inAnyTeam(a) - !!inAnyTeam(b) || C[b].rar - C[a].rar || S.roster[b].lvl - S.roster[a].lvl);
+    const free = Object.keys(S.roster).filter(id => C[id] && !C[id].pc).sort((a, b) => !!inAnyTeam(a) - !!inAnyTeam(b) || C[b].rar - C[a].rar || S.roster[b].lvl - S.roster[a].lvl);
     const crew = free.length ? `<div class="grid-cards exp-pick">${free.map(id => { const r = S.roster[id], on = EXSEL.has(id), capped = r.lvl >= K.maxLvl(r.stars, id), tm = teamsOf(id); return `<button type="button" class="card rar-${C[id].rar} ${on ? 'sel inteam' : ''} ${tm.length ? 'in-team' : ''}" data-act="expsel" data-id="${id}" aria-pressed="${on}" title="${tm.length ? `In ${esc(tm.join(', '))}: picking it asks to take it out of that team` : capped ? 'At its level cap: its XP goes to the rest of the crew' : ''}">${affChip(C[id].aff)}<span class="lv">${r.lvl}</span>${por(id)}<span class="nm">${esc(C[id].short)}</span><span class="sub">${tm.length ? `In ${esc(tm.join(', '))}` : capped ? 'Level cap' : roleStr(C[id])}</span></button>`; }).join('')}</div>`
       : '<p class="empty-note">You have no heroes yet.</p>';
     const trips = K.EXPEDITIONS.map((E0, k) => `<div class="exp-trip"><div class="exp-th"><h3>${esc(E0.name)}</h3><span class="tag">${E0.hours} ${E0.hours === 1 ? 'hour' : 'hours'}</span></div><p class="empty-note">${esc(E0.desc)}</p>
@@ -3603,7 +3661,7 @@
     const out = [];
     if (!S.seen.auto && S.cleared >= 0) { S.seen.auto = true; out.push({ k: 'auto', title: 'Auto battle unlocked', text: 'Tap the round Auto button at the top right of a battle and your heroes fight on their own. It stays on until you turn it off.' }); }
     // the homebase opens after the first campaign battle (see firstSteps)
-    if (!S.seen.home && !S.needStarter && !firstSteps()) { S.seen.home = true; out.push({ k: 'home', title: 'Your homebase is open', text: 'A short tour shows you every building and what it is for. After that, the campaign continues.' }); }
+    if (!S.seen.home && !noHero() && !firstSteps()) { S.seen.home = true; out.push({ k: 'home', title: 'Your homebase is open', text: 'A short tour shows you every building and what it is for. After that, the campaign continues.' }); }
     for (const [sp, at] of SPEED_UNLOCK) if (sp > 2 && !S.seen['spd' + sp] && S.cleared + 1 >= at) {
       S.seen['spd' + sp] = true;
       out.push({ k: 'spd', title: `Speed ${sp}× unlocked`, text: sp === 5 ? 'Battles can now run at 5× when you replay a stage you already cleared or a Boss Hall level you already beat.' : `Tap the speed button in battle to switch to ${sp}×.` });
@@ -3825,6 +3883,6 @@
     else if (m7) { save(); toast(`New: player levels. Win battles to level up. The Fate Altar opens at level ${PLAYER_UNLOCK.altaar}, the Boss Hall after Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]}. Tap your avatar for your profile.`, false, 7000); }
   }
   window.claude?.hot?.snapshot?.(() => ({ S }));
-  const boot = data => SPR.preload().then(() => start(data));
+  const boot = data => SPR.preload().then(() => { start(data); if (S.hero) SPR.loadSheet(S.hero.id); }); // the own hero's moves load in the background
   if (window.claude?.hot?.ready) window.claude.hot.ready(boot); else boot(window.claude?.hot?.data ?? {});
 })();

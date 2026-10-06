@@ -515,6 +515,69 @@ const K = (function () {
         SK('Shard Eruption', 'enemies', 'magic', 'meteor', 5, 'A Fate Shard erupts: 50% chance of Defense Down for 2 turns on all enemies, then hits them for 125%.', [DB('defDown', 2, 0.5), D(1.25)]),
       ] },
   };
+  // ---------- The player's own hero (Fateborn) ----------
+  // Made at the start (replaces the old starter choice): a gender and one of six classes, always Aether (no Strong or
+  // Weak Hits: a joker that fits every team and every Tower of Essence). Each class × gender is its own hero id
+  // `pc_<class>_<m|f>` (the gender only changes the art), Epic strength with 6 stars from the start (no ascending),
+  // and its skills level up by themselves with its level (pcSkills). Not in CHAMP_ORDER: no summon, unlock or bot gives it.
+  const PC_CLASSES = {
+    tank: { name: 'Tank', role: 'Tank', passive: 'thickhide', passiveName: 'Fate-Forged Plate', passiveDesc: 'Takes 10% less damage.',
+      pitch: 'Stands in front, taunts the enemy and shields the team. Hard to bring down.',
+      skills: [
+        SK('Shield Bash', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 40% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.4)]),
+        SK('Bulwark', 'allies', 'buff', 'shield', 4, 'All allies gain a shield of 15% of your max HP for 2 turns; you gain Defense Up for 2 turns.', [SH(0.15, 2), BF('defUp', 2, 'self')]),
+        SK('Unbreakable', 'enemies', 'buff', 'holy', 5, '70% chance to Taunt all enemies for 2 turns. You gain Counterattack for 2 turns.', [DB('taunt', 2, 0.7), BF('counter', 2, 'self')]),
+      ] },
+    warrior: { name: 'Warrior', role: 'Warrior', passive: 'bloodlust', passiveName: 'Battle Fury', passiveDesc: '+30% Attack while your HP is below 50%.',
+      pitch: 'Heavy blows, cleaves through groups and makes enemies bleed. Simple and strong.',
+      skills: [
+        SK('Cleave', 'enemy', 'melee', 'slash', 0, 'Two strikes of 60%.', [D(0.6)], { hits: 2 }),
+        SK('Sundering Blow', 'enemy', 'melee', 'smash', 3, 'Strike of 150%. 60% chance of Defense Down for 2 turns.', [D(1.5), DB('defDown', 2, 0.6)]),
+        SK('Whirlwind', 'enemies', 'slam', 'quake', 4, 'Hits all enemies for 85%. 50% chance of Bleed for 2 turns.', [D(0.85), DB('bleed', 2, 0.5)]),
+      ] },
+    mage: { name: 'Mage', role: 'Mage', passive: 'seduction', passiveName: 'Weave of Fate', passiveDesc: '+15% chance for your debuffs to land.',
+      pitch: 'Aether spells that hit every enemy, weaken them and end with a huge blast.',
+      skills: [
+        SK('Aether Bolt', 'enemy', 'magic', 'rune', 0, 'Attack of 100%. 30% chance of Speed Down for 1 turn.', [D(1.0), DB('spdDown', 1, 0.3)]),
+        SK('Arcane Nova', 'enemies', 'magic', 'meteor', 3, 'Hits all enemies for 65%. 40% chance of Defense Down for 2 turns.', [D(0.65), DB('defDown', 2, 0.4)]),
+        SK('Starfall', 'enemy', 'magic', 'holy', 4, 'Attack of 220%.', [D(2.2)]),
+      ] },
+    ranger: { name: 'Ranger', role: 'Ranger', passive: 'eagleeye', passiveName: 'Hawk Sight', passiveDesc: '+15% Crit Rate. Critical hits drain 10% of the target’s Turn Meter.',
+      pitch: 'Fast arrows and crits from the back line; picks off the weakest enemy.',
+      skills: [
+        SK('Twin Shot', 'enemy', 'ranged', 'arrow', 0, 'Two arrows of 55%.', [D(0.55)], { hits: 2 }),
+        SK('Arrow Storm', 'enemies', 'ranged', 'arrowrain', 3, 'Hits all enemies for 60%. 40% chance of Defense Down for 2 turns.', [D(0.6), DB('defDown', 2, 0.4)]),
+        SK('Fated Shot', 'lowestEnemy', 'ranged', 'arrow', 4, 'An arrow of 200% at the weakest enemy. +50% damage below 30% HP.', [D(2.0, { execute: [0.3, 0.5] })]),
+      ] },
+    rogue: { name: 'Rogue', role: 'Assassin', passive: 'scavenger', passiveName: 'Cutthroat', passiveDesc: '+20% damage against targets below 50% HP.',
+      pitch: 'Quick and deadly: stealth, execute strikes and a flurry of bleeding cuts.',
+      skills: [
+        SK('Backstab', 'enemy', 'melee', 'stab', 0, 'Strike of 110%.', [D(1.1)]),
+        SK('Shadowstep', 'lowestEnemy', 'melee', 'stab', 3, 'Gains Stealth for 2 turns, then strikes the weakest enemy for 160%. +50% damage below 30% HP.', [BF('stealth', 2, 'self'), D(1.6, { execute: [0.3, 0.5] })]),
+        SK('Thousand Cuts', 'random', 'melee', 'slash', 4, 'Five cuts of 45% on random enemies. Each has a 25% chance of Bleed for 2 turns.', [D(0.45), DB('bleed', 2, 0.25)], { hits: 5 }),
+      ] },
+    healer: { name: 'Healer', role: 'Support', passive: 'bloom', passiveName: 'Fate’s Mercy', passiveDesc: 'Your heals are 20% stronger.',
+      pitch: 'Keeps the whole team alive: big heals, shields and cleansing light.',
+      skills: [
+        SK('Light Strike', 'enemy', 'magic', 'holy', 0, 'Attack of 90%. 30% chance of Attack Down for 2 turns.', [D(0.9), DB('atkDown', 2, 0.3)]),
+        SK('Mending Light', 'allies', 'buff', 'heal', 3, 'Heals all allies for 22%.', [HEAL(0.22)]),
+        SK('Sanctuary', 'allies', 'buff', 'shield', 4, 'Heals all allies for 15%, gives them a shield of 15% of your max HP for 2 turns and cleanses them.', [HEAL(0.15), SH(0.15, 2), { t: 'cleanse' }]),
+      ] },
+  };
+  const PC_GENDERS = { m: 'Male', f: 'Female' };
+  const PC_IDS = [];
+  for (const k in PC_CLASSES) for (const g in PC_GENDERS) {
+    const p = PC_CLASSES[k], id = `pc_${k}_${g}`;
+    CHAMPS[id] = { name: 'Fateborn ' + p.name, faction: 'Fateborn', role: p.role, role2: p.role2, rar: 3, aff: 'Aether', pc: true, pcClass: k, pcGender: g,
+      passive: p.passive, passiveName: p.passiveName, passiveDesc: p.passiveDesc, skills: p.skills };
+    PC_IDS.push(id);
+  }
+  const isPC = id => !!(CHAMPS[id] && CHAMPS[id].pc);
+  // stars follow the level (4★ up to 40, 5★ up to 50, 6★ after), so the hero grows like an Epic without Ascension Stones
+  const pcStars = lvl => (lvl < 40 ? 4 : lvl < 50 ? 5 : 6), PC_STARS = 6;
+  // skill levels of the own hero: +1 on each skill at levels 12, 24, 36, 48 and 60
+  const pcSkills = (id, lvl) => CHAMPS[id].skills.map(() => Math.min(SKILL_MAX_PC, Math.floor(lvl / 12)));
+  const SKILL_MAX_PC = 5;
   for (const id in CHAMPS) CHAMPS[id].short = CHAMPS[id].name;
   // heroes outside every pool (see j3duin); they only come from a mail gift
   const DEV_HEROES = Object.keys(CHAMPS).filter(id => CHAMPS[id].dev);
@@ -1725,6 +1788,8 @@ const K = (function () {
       const c = h && CHAMPS[h.id];
       if (!c) return 'unknown hero';
       if (ids.has(h.id)) return 'duplicate hero'; ids.add(h.id);
+      // the own hero: at most one per team, always 6 stars, skills no higher than its level gives (pcSkills)
+      if (c.pc) { if ([...ids].filter(isPC).length > 1) return 'own hero'; if (h.stars !== pcStars(h.lvl) || !Array.isArray(h.sk) || h.sk.some((v, i) => v > pcSkills(h.id, h.lvl)[i])) return 'own hero'; }
       if (!isInt(h.stars, baseStars(h.id), maxStars(h.id))) return 'stars';
       if (!isInt(h.lvl, 1, maxLvl(h.stars, h.id))) return 'level';
       if (!Array.isArray(h.sk) || h.sk.length > c.skills.length || !h.sk.every(v => isInt(v, 0, SKILL_MAX))) return 'skills';
@@ -1834,7 +1899,7 @@ const K = (function () {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
+    PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

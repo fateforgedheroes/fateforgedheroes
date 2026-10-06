@@ -196,6 +196,19 @@ const SPR = (function () {
   const CUSTOM = { imp, wolf, nevelgeest: ghost, larve: larva, pop: doll, roestreus: golem, uthrak: () => worm(false) };
   const WAIST = 22;
 
+  // the own hero's art (pc_<class>_<m|f>, see engine PC_CLASSES): borrowed from existing heroes until its own art is drawn
+  const PC_ART_FROM = { pc_tank_m: 'vorlund', pc_tank_f: 'draelyn', pc_warrior_m: 'karnok', pc_warrior_f: 'astraea', pc_mage_m: 'celesthyr', pc_mage_f: 'ithyra', pc_ranger_m: 'bloodsnarl', pc_ranger_f: 'valkessa',
+    pc_rogue_m: 'skavren', pc_rogue_f: 'zephara', pc_healer_m: 'zulgroth', pc_healer_f: 'liora' };
+  // heroes with an animated sheet (sheets.js HERO_SHEET): its first idle frame and first portrait are their picture everywhere
+  if (typeof HERO_SHEET !== 'undefined') for (const id in HERO_SHEET) {
+    const sh = HERO_SHEET[id]; if (typeof HERO_ART !== 'undefined') HERO_ART[id] = { body: sh.idle[0], full: sh.idle[0], face: sh.por[0] };
+    if (typeof HERO_POR !== 'undefined') HERO_POR[id] = sh.por[0];
+    delete PC_ART_FROM[id]; // its own art: never borrowed (nor mirrored like a borrowed orc)
+  }
+  for (const [id, src] of Object.entries(PC_ART_FROM)) {
+    if (typeof HERO_ART !== 'undefined' && !HERO_ART[id]) { const a = HERO_ART[src] || (typeof ENEMY_ART !== 'undefined' && ENEMY_ART[src]); if (a) HERO_ART[id] = a; }
+    if (typeof HERO_POR !== 'undefined' && !HERO_POR[id] && HERO_POR[src]) HERO_POR[id] = HERO_POR[src];
+  }
   const cache = {};
   const ART = Object.assign({}, typeof HERO_ART !== 'undefined' ? HERO_ART : {}, typeof ENEMY_ART !== 'undefined' ? ENEMY_ART : {}, typeof BOSS_ART !== 'undefined' ? BOSS_ART : {});
   const heroCv = {};
@@ -251,16 +264,47 @@ const SPR = (function () {
   const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl']);
   // their big picture (SPR.url at scale 2: starter hall, hero details, summons) is mirrored too, once at load
   const fullFlip = {};
-  const loadFlipped = () => Promise.all([...FACES_LEFT].filter(id => ART[id] && ART[id].full).map(id => new Promise(res => {
+  const loadFlipped = () => Promise.all([...FACES_LEFT, ...Object.keys(PC_ART_FROM).filter(id => FACES_LEFT.has(PC_ART_FROM[id]))].filter(id => ART[id] && ART[id].full).map(id => new Promise(res => {
     const img = new Image();
     img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); g.translate(img.width, 0); g.scale(-1, 1); g.drawImage(img, 0, 0); fullFlip[id] = c.toDataURL(); res(); };
     img.onerror = () => res();
     img.src = ART[id].full;
   })));
+  // animated heroes (sheets.js): the picture everywhere comes from the inline idle frame (k times finer, scaled down for the
+  // battle grid), fullCrop is that frame cropped square for big pictures; every move is loaded from sheets/<id>.js the first
+  // time the battle asks for the hero (sheet(id) answers null until then, so the still picture is drawn meanwhile)
+  const SHEETS = {}, fullCrop = {}, sheetWant = {};
+  const SHEET_K = id => (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id] && HERO_SHEET[id].k) || 1;
+  const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+  window.FFH_SHEET = async (id, sh) => {
+    const out = { w: sh.w, h: sh.h, k: sh.k || 1 };
+    for (const k of ['idle', 'atk1', 'atk2', 'block', 'skill', 'hurt', 'dead']) if (sh[k]) out[k] = await Promise.all(sh[k].map(loadImg)); // block and skill are optional
+    if (out.idle && out.idle[0] && out.atk1 && out.atk2 && out.hurt && out.dead) SHEETS[id] = out;
+  };
+  function loadSheet(id) {
+    if (typeof HERO_SHEET === 'undefined' || !HERO_SHEET[id]) return Promise.resolve(null);
+    return (sheetWant[id] = sheetWant[id] || new Promise(res => {
+      const s = document.createElement('script'); s.src = `sheets/${id}.js`; s.async = true;
+      const done = () => { const t = setInterval(() => { if (SHEETS[id]) { clearInterval(t); res(SHEETS[id]); } }, 50); setTimeout(() => { clearInterval(t); res(SHEETS[id] || null); }, 8000); };
+      s.onload = done; s.onerror = () => res(null); document.head.appendChild(s);
+    }));
+  }
+  const cropSheets = () => Promise.all(Object.keys(typeof HERO_SHEET !== 'undefined' ? HERO_SHEET : {}).map(async id => {
+    const im = await loadImg(HERO_SHEET[id].idle[0]); if (!im) return;
+    const c = canvas(im.width, im.height), g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+    let x0 = c.width, x1 = 0, y0 = c.height, y1 = 0; for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 20) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const s = Math.max(x1 - x0, y1 - y0) + 4, o = canvas(s, s), og = o.getContext('2d'); og.imageSmoothingQuality = 'high';
+    og.drawImage(c, x0 - (s - (x1 - x0)) / 2, y0 - (s - (y1 - y0)), s, s, 0, 0, s, s); fullCrop[id] = o.toDataURL('image/webp', 0.92);
+  }));
   function preload() {
-    return Promise.all([loadChapterBgs(), loadFlipped(), ...Object.keys(ART).map(id => new Promise(res => {
+    return Promise.all([loadChapterBgs(), loadFlipped(), cropSheets(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
-      img.onload = () => { const c = canvas(img.width, img.height), g = c.getContext('2d'); if (FACES_LEFT.has(id)) { g.translate(img.width, 0); g.scale(-1, 1); } g.drawImage(img, 0, 0); sharpen(c); heroCv[id] = c; res(); };
+      img.onload = () => {
+        // an animated hero's frame is k times finer than the battle grid: scaled down smoothly (and not sharpened)
+        const k = SHEET_K(id), c = canvas(Math.round(img.width / k), Math.round(img.height / k)), g = c.getContext('2d');
+        if (FACES_LEFT.has(id) || FACES_LEFT.has(PC_ART_FROM[id])) { g.translate(c.width, 0); g.scale(-1, 1); }
+        g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); if (k === 1) sharpen(c); heroCv[id] = c; res();
+      };
       img.onerror = () => res();
       img.src = ART[id].body;
     }))]);
@@ -329,7 +373,7 @@ const SPR = (function () {
   const urls = {};
   function url(id, scale, flip) {
     if (typeof HERO_POR !== 'undefined' && HERO_POR[id] && (scale || 1) < 2) return HERO_POR[id];
-    if (isHero(id)) return (scale || 1) >= 2 ? fullFlip[id] || ART[id].full : ART[id].face;
+    if (isHero(id)) return (scale || 1) >= 2 ? fullFlip[id] || fullCrop[id] || ART[id].full : ART[id].face;
     const k = scale || 1, key = id + '@' + k + (flip ? 'f' : '');
     if (urls[key]) return urls[key];
     const s = frame(id, 'idle0', flip ? 'flip' : '');
@@ -416,5 +460,5 @@ const SPR = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, preload, isHero, BG_W: 480, BG_H: 270, LOOK };
+  return { frame, get, url, bg, iconUrl, preload, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, BG_W: 480, BG_H: 270, LOOK };
 })();
