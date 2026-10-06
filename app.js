@@ -2700,6 +2700,8 @@
   let RS = 1; // device pixels per game pixel on the battle canvas (set in runBattle)
   const pctX = x => ((x - VIEW.x) / VIEW.w * 100) + '%', pctW = w => (w / VIEW.w * 100) + '%', pctY = y => (y / H * 100) + '%';
 
+  // manga heroes in battle: a little taller and narrower than drawn (the painted figures are broad: wide capes and weapons)
+  const STRETCH = [0.9, 1.12], stretch = id => (SPR.manga(id) && K.CHAMPS[id] ? STRETCH : [1, 1]);
   // sprite metrics: feet offset + content box, from the idle frame
   const metrics = {};
   function info(id) {
@@ -2707,7 +2709,9 @@
     const s = SPR.frame(id, 'idle0'), d = s.getContext('2d').getImageData(0, 0, s.width, s.height).data;
     let x0 = s.width, x1 = 0, y0 = s.height, y1 = 0;
     for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (d[(y * s.width + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-    return (metrics[id] = { w: s.width, h: s.height, fy: y1, top: y1 - y0, cx: (x0 + x1) / 2, cw: x1 - x0 });
+    // a fine picture (manga figure) counts in game pixels; manga heroes are drawn a little taller and narrower (STRETCH)
+    const k = SPR.k(id), [sx, sy] = stretch(id);
+    return (metrics[id] = { w: s.width / k * sx, h: s.height / k * sy, fy: y1 / k * sy, top: (y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
   }
   function place(u, [x, y], off) {
     const m = info(u.id);
@@ -3013,11 +3017,81 @@
     if (active && rs.pose === 'hit') return SH.block && u.effects.some(e => e.k === 'shield' || e.k === 'defUp') ? at(SH.block, k) : SH.hurt[Math.min(1, Math.floor(k * 3))];
     return SH.idle[Math.floor(now / 260 + rs.phase * 4) % SH.idle.length];
   }
+  // A manga figure (manga.js) is one smooth picture, so it gets more life than the old pixel figures: it is placed at
+  // sub-pixel positions, a strike leaves
+  // a few afterimages, a melee strike draws a slash in the essence colour, and skills and spells make it glow in that colour.
+  // each manga picture is scaled once to the screen's resolution (with the stretch), so a frame draws it nearly 1:1: the
+  // high-quality downscale of a big picture is far too slow to do 16 times per figure on every frame
+  // a white (hit flash) or darkened (fallen) copy of a pose picture, made once
+  const TINT = { white: new WeakMap(), dark: new WeakMap() };
+  function tint(img, kind) {
+    let c = TINT[kind].get(img); if (c) return c;
+    c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const cg = c.getContext('2d'); cg.drawImage(img, 0, 0);
+    cg.globalCompositeOperation = 'source-atop'; cg.fillStyle = kind === 'white' ? '#fff6e0' : 'rgba(8,6,12,0.55)'; cg.fillRect(0, 0, c.width, c.height); TINT[kind].set(img, c); return c;
+  }
+  const MCV = new WeakMap();
+  function mangaPre(img, ak, kx, ky) {
+    const e = MCV.get(img); if (e && e.rs === RS) return e.c;
+    const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width / ak * kx * RS)); c.height = Math.max(1, Math.round(img.height / ak * ky * RS));
+    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); MCV.set(img, { rs: RS, c }); return c;
+  }
+  function drawManga(u, P, now, a, flip, dir, fr, sh, shy) {
+    const rs = u._rs, m = rs.m, ak = SPR.k(u.id), [kx, ky] = stretch(u.id), ess = AFF_COL[u.aff] || '#ffffff', t = now / 1000 + rs.phase;
+    const PZ = SPR.poses(u.id), mir = PZ && flip ? -1 : 1;
+    const cur = { px: rs.x + rs.ox + P.dx * dir + sh, py: rs.y + rs.oy - rs.jump + P.dy + shy, rot: P.rot, sx: P.sx, sy: P.sy };
+    const active = u.alive && rs.pose && now < rs.poseUntil, k = active ? Math.min(1, (now - rs.poseAt) / Math.max(1, rs.poseUntil - rs.poseAt)) : 0;
+    const striking = active && ((rs.pose === 'atk' && k > 0.16 && k < 0.5) || (rs.pose === 'atk2' && k > 0.3 && k < 0.72));
+    rs.trail = (rs.trail || []).filter(p => now - p.at < 210 / spd);
+    if (striking && !calm()) rs.trail.push(Object.assign({ at: now }, cur));
+    if (rs.trail.length > 5) rs.trail.splice(0, rs.trail.length - 5);
+    const glow = !u.alive || calm() ? 0 : active && rs.pose === 'cast' ? Math.sin(k * Math.PI) : active && rs.pose === 'atk2' ? 0.8 * Math.sin(k * Math.PI) : 0;
+    const fig = (img, al, o, gl) => {
+      if (!img || al <= 0.01) return;
+      const pre = mangaPre(img, ak, kx, ky), W = pre.width / RS, H = pre.height / RS, x0 = -m.w / 2, y0 = -m.fy;
+      g.save(); g.globalAlpha = al; g.translate(o.px, o.py); if (o.rot) g.rotate(o.rot * dir); g.scale(o.sx * mir, o.sy);
+      g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
+      if (gl > 0.02) { g.shadowColor = ess; g.shadowBlur = gl * 18 * RS; g.drawImage(pre, x0, y0, W, H); if (gl > 0.4) g.drawImage(pre, x0, y0, W, H); g.shadowBlur = 0; }
+      else g.drawImage(pre, x0, y0, W, H);
+      g.restore();
+    };
+    // a character with real poses (pose sheet) shows the pose for what it does; its pictures face right and are mirrored here
+    let base = PZ ? SPR.frame(u.id, fr) : SPR.frame(u.id, fr, flip ? 'flip' : '');
+    if (PZ) {
+      if (!u.alive) {
+        const dk = rs.deadAt ? Math.min(1, (now - rs.deadAt) / (780 / spd)) : 1;
+        base = (dk < 0.22 ? PZ.hurt : PZ.dead) || base; Object.assign(cur, { px: rs.x + rs.ox + sh, py: rs.y + rs.oy + shy, rot: 0, sx: 1, sy: 1 });
+      } else if (active) {
+        const pick = rs.pose === 'atk' && rs.alt && !u.skills.some(s => s.cd > 0) ? PZ.atk2 : rs.pose === 'atk' || (rs.pose === 'cast' && rs.skIdx === 0) ? PZ.atk1 : rs.pose === 'atk2' || rs.pose === 'cast' ? PZ.atk2
+          : rs.pose === 'hit' ? (PZ.block && u.effects.some(e => e.k === 'shield' || e.k === 'defUp') ? PZ.block : PZ.hurt) : null;
+        if (pick) base = pick;
+      }
+    }
+    rs.trail.forEach((p, i) => fig(base, a * 0.3 * (i + 1) / rs.trail.length, p, 0));
+    fig(base, a, cur, glow);
+    if (P.dim > 0) fig(PZ ? tint(base, 'dark') : SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim, cur, 0);
+    if (rs.flash > 0.02 && u.alive) { fig(PZ ? tint(base, 'white') : SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash), cur, 0); rs.flash *= FADE; }
+    // the slash of a melee strike: a crescent sweeping down in front of the figure, white in the middle, the essence colour around
+    const sl = active && rs.skAnim === 'melee' ? (rs.pose === 'atk' ? (k - 0.14) / 0.48 : rs.pose === 'atk2' ? (k - 0.46) / 0.4 : -1) : -1;
+    if (sl > 0 && sl < 1 && !calm()) {
+      const r = m.fy * 0.72, a1 = -1.4 + 2.7 * eo(Math.min(1, sl * 1.6)), a0 = Math.max(-1.4, a1 - 1.6);
+      g.save(); g.translate(cur.px + dir * m.cw * 0.2, cur.py - m.fy * 0.52); g.scale(dir, 1); g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+      g.globalAlpha = sl < 0.55 ? 1 : (1 - sl) / 0.45; g.shadowColor = ess; g.shadowBlur = 14 * RS;
+      for (const [rr, lw] of [[r, 6], [r * 0.86, 3]]) { g.beginPath(); g.arc(0, 0, rr, a0, a1); g.strokeStyle = ess; g.lineWidth = lw; g.stroke(); }
+      g.shadowBlur = 0; g.beginPath(); g.arc(0, 0, r, a0 + 0.25, a1); g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.stroke();
+      g.restore();
+    }
+    g.imageSmoothingEnabled = false; g.globalAlpha = 1;
+  }
+  let FADE = 0.8; // this frame's fade factor for hit flashes (frame())
   function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
+  // test hook (only with ?debug in the address): lets a test page play poses on the battle figures while the battle is paused
+  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter };
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
     R.shake *= 0.86;
+    // hit flashes fade by time, not by drawn frames (a slow screen would keep them white for long)
+    FADE = Math.pow(0.8, Math.min(6, Math.max(0.5, (now - (R.lastNow || now - 16.7)) / 16.7))); R.lastNow = now;
     g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0);
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     g.drawImage(SPR.bg(R.bg || R.area), sh, shy);
@@ -3038,18 +3112,20 @@
       // the figure is drawn around its feet with this frame's pose (see pose())
       const flip = u.side === 'enemy', dir = flip ? -1 : 1, fr = u.effects.some(e => e.k === 'burrow') ? 'burrow' : 'idle0', P = pose(u, now);
       const px = Math.round(rs.x + rs.ox + P.dx * dir) + sh, py = Math.round(rs.y + rs.oy - rs.jump + P.dy) + shy;
-      const draw = (img, a) => { g.globalAlpha = a; g.save(); g.translate(px, py); if (P.rot) g.rotate(P.rot * dir); if (P.sx !== 1 || P.sy !== 1) g.scale(P.sx, P.sy); g.drawImage(img, -Math.round(m.w / 2), -m.fy); g.restore(); };
+      // a fine picture (manga figure, k > 1) is drawn k times smaller and smoothly; the old pixel figures stay blocky
+      const ak = SPR.k(u.id), draw = (img, a) => { g.globalAlpha = a; g.save(); g.translate(px, py); if (P.rot) g.rotate(P.rot * dir); if (P.sx !== 1 || P.sy !== 1) g.scale(P.sx, P.sy); if (ak > 1) { g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; { const [sx, sy] = stretch(u.id); g.drawImage(img, -m.w / 2, -m.fy, img.width / ak * sx, img.height / ak * sy); } } else g.drawImage(img, -Math.round(m.w / 2), -m.fy); g.restore(); };
       const a = (u.alive ? rs.alpha : 0.85) * (u.id === 'nevelgeest' && u.alive ? 0.9 : 1);
       const SH = SPR.sheet(u.id);
       if (SH) {
         // an animated hero (sheets.js): this moment's frame of its move, feet on the spot, mirrored on the enemy side
         const img = sheetFrame(u, SH, now), sx = rs.x + rs.ox + (u.alive ? P.dx * dir : 0) + sh, sy = rs.y + rs.oy - rs.jump + (u.alive ? P.dy : 0) + shy;
         if (img) { g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(img, -SH.w / 2, -SH.h + 1 / SH.k, SH.w, SH.h); g.restore(); g.imageSmoothingEnabled = false; }
-        if (rs.flash > 0.02) rs.flash *= 0.8;
-      } else {
+        if (rs.flash > 0.02) rs.flash *= FADE;
+      } else if (SPR.manga(u.id)) drawManga(u, P, now, a, flip, dir, fr, sh, shy);
+      else {
         draw(SPR.frame(u.id, fr, flip ? 'flip' : ''), a);
         if (P.dim > 0) draw(SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim);
-        if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= 0.8; }
+        if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= FADE; }
       }
       if (rs.glow > 0.02) { g.globalAlpha = rs.glow * 0.8; pxEllipse(Math.round(rs.x + rs.ox) + sh, Math.round(rs.y - m.top / 2), Math.round(m.cw / 2) + 4, Math.round(m.top / 2) + 3, AFF_COL[u.aff], true); }
       g.globalAlpha = 1;
@@ -3114,6 +3190,8 @@
   async function animBefore(u, skill, targets) {
     const rs = u._rs, dir = u.side === 'hero' ? 1 : -1, v = skill.vfx || '';
     rs.skIdx = u.skills.indexOf(skill); // which skill (an animated sheet may have its own row for the third)
+    rs.skAnim = skill.anim; // melee, ranged, magic, buff (manga figures draw a slash for melee strikes)
+    if (!skill.cd) rs.alt = !rs.alt; // a character with poses but no skill swings attack 1 and attack 2 in turn
     if (skill.anim === 'melee') {
       SFX.swing();
       const tx = targets.reduce((s, t) => s + t._rs.x, 0) / targets.length - dir * ((u.big ? 30 : 22) + Math.max(...targets.map(t => t.immortal ? Math.round(t._rs.m.cw * 0.38) : t.big ? 20 : 8)));
@@ -3298,7 +3376,8 @@
   }
   function resolveChoice(target) {
     if (!pending) return;
-    const { u, res } = pending, s = u.skills[selSkill];
+    const { u, res, b } = pending, s = u.skills[selSkill];
+    if (!s || !b.usable(u, s)) return; // a skill on cooldown is never used, whatever the page says
     pending = null; R.hl = new Set();
     if (TUT.on && TUT.turns === 1) coachHide();
     $('#b-skills').querySelectorAll('button').forEach(b => (b.disabled = true));
@@ -3320,6 +3399,7 @@
   }
   $('#b-skills').addEventListener('click', e => {
     const btn = e.target.closest('.sk'); if (!btn || !pending || btn.disabled) return;
+    { const sk = pending.u.skills[+btn.dataset.i]; if (!sk || !pending.b.usable(pending.u, sk)) return; } // not by the button alone (devtools can switch it on)
     SFX.click();
     const i = +btn.dataset.i, s = pending.u.skills[i];
     if (i === selSkill && !['enemy', 'ally', 'deadAlly'].includes(s.target)) { resolveChoice(null); return; }

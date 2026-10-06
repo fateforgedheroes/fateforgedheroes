@@ -1347,6 +1347,9 @@ const K = (function () {
           let manual = u.side === 'hero' && !this.auto && !!this.h.chooseAction;
           let act = manual ? await this.h.chooseAction(u, this) : this.ai(u);
           if (this.aborted) return;
+          // a manual choice must be one the hero can make now (a skill off cooldown, a valid target): anything else, e.g. a
+          // button switched back on in the browser's devtools, hands the turn to the AI
+          if (manual && act && !act.auto && (!u.skills.includes(act.skill) || !this.usable(u, act.skill) || (act.target && !this.validTargets(u, act.skill).includes(act.target)))) act = { auto: true };
           if (act && act.auto) { act = this.ai(u); manual = false; }
           if (u.side === 'hero' && this.h.record) this.h.record(u, act, !manual);
           used = act.skill;

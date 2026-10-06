@@ -199,11 +199,23 @@ const SPR = (function () {
   // the own hero's art (pc_<class>_<m|f>, see engine PC_CLASSES): borrowed from existing heroes until its own art is drawn
   const PC_ART_FROM = { pc_tank_m: 'vorlund', pc_tank_f: 'draelyn', pc_warrior_m: 'karnok', pc_warrior_f: 'astraea', pc_mage_m: 'celesthyr', pc_mage_f: 'ithyra', pc_ranger_m: 'bloodsnarl', pc_ranger_f: 'valkessa',
     pc_rogue_m: 'skavren', pc_rogue_f: 'zephara', pc_healer_m: 'zulgroth', pc_healer_f: 'liora' };
-  // heroes with an animated sheet (sheets.js HERO_SHEET): its first idle frame and first portrait are their picture everywhere
+  // heroes and enemies with an animated sheet (sheets.js HERO_SHEET): its first idle frame and first portrait are their
+  // picture everywhere (an enemy's or boss's in its own table, which would otherwise win in ART below)
   if (typeof HERO_SHEET !== 'undefined') for (const id in HERO_SHEET) {
-    const sh = HERO_SHEET[id]; if (typeof HERO_ART !== 'undefined') HERO_ART[id] = { body: sh.idle[0], full: sh.idle[0], face: sh.por[0] };
+    const sh = HERO_SHEET[id], a = { body: sh.idle[0], full: sh.idle[0], face: sh.por[0] };
+    const T = [typeof ENEMY_ART !== 'undefined' && ENEMY_ART, typeof BOSS_ART !== 'undefined' && BOSS_ART].find(t => t && t[id]) || (typeof HERO_ART !== 'undefined' && HERO_ART);
+    if (T) T[id] = a;
     if (typeof HERO_POR !== 'undefined') HERO_POR[id] = sh.por[0];
     delete PC_ART_FROM[id]; // its own art: never borrowed (nor mirrored like a borrowed orc)
+  }
+  // heroes, enemies and bosses redrawn in manga style (manga.js MANGA_ART): a figure k times finer than the battle grid and a
+  // portrait replace the old art (the figure is also the big picture); ART_K says how much finer each picture is
+  const ART_K = {};
+  if (typeof MANGA_ART !== 'undefined') for (const id in MANGA_ART) {
+    const m = MANGA_ART[id], a = { body: m.body, full: m.body, face: m.por };
+    for (const T of [typeof HERO_ART !== 'undefined' && HERO_ART, typeof ENEMY_ART !== 'undefined' && ENEMY_ART, typeof BOSS_ART !== 'undefined' && BOSS_ART]) if (T && T[id]) T[id] = a;
+    if (typeof HERO_POR !== 'undefined') HERO_POR[id] = m.por;
+    ART_K[id] = m.k || 1;
   }
   for (const [id, src] of Object.entries(PC_ART_FROM)) {
     if (typeof HERO_ART !== 'undefined' && !HERO_ART[id]) { const a = HERO_ART[src] || (typeof ENEMY_ART !== 'undefined' && ENEMY_ART[src]); if (a) HERO_ART[id] = a; }
@@ -261,7 +273,7 @@ const SPR = (function () {
     })));
   }
   // figures painted facing left (the orc cards); mirrored at load so every figure faces right like the rest
-  const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl']);
+  const FACES_LEFT = new Set(['grimtar', 'krogash', 'zulgroth', 'bloodsnarl'].filter(id => !ART_K[id])); // a manga redraw faces right
   // their big picture (SPR.url at scale 2: starter hall, hero details, summons) is mirrored too, once at load
   const fullFlip = {};
   const loadFlipped = () => Promise.all([...FACES_LEFT, ...Object.keys(PC_ART_FROM).filter(id => FACES_LEFT.has(PC_ART_FROM[id]))].filter(id => ART[id] && ART[id].full).map(id => new Promise(res => {
@@ -274,13 +286,21 @@ const SPR = (function () {
   // battle grid), fullCrop is that frame cropped square for big pictures; every move is loaded from sheets/<id>.js the first
   // time the battle asks for the hero (sheet(id) answers null until then, so the still picture is drawn meanwhile)
   const SHEETS = {}, fullCrop = {}, sheetWant = {};
-  const SHEET_K = id => (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id] && HERO_SHEET[id].k) || 1;
+  const SHEET_K = id => ART_K[id] || (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id] && HERO_SHEET[id].k) || 1;
   const loadImg = src => new Promise(res => { const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
   window.FFH_SHEET = async (id, sh) => {
     const out = { w: sh.w, h: sh.h, k: sh.k || 1 };
     for (const k of ['idle', 'atk1', 'atk2', 'block', 'skill', 'hurt', 'dead']) if (sh[k]) out[k] = await Promise.all(sh[k].map(loadImg)); // block and skill are optional
     if (out.idle && out.idle[0] && out.atk1 && out.atk2 && out.hurt && out.dead) SHEETS[id] = out;
   };
+  // characters drawn with real poses (a pose sheet: manga.js entry with poses: 1): their attack, skill, block, hurt and dead
+  // pictures are in poses/<id>.js and load the first time a battle asks for them (SPR.poses answers null until then)
+  const POSES = {}, poseWant = {};
+  window.FFH_POSES = async (id, p) => { const o = {}; for (const k of ['atk1', 'atk2', 'block', 'hurt', 'dead']) if (p[k]) o[k] = await loadImg(p[k]); POSES[id] = o; };
+  function loadPoses(id) {
+    if (typeof MANGA_ART === 'undefined' || !MANGA_ART[id] || !MANGA_ART[id].poses || poseWant[id]) return;
+    poseWant[id] = true; const s = document.createElement('script'); s.src = `poses/${id}.js`; s.async = true; document.head.appendChild(s);
+  }
   function loadSheet(id) {
     if (typeof HERO_SHEET === 'undefined' || !HERO_SHEET[id]) return Promise.resolve(null);
     return (sheetWant[id] = sheetWant[id] || new Promise(res => {
@@ -300,8 +320,8 @@ const SPR = (function () {
     return Promise.all([loadChapterBgs(), loadFlipped(), cropSheets(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
       img.onload = () => {
-        // an animated hero's frame is k times finer than the battle grid: scaled down smoothly (and not sharpened)
-        const k = SHEET_K(id), c = canvas(Math.round(img.width / k), Math.round(img.height / k)), g = c.getContext('2d');
+        // a fine picture (k > 1: manga figures, animated heroes) stays fine and is not sharpened; app.js draws it k times smaller
+        const k = SHEET_K(id), c = canvas(img.width, img.height), g = c.getContext('2d');
         if (FACES_LEFT.has(id) || FACES_LEFT.has(PC_ART_FROM[id])) { g.translate(c.width, 0); g.scale(-1, 1); }
         g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); if (k === 1) sharpen(c); heroCv[id] = c; res();
       };
@@ -460,5 +480,5 @@ const SPR = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, preload, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, BG_W: 480, BG_H: 270, LOOK };
+  return { frame, get, url, bg, iconUrl, preload, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || (loadPoses(id), null), BG_W: 480, BG_H: 270, LOOK };
 })();
