@@ -78,6 +78,7 @@
     s.modeTeam = s.modeTeam || {};
     { const hid = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (hid) s.teams.forEach(t => keepHero(t.ids, hid)); }
     for (const [m] of TEAM_MODES) if (!(s.modeTeam[m] < s.teams.length)) s.modeTeam[m] = 0;
+    s.bossTeam = s.bossTeam || {}; for (const k in s.bossTeam) if (!(s.bossTeam[k] < s.teams.length)) delete s.bossTeam[k];
     s.team = s.teams[s.tsel].ids;
     return s;
   }
@@ -88,6 +89,10 @@
   const teamsOf = id => S.teams.filter(t => t.ids.includes(id)).map(t => t.name);
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
+  // the Boss Hall can have a team per boss essence (S.bossTeam[essence] = team index, chosen on the Boss Hall screen);
+  // a boss of an essence without one uses the Boss Hall team (S.modeTeam.boss)
+  const bossTeamIdx = aff => { const i = S.bossTeam && S.bossTeam[aff]; return i != null && i < S.teams.length ? i : (S.modeTeam.boss || 0); };
+  function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
     // the Support class was dropped before release: a test save's Support hero becomes a Healer (same id everywhere)
     if (s.hero && s.hero.cls === 'support') {
@@ -218,11 +223,26 @@
   function save() { syncHero(S); S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); }
 
   // ---------- sound ----------
+  // volume (S.vol, 0-1; a slider in the Town Hall settings and the ☰ menu) scales the sound effects and the music
+  const VOL = () => (S && S.vol != null ? S.vol : 0.7), MUS_GAIN = 0.5;
+  // the header button mutes everything (sound effects and music) and turns back on what was on (S.audioWas)
+  function toggleAudio() {
+    if (S.sound || S.music) { S.audioWas = { s: S.sound, m: S.music }; S.sound = S.music = false; }
+    else { const w = S.audioWas || {}; S.sound = w.s !== false; S.music = w.m !== false; if (!w.s && !w.m) S.sound = S.music = true; }
+    save(); hud(); MUSIC.refresh(); if (S.sound) SFX.click(); if (tab === 'profiel') render();
+  }
+  const volSlider = () => `<label class="vol-ctl"><span>Volume</span><input type="range" class="vol-range" min="0" max="100" step="5" value="${Math.round(VOL() * 100)}" aria-label="Volume"><output>${Math.round(VOL() * 100)}%</output></label>`;
+  document.addEventListener('input', e => {
+    if (!e.target.classList || !e.target.classList.contains('vol-range')) return;
+    S.vol = +e.target.value / 100; SFX.vol(); MUSIC.refresh();
+    document.querySelectorAll('.vol-range').forEach(r => { r.value = e.target.value; if (r.nextElementSibling) r.nextElementSibling.textContent = e.target.value + '%'; });
+  });
+  document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('vol-range')) { save(); SFX.click(); } });
   const SFX = (() => {
     let ctx = null, master = null, volK = 1;
     function ac() {
       if (!S || !S.sound) return null;
-      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.2; master.connect(ctx.destination); } catch (e) { return null; } }
+      if (!ctx) { try { ctx = new (window.AudioContext || window.webkitAudioContext)(); master = ctx.createGain(); master.gain.value = 0.2 * VOL(); master.connect(ctx.destination); } catch (e) { return null; } }
       if (ctx.state === 'suspended') ctx.resume();
       return ctx;
     }
@@ -274,6 +294,7 @@
         volK = 0.5; f(...a); volK = 1;
       };
     }
+    api.vol = () => { if (master) master.gain.value = 0.2 * VOL(); }; // the volume slider moved
     return api;
   })();
 
@@ -466,10 +487,10 @@
       const now = ctx.currentTime;
       out.gain.cancelScheduledValues(now); out.gain.setValueAtTime(out.gain.value, now);
       if (!on) { out.gain.linearRampToValueAtTime(0, now + 0.6); cur = null; return; }
-      if (cur && cur.name === want) { out.gain.linearRampToValueAtTime(0.5, now + 0.4); return; }
+      if (cur && cur.name === want) { out.gain.linearRampToValueAtTime(MUS_GAIN * VOL(), now + 0.4); return; }
       cur = Object.assign(built[want] || (built[want] = build(TRACKS[want])), { name: want });
       startAt = now + 0.1; next = 0;
-      out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(0.5, now + 1.5);
+      out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(MUS_GAIN * VOL(), now + 1.5);
     }
     return {
       // play a track ('home', 'battle', 'boss') or null for silence; starts for real after the first click (browser rule)
@@ -551,8 +572,8 @@
     $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy(); const ge = $('#gems'); if (ge) ge.textContent = (S.gems || 0).toLocaleString('en-US');
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones; $('#stones').parentElement.title = 'Ascension Stones: ' + K.STONES.map(s => `${stoneN(s.id)} ${s.name.replace(/ Ascension Stone$/, '')}`).join(', ') + '. Lesser for 2-4★, Greater for 5★, Ancient for 6★.';
-    const sb = $('#sound'); sb.classList.toggle('on', S.sound); sb.setAttribute('aria-pressed', S.sound ? 'true' : 'false');
-    sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${S.sound ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${S.sound ? 'Sound on' : 'Sound off'}</span>`;
+    const aOn = S.sound || S.music, sb = $('#sound'); sb.classList.toggle('on', aOn); sb.setAttribute('aria-pressed', aOn ? 'true' : 'false'); sb.title = aOn ? 'Mute sound and music' : 'Turn sound and music back on';
+    sb.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${aOn ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg><span class="lbl">${aOn ? 'Sound on' : 'Sound off'}</span>`;
     document.querySelector('#tabs [data-tab="altaar"] .dot').hidden = !(totalFs > 0 && unlocked('altaar'));
     for (const t in UNLOCKS) document.querySelector(`#tabs [data-tab="${t}"]`)?.classList.toggle('locked', !unlocked(t));
     paintAccount();
@@ -776,10 +797,10 @@
       ${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}
       <div class="cp-phases">${st.phases.map((p, i) => `<div class="${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cp-foe" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('')}</div>
       <div class="cp-meta"><span class="rw"><span class="st-dic">${D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="">`).join('')}</span><b>${dropName(st)}</b></span>${firsts.length ? `<span class="rw cp-first"><small>First clear</small></span>${firsts.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div>
-      ${acts}${fightSpot() && sel === next ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(st, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : ''}</section>`;
+      ${acts}${fightSpot() && sel === next ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : ''}</section>`;
     const tids = teamIds('campaign');
     const team = `<button type="button" class="cp-team" data-act="editteam" data-mode="campaign" aria-label="Edit the campaign team">${tids.map(id => `<span class="cp-tm rar-${C[id].rar}">${por(id)}<i>Lv ${S.roster[id].lvl}</i></span>`).join('')}<span class="cp-pw"><small>Team power</small><b>${teamPower(tids).toLocaleString('en-US')}</b></span></button>`;
-    const fightBtn = state === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${sel}">↻ Replay${enCost(K.stageEnergy(st, d))}</button>` : state === 'next' ? `<button class="btn primary" data-act="play" data-stage="${sel}">⚔ Fight${enCost(K.stageEnergy(st, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
+    const fightBtn = state === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${sel}">↻ Replay${enCost(stEn(sel, d))}</button>` : state === 'next' ? `<button class="btn primary" data-act="play" data-stage="${sel}">⚔ Fight${enCost(stEn(sel, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
     return `<div class="campaign cp ${d ? 'hardmode diff-' + D.id : ''}">
       <div class="cp-top"><label class="cp-diff"><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select></label>
         <div class="cp-chap"><button type="button" class="btn small" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button><b>Chapter ${ROMAN[chap]}</b><button type="button" class="btn small" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></div></div>
@@ -811,11 +832,11 @@
     const tile = (st, i) => {
       const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
       const rw = firstRewards(st, i);
-      const go = state === 'next' ? `Fight ›${enCost(K.stageEnergy(st, d))}` : `${LOCK_SVG} Locked`;
+      const go = state === 'next' ? `Fight ›${enCost(stEn(i, d))}` : `${LOCK_SVG} Locked`;
       // a cleared stage has two buttons: Replay, and Auto ×10 once the whole chapter is cleared on this difficulty
       const chapDone = clearedOn(d) >= st.chapter * 7 + 6, tag = state === 'cleared' ? 'div' : 'button';
       const foot = state === 'cleared'
-        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay${enCost(K.stageEnergy(st, d))}</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
+        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay${enCost(stEn(i, d))}</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
         : `<span class="st-go">${go}</span>`;
       return `<${tag} class="stage ${state} ${st.boss ? 'bossst' : ''}" ${tag === 'button' ? `data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}` : ''}>
         <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span>${state === 'cleared' ? '<span class="st-state tag">✓</span>' : ''}</div>
@@ -840,7 +861,7 @@
           ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}</div>
           <div class="cn-phases">${nx.phases.map((p, i) => `<div class="cn-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><div>${p.map(f => `<span class="cn-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div></div>`).join('')}</div>
           <div class="cn-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(nx, d)}</b></span><span class="rw cn-drop"><span class="st-dic">${dropIc(nx)}</span><b>${dropName(nx)}</b></span>${nrw.length ? `<span class="rw cn-first"><small>First clear</small></span>${nrw.join('')}` : ''}<span class="rw"><small>Enemies</small>${[...new Set(nx.phases.flat().map(f => E[f].aff))].map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div></div>
-        ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></section>`}`
+        ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button></section>`}`
       : `<section class="camp-next done"><div class="cn-main"><span class="tag">${esc(D.name)} complete</span><h3>Every stage cleared!</h3><span class="cn-sub">${K.DIFFS[d + 1] ? `${K.DIFFS[d + 1].name} is open: pick it above for better gear.` : 'You beat the hardest difficulty.'} Replay stages to farm gear.</span></div></section>`;
     return `<div class="campaign ${hard ? 'hardmode diff-' + D.id : ''}">
       <div class="camp-head"><h2>Campaign</h2>
@@ -849,7 +870,7 @@
       ${cont}
       <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower(teamIds('campaign')).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button></div>
       <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
-      ${nx && !fightSpot() ? `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button><button class="btn primary" data-act="play" data-stage="${next}">⚔ Fight${enCost(K.stageEnergy(K.STAGES[next], d))}</button></div>` : ''}
+      ${nx && !fightSpot() ? `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button><button class="btn primary" data-act="play" data-stage="${next}">⚔ Fight${enCost(stEn(next, d))}</button></div>` : ''}
       <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared</span></div>
       ${setBanner(K.CHAPTERS[chap].set, D)}
       <div class="stages">${idx.slice(0, 6).map(i => tile(K.STAGES[i], i)).join('')}</div>
@@ -890,7 +911,13 @@
           <p><b>${esc(B0.passiveName)}</b>: ${esc(B0.passiveDesc)}</p>
           <p>${B0.aff === 'Aether' ? 'No essence has the advantage here.' : `Strong against it: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
           <div class="setlist">${sets}</div>
-          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = teamIds('boss').some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
+          ${(() => { // the team for bosses of this essence (or the Boss Hall team), its heroes and power
+            const own = S.bossTeam && S.bossTeam[B0.aff] != null && S.bossTeam[B0.aff] < S.teams.length, ti = bossTeamIdx(B0.aff), ids = S.teams[ti].ids;
+            const opts = `<option value="" ${own ? '' : 'selected'}>Boss Hall team (${esc(S.teams[S.modeTeam.boss || 0].name)})</option>` + S.teams.map((t, i) => `<option value="${i}" ${own && i === ti ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+            return `<div class="bh-team"><label class="bh-team-pick">${affChip(B0.aff)} Team against ${B0.aff} bosses <select id="bh-team" data-aff="${B0.aff}">${opts}</select></label>
+              <div class="teamstrip">${ids.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('')}<div class="power"><span class="tag">Team power</span><b>${teamPower(ids).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editbteam" data-aff="${B0.aff}">Edit</button></div></div>`;
+          })()}
+          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.teams[bossTeamIdx(B0.aff)].ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
           <div class="lvls" role="group" aria-label="Level">${lvls}</div>
           <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><span class="bh-btns"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge${enCost(K.bossEnergy(sel))}</button></span></div>
         </div></div>`
@@ -1307,12 +1334,23 @@
     for (let i = dcl.length - 1; i >= 1; i--) if (dcl[i] >= 0 && K.DIFFS[i] && K.STAGES[dcl[i]]) return `${K.DIFFS[i].name} · ${stageName(dcl[i])}`;
     return K.STAGES[d.cleared] ? `Easy · ${stageName(d.cleared)}` : `${r.score} stages`;
   }
+  // the arena bots on the leaderboard (marked, without a rank, so the players' ranks stay those the weekly rewards use):
+  // the same names as the server's bots, a rating, record and hero picked per UTC week, so the list changes now and then
+  function boardBots() {
+    const wk = Math.floor(Date.now() / 6048e5), pool = K.CHAMP_ORDER.filter(id => C[id] && C[id].rar >= 2);
+    const h = (i, s) => { let x = (Math.imul(wk + 1, 2654435761) ^ Math.imul(i + 1, 40503) ^ Math.imul(s + 1, 2246822507)) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822507) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; };
+    return K.BOT_NAMES.map((name, i) => {
+      const score = Math.round(950 + h(i, 1) * 450), n = 8 + Math.floor(h(i, 2) * 40), wins = Math.round(n * Math.min(0.8, 0.3 + (score - 950) / 900));
+      return { bot: true, name, avatar: pool[Math.floor(h(i, 3) * pool.length)], score, detail: { wins, losses: n - wins } };
+    });
+  }
   function boardHtml() {
     const kinds = [['arena', 'Arena'], ['campaign', 'Campaign'], ['bosses', 'Boss Hall']];
     const seg = `<div class="seg" role="group" aria-label="Leaderboard">${kinds.map(([k, l]) => `<button type="button" data-act="arlb" data-kind="${k}" aria-pressed="${AR.lb === k}">${l}</button>`).join('')}</div>`;
     const fmt = r => AR.lb === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : AR.lb === 'campaign' ? campaignText(r) : `${r.score} boss levels${r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}`;
-    const rows = AR.board ? AR.board.map(r => `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
-    const note = AR.lb === 'arena' ? 'Ratings from fights the server played.' : 'From cloud saves of signed-in players.';
+    const list = AR.board && AR.lb === 'arena' ? AR.board.concat(boardBots()).sort((a, b) => b.score - a.score) : AR.board;
+    const rows = list ? list.map(r => `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = AR.lb === 'arena' ? 'Ratings from fights the server played. Arena bots are the opponents the arena fills in: they have no rank and win no rewards.' : 'From cloud saves of signed-in players.';
     return `<section class="ar-board"><div class="section-head"><h3>Leaderboard</h3>${seg}</div><p class="empty-note">${note}</p>
       ${AR.boardErr ? `<p class="ar-err">${esc(AR.boardErr)}</p>` : !AR.board ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
@@ -2124,7 +2162,7 @@
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
       <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
-      ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}
+      ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}<div class="mm-it mm-vol">${volSlider()}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
         <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
@@ -2140,7 +2178,7 @@
     if (it) {
       const a = it.dataset.mm; setMenu(false);
       if (a === 'sound') { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
-      if (a === 'music') { S.music = !S.music; save(); MUSIC.refresh(); if (tab === 'profiel') render(); return; }
+      if (a === 'music') { S.music = !S.music; save(); hud(); MUSIC.refresh(); if (tab === 'profiel') render(); return; }
       ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
       return;
     }
@@ -2292,7 +2330,7 @@
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
-      <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button><button class="btn small" data-act="musictoggle" aria-pressed="${S.music}">Music: ${S.music ? "on" : "off"}</button></div></section>
+      <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button><button class="btn small" data-act="musictoggle" aria-pressed="${S.music}">Music: ${S.music ? "on" : "off"}</button>${volSlider()}</div></section>
       <section class="prof-acc"><h3>Community</h3><p class="empty-note">Chat with other players, find a guild and hear about updates first.</p><div class="row"><a class="btn small dc-btn" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Join the Discord</a></div></section>
       <section class="prof-acc"><h3>Account</h3>${account}</section>
       ${startOverHtml()}
@@ -2304,6 +2342,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'inv-set') { invSet = e.target.value; render(); const p = document.getElementById('invpanel'); if (p) p.scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'cp-diff') { S.diff = +e.target.value; delete S.chap; campSel = null; save(); render(); return; }
+    if (e.target.id === 'bh-team') { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
@@ -2350,7 +2389,7 @@
     SFX.unlock(); MUSIC.unlock();
     const tb = e.target.closest('#tabs button');
     if (tb) { invSlot = null; SFX.click(); setTab(tb.dataset.tab); return; }
-    if (e.target.closest('#sound')) { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
+    if (e.target.closest('#sound')) { toggleAudio(); return; }
     if (e.target.closest('.brand') && !B && !noHero()) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#guide')) { if (B) return; SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
@@ -2405,7 +2444,7 @@
     else if (act === 'pfhero') { PF.sel = id; renderProfile(); }
     else if (act === 'pfclose') { PF.id = null; $('#modal').hidden = true; }
     else if (act === 'soundtoggle') { S.sound = !S.sound; save(); hud(); render(); if (S.sound) SFX.click(); }
-    else if (act === 'musictoggle') { S.music = !S.music; save(); render(); MUSIC.refresh(); }
+    else if (act === 'musictoggle') { S.music = !S.music; save(); hud(); render(); MUSIC.refresh(); }
     else if (act === 'glnav') { e.preventDefault(); const s = document.getElementById('gl-' + a.dataset.id); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (act === 'socreload') socialLoad();
     else if (act === 'copycode') { const c = SO.code; navigator.clipboard.writeText(c).then(() => toast('Friend code copied.'), () => toast('Your friend code: ' + c, false, 5000)); }
@@ -2441,6 +2480,7 @@
     else if (act === 'tmsel') { S.tsel = +a.dataset.i; S.team = S.teams[S.tsel].ids; if (!S.team.includes(selChamp)) selChamp = S.team[0] || selChamp; invSlot = null; save(); render(); }
     else if (act === 'tmmode') { S.modeTeam[a.dataset.m] = S.tsel; save(); render(); }
     else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
+    else if (act === 'editbteam') { useBossTeam(a.dataset.aff); setTab('team'); }
     else if (act === 'tmnew') nameBox('Create a team', freeTeamName(), 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
     else if (act === 'tmname') nameBox('Rename team', S.teams[S.tsel].name, 'Save', name => { S.teams[S.tsel].name = name; save(); render(); });
     else if (act === 'tmfav') { S.tfav = S.tfav === S.tsel ? null : S.tsel; save(); render(); }
@@ -2449,6 +2489,7 @@
       confirmBox(`Delete ${esc(t.name)}?`, 'The heroes stay in your roster; only this team is removed. Game modes that used it switch to your first team.', 'Delete', () => {
         S.teams.splice(i, 1);
         for (const [m] of TEAM_MODES) S.modeTeam[m] = S.modeTeam[m] === i ? 0 : S.modeTeam[m] > i ? S.modeTeam[m] - 1 : S.modeTeam[m];
+        for (const k in S.bossTeam || {}) { if (S.bossTeam[k] === i) delete S.bossTeam[k]; else if (S.bossTeam[k] > i) S.bossTeam[k]--; }
         S.tfav = S.tfav === i ? null : S.tfav > i ? S.tfav - 1 : S.tfav;
         S.tsel = 0; linkTeams(S); save(); render();
       });
@@ -3482,15 +3523,15 @@
   // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
   function startCampaign(i, rep) {
     const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
-    if (!spendEnergy(K.stageEnergy(st, diff))) { render(); return; }
+    if (!spendEnergy(stEn(i, diff))) { render(); return; }
     useTeam('campaign');
     S.chap = st.chapter;
     runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, bg: chapterBg(st.chapter), rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n, rep) {
     if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
-    useTeam('boss');
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
+    useBossTeam(bo.aff);
     runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], bg: chapterBg(Math.floor(bi * K.CHAPTERS.length / K.BOSS_ORDER.length)), title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
@@ -3734,6 +3775,8 @@
   function energyWait(need) { energyTick(); const short = need - S.energy; return short <= 0 ? 0 : Math.max(1, Math.ceil((short * EN_MS - (Date.now() - S.enAt)) / 60000)); }
   const enIc = () => EN_SVG;
   const enCost = c => c ? `<span class="en-cost" title="Costs ${c} energy">${enIc()}${c}</span>` : '';
+  // energy for stage i on difficulty d: Easy Chapter I is free only while that stage is not cleared yet
+  const stEn = (i, d) => K.stageEnergy(K.STAGES[i], d, !d && i > S.cleared);
   // pay for a battle; false (with a message) when there is not enough
   function spendEnergy(cost) {
     energyTick();
@@ -3928,7 +3971,7 @@
       if ($('#modal').hidden) { clearInterval(repTimer); return; }
       if (document.querySelector('.unlock-pop')) return; // wait while an unlock message is open
       left--; const s = el.querySelector('span'); if (s) s.textContent = left;
-      if (left <= 0) { clearInterval(repTimer); const c = cfg.type === 'stage' ? K.stageEnergy(K.STAGES[cfg.i], cfg.diff) : K.bossEnergy(cfg.n); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; const nx = { n: r.n, k: r.k + 1, won }; if (cfg.type === 'stage') startCampaign(cfg.i, nx); else startDungeon(cfg.id, cfg.n, nx); }
+      if (left <= 0) { clearInterval(repTimer); const c = cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; const nx = { n: r.n, k: r.k + 1, won }; if (cfg.type === 'stage') startCampaign(cfg.i, nx); else startDungeon(cfg.id, cfg.n, nx); }
     }, 1000);
     el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; });
   }

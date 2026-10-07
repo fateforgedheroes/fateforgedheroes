@@ -663,7 +663,12 @@ button, a, input { touch-action: manipulation; }
 .av-pick.sel { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold); }
 .prof-acc { background: var(--panel); border: 2px solid var(--line); padding: 12px 14px; }
 .prof-acc p { margin: 0 0 8px; }
-.prof-acc .row { display: flex; gap: 8px; flex-wrap: wrap; }
+.prof-acc .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+/* volume slider (Town Hall settings and the ☰ menu) */
+.vol-ctl { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.vol-ctl input { width: 130px; max-width: 40vw; accent-color: var(--gold); }
+.vol-ctl output { min-width: 3.2em; color: var(--muted); font-variant-numeric: tabular-nums; font-size: .9rem; }
+.mm-vol { cursor: default; }
 .prof-bk { background: var(--panel); border: 2px solid var(--line); padding: 12px 14px; }
 .prof-bk p { margin: 0 0 8px; }
 .bk-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -702,6 +707,7 @@ button, a, input { touch-action: manipulation; }
 .lb li { display: flex; align-items: center; gap: 10px; padding: 4px 8px; background: var(--panel-2); }
 .lb li.me { outline: 2px solid var(--gold); }
 .lb-rank { width: 32px; text-align: right; font-family: var(--font-display); font-weight: 700; color: var(--gold); flex: none; }
+.lb li.bot { opacity: .72; } /* arena bots: listed, but no rank */
 .lb img.spr, .lb .lb-noav { width: 32px; height: 32px; }
 .lb-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lb-name b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1539,6 +1545,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .bh-trait { display: flex; gap: 8px; align-items: flex-start; margin: 6px 0; padding: 8px 10px; border: 1px solid rgba(240, 192, 96, .45); border-radius: 6px; background: rgba(138, 90, 18, .18); }
 .bh-trait .fxi { flex: none; width: 24px; height: 24px; }
 .bh-trait .warn { color: #ff9a7a; }
+/* the team for bosses of the selected boss's essence */
+.bh-team { display: flex; flex-direction: column; gap: 6px; margin: 6px 0; padding: 8px 10px; border: 1px solid var(--line); background: var(--panel-2); }
+.bh-team-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-weight: 600; }
+.bh-team-pick select { min-width: 0; max-width: 100%; }
 /* energy (K.ENERGY): header counter and the cost on Fight / Replay / Challenge buttons */
 .res.en { color: #ffd76a; }
 .res.en .en-ic { width: 18px; height: 18px; fill: #ffd76a; filter: drop-shadow(0 0 3px rgba(255, 200, 80, .6)); }

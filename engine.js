@@ -984,7 +984,8 @@ const K = (function () {
   // level-ups): Easy about a week and a half, all five difficulties a few months, as in RAID.
   const ENERGY = { base: 100, regenMin: 3, stage: [3, 4, 6, 8, 10], boss: 6 };
   const energyMax = plvl => ENERGY.base + (plvl || 1);
-  const stageEnergy = (st, d) => (!d && st.chapter === 0 ? 0 : ENERGY.stage[d || 0]);
+  // Easy Chapter I is free the first time through (new players never wait); a replay costs like the rest of Easy
+  const stageEnergy = (st, d, first) => (!d && st.chapter === 0 && first ? 0 : ENERGY.stage[d || 0]);
   const bossEnergy = n => ENERGY.boss + n;
   // ---------- Expeditions (the ship): one at a time, up to EXP_HEROES heroes that are in none of the player's teams ----------
   // Each hero gets xp × winXp(lvl) XP (a won stage gives 1×; a hero at its level cap passes its share to the rest of the crew) and the trip brings silver × winSilver(lvl) Sigils, with lvl
@@ -1898,7 +1899,7 @@ const K = (function () {
 
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
-    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, setRng, seeded,
+    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
