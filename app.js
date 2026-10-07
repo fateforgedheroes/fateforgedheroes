@@ -2541,7 +2541,36 @@
       const id = a.dataset.id;
       S.inv.filter(x => x.owner === id && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = id; save(); SFX.click(); toast(`${itemName(item)} equipped on ${C[id].short}.`);
-      const box = document.querySelector('.rep-sum'); if (box && lastRep) box.outerHTML = repSummary(lastRep);
+      repRefresh();
+    }
+    // the Auto ×10 summary's gear boxes (repSummary): open one, or pick several in select mode, and act on them
+    else if (act === 'rbox' && item) {
+      RSUM.arm = null;
+      if (RSUM.selecting) { if (!sellable(item)) { toast(item.lock ? 'Locked gear cannot be sold.' : 'Worn gear cannot be sold.', true); return; } RSUM.sel.has(item.id) ? RSUM.sel.delete(item.id) : RSUM.sel.add(item.id); }
+      else RSUM.open = RSUM.open === item.id ? null : item.id;
+      repRefresh();
+    }
+    else if (act === 'rselmode') { RSUM.selecting = !RSUM.selecting; RSUM.sel.clear(); RSUM.arm = null; repRefresh(); }
+    else if (act === 'rselall') { RSUM.arm = null; if (lastRep) lastRep.sum.items.map(i => S.inv.find(x => x.id === i)).filter(it => it && sellable(it)).forEach(it => RSUM.sel.add(it.id)); repRefresh(); }
+    else if (act === 'rupg' && item) {
+      const cost = K.upgradeCost(item); RSUM.arm = null;
+      if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return;
+      S.silver -= cost; track('upg');
+      if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
+      else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
+      save(); repRefresh();
+    }
+    else if (act === 'rlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; RSUM.arm = null; save(); repRefresh(); }
+    else if (act === 'rsell1' && item && sellable(item)) {
+      // Epic or better asks once more (on the button itself: a confirm dialog would replace the result)
+      if (item.rar >= 3 && RSUM.arm !== 'one' + item.id) { RSUM.arm = 'one' + item.id; repRefresh(); return; }
+      const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); RSUM.open = null; RSUM.arm = null; save(); SFX.up(); toast(`Sold for ${v.toLocaleString('en-US')} Sigils.`); repRefresh();
+    }
+    else if (act === 'rsellsel') {
+      const list = S.inv.filter(it => RSUM.sel.has(it.id) && sellable(it)); if (!list.length) return;
+      if (list.some(it => it.rar >= 3) && RSUM.arm !== 'sel') { RSUM.arm = 'sel'; repRefresh(); return; }
+      const v = list.reduce((t, it) => t + K.sellValue(it), 0); S.silver += v; S.inv = S.inv.filter(it => !list.includes(it));
+      RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; save(); SFX.up(); toast(`Sold ${list.length} ${list.length === 1 ? 'piece' : 'pieces'} for ${v.toLocaleString('en-US')} Sigils.`); repRefresh();
     }
     else if (act === 'sell' && item) {
       if (item.lock) { toast('This gear is locked. Unlock it first to sell it.', true); return; }
@@ -3139,7 +3168,7 @@
   let FADE = 0.8; // this frame's fade factor for hit flashes (frame())
   function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
   // test hook (only with ?debug in the address): lets a test page play poses on the battle figures while the battle is paused
-  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay, repSummary: r => { lastRep = r; return repSummary(r); }, S: () => S };
+  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay, repSummary: r => { lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; return repSummary(r); }, S: () => S };
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
@@ -3988,30 +4017,50 @@
     }
     return best;
   }
-  // the end of an Auto ×10 run: what the whole run paid, and every piece of gear it dropped with its stats (tap a piece)
-  // and a button to put it on the hero it suits best
+  // the end of an Auto ×10 run: the gear it dropped as boxes (tap one for its stats, Equip on the hero it suits best,
+  // Upgrade, Sell or Lock; or Select several and sell them together), then what the whole run paid. The rest of the last
+  // battle's result is hidden (.rep-done), so it all fits on one screen; the boxes scroll.
   let lastRep = null;
+  const RSUM = { open: null, sel: new Set(), selecting: false, arm: null };
   function repSummary(r) {
     const s = r && r.sum; if (!s || !s.battles) return '';
-    const n = v => v.toLocaleString('en-US'), tot = [`${ic('coin')} +${n(s.silver)} Sigils`, `<span class="aff" style="--c:var(--info)">XP</span> +${n(s.xp)} XP per champion`];
+    const n = v => v.toLocaleString('en-US'), tot = [`${enIc()} ${n(s.energy)} energy`, `${ic('coin')} +${n(s.silver)} Sigils`, `<span class="aff" style="--c:var(--info)">XP</span> +${n(s.xp)} XP per champion`];
     if (s.pxp) tot.push(`<span class="aff" style="--c:var(--gold)">P</span> +${n(s.pxp)} player XP`);
     for (const [t, c] of Object.entries(s.fs)) tot.push(`${shardIc(t)} +${c} ${esc(K.SHARD[t].name)}`);
     for (const [t, c] of Object.entries(s.st)) tot.push(`${stoneIc(t)} +${c} ${stoneName(t, c)}`);
     for (const id of s.caps) if (C[id]) tot.push(`${por(id)} Captured ${esc(C[id].short)}`);
-    tot.push(`${enIc()} ${n(s.energy)} energy spent`);
     const ups = Object.entries(s.ups).filter(([id]) => C[id]).map(([id, l]) => `${esc(C[id].short)} ${l}`).join(', ');
-    const items = s.items.map(id => S.inv.find(x => x.id === id)).filter(Boolean).sort((a, b) => b.rar - a.rar);
-    const row = it => {
-      const w = it.owner ? null : bestWearer(it);
-      const act = it.owner && C[it.owner] ? `<span class="rep-on">✓ ${esc(C[it.owner].short)}</span>`
-        : w ? `<button class="btn small primary" type="button" data-act="repequip" data-item="${it.id}" data-id="${w.id}" title="${esc(C[w.id].short)}'s power goes up by about ${Math.max(1, Math.round(w.g * 100))}% (replacing what ${esc(C[w.id].short)} wears in that slot)">Equip on ${esc(C[w.id].short)} <small>+${Math.max(1, Math.round(w.g * 100))}%</small></button>`
+    if (ups) tot.push(`<span class="aff" style="--c:var(--info)">▲</span> Levels now: ${ups}`);
+    const items = s.items.map(id => S.inv.find(x => x.id === id)).filter(Boolean).sort((a, b) => b.rar - a.rar || b.lvl - a.lvl);
+    for (const id of [...RSUM.sel]) if (!items.some(it => it.id === id && sellable(it))) RSUM.sel.delete(id);
+    if (RSUM.open != null && !items.some(it => it.id === RSUM.open)) RSUM.open = null;
+    const box = it => `<button type="button" class="rbox rar-${it.rar} ${RSUM.open === it.id ? 'open' : ''} ${RSUM.sel.has(it.id) ? 'sel' : ''}" data-act="rbox" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}">
+        ${gearIcon(it, 'rbox-ic')}${it.lvl ? `<b class="rbox-lv">+${it.lvl}</b>` : ''}${it.owner && C[it.owner] ? `<span class="rbox-own">${por(it.owner)}</span>` : ''}${it.lock ? '<span class="rbox-lock">🔒</span>' : ''}${RSUM.selecting ? `<span class="rbox-chk">${RSUM.sel.has(it.id) ? '✓' : ''}</span>` : ''}</button>`;
+    // the piece that is open: its stats and what can be done with it
+    const op = RSUM.open != null && items.find(it => it.id === RSUM.open);
+    let detail = '<p class="empty-note rdet-hint">Tap a piece to see its stats, equip, upgrade or sell it.</p>';
+    if (op && !RSUM.selecting) {
+      const w = op.owner ? null : bestWearer(op), maxed = op.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(op), val = K.sellValue(op);
+      const eq = op.owner && C[op.owner] ? `<span class="rep-on">Worn by ${esc(C[op.owner].short)}</span>`
+        : w ? `<button class="btn small primary" type="button" data-act="repequip" data-item="${op.id}" data-id="${w.id}" title="${esc(C[w.id].short)}'s power goes up by about ${Math.max(1, Math.round(w.g * 100))}%">Equip on ${esc(C[w.id].short)} <small>+${Math.max(1, Math.round(w.g * 100))}%</small></button>`
         : '<small class="empty-note">No upgrade for your heroes</small>';
-      return `<li class="rep-it rar-${it.rar}">${gearIcon(it, 'loot-ic')}<details><summary><span class="item-name">${itemName(it)}</span> <span class="item-set">${esc(K.SETS[it.set].name)}</span></summary>${itemStatsHtml(it)}</details>${act}</li>`;
-    };
-    return `<div class="rep-sum"><h3>Auto ×${r.n} totals <small>${s.battles} ${s.battles === 1 ? 'battle' : 'battles'}</small></h3>
-      <ul class="rep-tot">${tot.map(t => `<li>${t}</li>`).join('')}</ul>${ups ? `<p class="empty-note">Levels now: ${ups}</p>` : ''}
-      ${items.length ? `<h4>Gear (${items.length}) <small>tap a piece for its stats</small></h4><ul class="rep-gear">${items.map(row).join('')}</ul>` : '<p class="empty-note">No gear dropped in this run.</p>'}</div>`;
+      const armed = RSUM.arm === 'one' + op.id;
+      detail = `<div class="rdet rar-${op.rar}">${gearIcon(op, 'rdet-ic')}<div class="rdet-main"><b class="item-name">${itemName(op)}</b> <span class="item-set">${esc(K.SETS[op.set].name)}</span>${itemStatsHtml(op)}</div>
+        <div class="rdet-acts">${eq}
+          ${maxed ? '<small class="empty-note">Fully upgraded</small>' : `<button class="btn small" type="button" data-act="rupg" data-item="${op.id}" ${S.silver < cost ? 'disabled' : ''}>Upgrade ${ic('coin')} ${n(cost)} <small>${Math.round(K.upgradeChance(op) * 100)}%</small></button>`}
+          ${sellable(op) ? `<button class="btn small ${armed ? 'danger' : ''}" type="button" data-act="rsell1" data-item="${op.id}">${armed ? 'Sure? Sell' : 'Sell'} ${ic('coin')} ${n(val)}</button>` : ''}
+          <button class="btn small" type="button" data-act="rlock" data-item="${op.id}">${op.lock ? 'Unlock' : 'Lock'}</button></div></div>`;
+    }
+    const selV = items.filter(it => RSUM.sel.has(it.id)).reduce((t, it) => t + K.sellValue(it), 0), armedAll = RSUM.arm === 'sel';
+    const tools = !items.length ? '' : RSUM.selecting
+      ? `<button class="btn small" type="button" data-act="rselall">All spare</button><button class="btn small ${armedAll ? 'danger' : 'primary'}" type="button" data-act="rsellsel" ${RSUM.sel.size ? '' : 'disabled'}>${armedAll ? 'Sure? Sell' : 'Sell'} ${RSUM.sel.size} · ${ic('coin')} ${n(selV)}</button><button class="btn small" type="button" data-act="rselmode">Done</button>`
+      : `<button class="btn small" type="button" data-act="rselmode">Select to sell</button>`;
+    return `<div class="rep-sum"><div class="rep-head"><h3>Gear <small>${items.length} ${items.length === 1 ? 'piece' : 'pieces'} from ${s.battles} ${s.battles === 1 ? 'battle' : 'battles'}${RSUM.selecting ? ' · tap pieces to select' : ''}</small></h3><div class="rep-tools">${tools}</div></div>
+      ${items.length ? `<div class="rep-grid">${items.map(box).join('')}</div>${detail}` : '<p class="empty-note">No gear dropped in this run (or it was sold).</p>'}
+      <ul class="rep-tot">${tot.map(t => `<li>${t}</li>`).join('')}</ul></div>`;
   }
+  // redraw the summary in place (after equipping, upgrading, selling or picking a box)
+  function repRefresh() { const el = document.querySelector('.rep-sum'); if (el && lastRep) el.outerHTML = repSummary(lastRep); hud(); }
   // Auto ×10: after a win the next battle starts by itself after a short countdown (Stop keeps the result open);
   // a defeat or the tenth battle ends the run with a summary of the whole run (repSummary)
   let repTimer = null;
@@ -4022,7 +4071,7 @@
       : `<b>Auto ×${r.n} finished</b> · ${won} of ${r.k} ${r.k === 1 ? 'battle' : 'battles'} won${win ? '' : ' (stopped after a defeat)'}`;
     box.insertBefore(el, box.querySelector('.rewards'));
     clearInterval(repTimer);
-    const done = () => { lastRep = r; el.insertAdjacentHTML('afterend', repSummary(r)); };
+    const done = () => { lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; box.classList.add('rep-done'); el.insertAdjacentHTML('afterend', repSummary(r)); };
     if (!more) { done(); return; }
     let left = 3;
     repTimer = setInterval(() => {
