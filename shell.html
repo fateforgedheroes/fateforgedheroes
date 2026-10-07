@@ -1145,6 +1145,22 @@ div.stage { cursor: default; color: inherit; font: inherit; }
 .rep-bar { padding: 8px 10px; border: 1px solid var(--violet); background: color-mix(in srgb, var(--violet) 14%, var(--panel)); font-size: .92rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .rep-bar b { color: var(--violet); }
 .rep-bar .btn { margin-left: auto; }
+/* Auto ×10 summary: the run's totals and its gear, each piece with its stats and an equip button */
+.rep-sum { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; padding: 10px; border: 1px solid var(--violet); background: color-mix(in srgb, var(--violet) 8%, var(--panel)); }
+.rep-sum h3, .rep-sum h4 { margin: 0; }
+.rep-sum h3 small, .rep-sum h4 small { color: var(--muted); font-family: var(--font-body); font-weight: 400; font-size: .85rem; text-transform: none; letter-spacing: 0; }
+.rep-tot { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 0; padding: 0; list-style: none; font-size: .92rem; }
+.rep-tot li { display: inline-flex; align-items: center; gap: 4px; }
+.rep-tot .spr, .rep-tot .en-ic { width: 20px; height: 20px; object-fit: contain; }
+.rep-gear { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; max-height: 40vh; overflow-y: auto; }
+.rep-it { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 8px; padding: 4px 6px; background: var(--panel-2); border-left: 3px solid var(--rc, var(--line)); }
+.rep-it .loot-ic { width: 32px; height: 32px; }
+.rep-it details summary { cursor: pointer; }
+.rep-it .item-stats { margin: 4px 0 0; }
+.rep-it .btn small { opacity: .85; }
+.rep-on { color: var(--good); font-size: .9rem; white-space: nowrap; }
+.rep-it .item-name { color: var(--rc); font-weight: 600; }
+@media (max-width: 480px) { .rep-it { grid-template-columns: auto minmax(0, 1fr); } .rep-it > :last-child { grid-column: 1 / -1; justify-self: start; } }
 /* stage tiles: drop icons per rarity from the gear sheet */
 .st-dic:has(.gt-ic) { width: auto; height: auto; background: none; border: 0; display: flex; gap: 3px; overflow: visible; }
 .gt-ic { width: 30px; height: 30px; display: block; border: 1px solid var(--rc); box-shadow: 0 0 6px -1px var(--rc); }

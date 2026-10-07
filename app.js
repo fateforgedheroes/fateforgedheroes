@@ -2536,6 +2536,13 @@
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = selChamp; invSlot = null; save(); render(); toast(`${itemName(item)} equipped.`);
     } else if (act === 'unequip' && item) { $('#modal').hidden = true; item.owner = null; save(); render(); }
+    else if (act === 'repequip' && item && S.roster[a.dataset.id]) {
+      // from the Auto ×10 summary: on the hero it suits best, in place of what that hero wore in that slot
+      const id = a.dataset.id;
+      S.inv.filter(x => x.owner === id && x.slot === item.slot).forEach(x => (x.owner = null));
+      item.owner = id; save(); SFX.click(); toast(`${itemName(item)} equipped on ${C[id].short}.`);
+      const box = document.querySelector('.rep-sum'); if (box && lastRep) box.outerHTML = repSummary(lastRep);
+    }
     else if (act === 'sell' && item) {
       if (item.lock) { toast('This gear is locked. Unlock it first to sell it.', true); return; }
       const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); if (VT.open === item.id) VT.open = null; save(); render(); toast(`Sold for ${v} Sigils.`);
@@ -3132,7 +3139,7 @@
   let FADE = 0.8; // this frame's fade factor for hit flashes (frame())
   function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
   // test hook (only with ?debug in the address): lets a test page play poses on the battle figures while the battle is paused
-  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay };
+  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay, repSummary: r => { lastRep = r; return repSummary(r); }, S: () => S };
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
@@ -3882,6 +3889,17 @@
     if (win && cfg.type === 'stage') { track('camp'); if (cfg.diff === 4 && b.heroes.every(u => u.alive)) track('flaw'); }
     if (win && cfg.type === 'boss') track('boss');
     if (cfg.type === 'tower' && !b.aborted) { track('tower'); if (win && cfg.ids && cfg.ids.length === 1) qBest('solo', cfg.floor); }
+    // Auto ×10: everything this battle paid is added to the run's totals (shown when the run ends, repSummary)
+    if (cfg.rep) {
+      const s = cfg.rep.sum || (cfg.rep.sum = { battles: 0, energy: 0, silver: 0, xp: 0, pxp: 0, fs: {}, st: {}, items: [], caps: [], ups: {} });
+      s.battles++; s.energy += cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n);
+      s.silver += silver; s.xp += xp; s.pxp += pxp;
+      for (const t of gotShards) s.fs[t] = (s.fs[t] || 0) + 1;
+      for (const [t, n] of Object.entries(stones)) if (n > 0) s.st[t] = (s.st[t] || 0) + n;
+      loot.forEach(it => s.items.push(it.id));
+      if (captured) s.caps.push(captured.id);
+      ups.forEach(([id, l]) => (s.ups[id] = l));
+    }
     const unlocks = newUnlocks();
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
@@ -3955,8 +3973,47 @@
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
   }
+  // the hero a piece of gear helps most: the biggest gain in power (as a share of the hero's power, so a low-level hero
+  // is not passed over) if it replaced what that hero wears in that slot; heroes in a team first, then the rest
+  function bestWearer(it) {
+    const pool = Object.keys(S.roster).filter(id => C[id] && !onExp(id));
+    let best = null;
+    for (const ids of [pool.filter(inAnyTeam), pool]) {
+      for (const id of ids) {
+        const h = S.roster[id], cur = itemsOf(id).find(x => x.slot === it.slot); if (cur === it) continue;
+        const rest = itemsOf(id).filter(x => x.slot !== it.slot), p0 = power(K.heroStats(id, h, cur ? [...rest, cur] : rest)), p1 = power(K.heroStats(id, h, [...rest, it]));
+        const g = (p1 - p0) / Math.max(1, p0); if (g > 0.0005 && (!best || g > best.g)) best = { id, g };
+      }
+      if (best) break;
+    }
+    return best;
+  }
+  // the end of an Auto ×10 run: what the whole run paid, and every piece of gear it dropped with its stats (tap a piece)
+  // and a button to put it on the hero it suits best
+  let lastRep = null;
+  function repSummary(r) {
+    const s = r && r.sum; if (!s || !s.battles) return '';
+    const n = v => v.toLocaleString('en-US'), tot = [`${ic('coin')} +${n(s.silver)} Sigils`, `<span class="aff" style="--c:var(--info)">XP</span> +${n(s.xp)} XP per champion`];
+    if (s.pxp) tot.push(`<span class="aff" style="--c:var(--gold)">P</span> +${n(s.pxp)} player XP`);
+    for (const [t, c] of Object.entries(s.fs)) tot.push(`${shardIc(t)} +${c} ${esc(K.SHARD[t].name)}`);
+    for (const [t, c] of Object.entries(s.st)) tot.push(`${stoneIc(t)} +${c} ${stoneName(t, c)}`);
+    for (const id of s.caps) if (C[id]) tot.push(`${por(id)} Captured ${esc(C[id].short)}`);
+    tot.push(`${enIc()} ${n(s.energy)} energy spent`);
+    const ups = Object.entries(s.ups).filter(([id]) => C[id]).map(([id, l]) => `${esc(C[id].short)} ${l}`).join(', ');
+    const items = s.items.map(id => S.inv.find(x => x.id === id)).filter(Boolean).sort((a, b) => b.rar - a.rar);
+    const row = it => {
+      const w = it.owner ? null : bestWearer(it);
+      const act = it.owner && C[it.owner] ? `<span class="rep-on">✓ ${esc(C[it.owner].short)}</span>`
+        : w ? `<button class="btn small primary" type="button" data-act="repequip" data-item="${it.id}" data-id="${w.id}" title="${esc(C[w.id].short)}'s power goes up by about ${Math.max(1, Math.round(w.g * 100))}% (replacing what ${esc(C[w.id].short)} wears in that slot)">Equip on ${esc(C[w.id].short)} <small>+${Math.max(1, Math.round(w.g * 100))}%</small></button>`
+        : '<small class="empty-note">No upgrade for your heroes</small>';
+      return `<li class="rep-it rar-${it.rar}">${gearIcon(it, 'loot-ic')}<details><summary><span class="item-name">${itemName(it)}</span> <span class="item-set">${esc(K.SETS[it.set].name)}</span></summary>${itemStatsHtml(it)}</details>${act}</li>`;
+    };
+    return `<div class="rep-sum"><h3>Auto ×${r.n} totals <small>${s.battles} ${s.battles === 1 ? 'battle' : 'battles'}</small></h3>
+      <ul class="rep-tot">${tot.map(t => `<li>${t}</li>`).join('')}</ul>${ups ? `<p class="empty-note">Levels now: ${ups}</p>` : ''}
+      ${items.length ? `<h4>Gear (${items.length}) <small>tap a piece for its stats</small></h4><ul class="rep-gear">${items.map(row).join('')}</ul>` : '<p class="empty-note">No gear dropped in this run.</p>'}</div>`;
+  }
   // Auto ×10: after a win the next battle starts by itself after a short countdown (Stop keeps the result open);
-  // a defeat or the tenth battle ends the run with a summary line
+  // a defeat or the tenth battle ends the run with a summary of the whole run (repSummary)
   let repTimer = null;
   function repStep(cfg, win) {
     const r = cfg.rep, won = r.won + (win ? 1 : 0), more = win && r.k < r.n, box = $('#modal .modal-box');
@@ -3965,15 +4022,16 @@
       : `<b>Auto ×${r.n} finished</b> · ${won} of ${r.k} ${r.k === 1 ? 'battle' : 'battles'} won${win ? '' : ' (stopped after a defeat)'}`;
     box.insertBefore(el, box.querySelector('.rewards'));
     clearInterval(repTimer);
-    if (!more) return;
+    const done = () => { lastRep = r; el.insertAdjacentHTML('afterend', repSummary(r)); };
+    if (!more) { done(); return; }
     let left = 3;
     repTimer = setInterval(() => {
       if ($('#modal').hidden) { clearInterval(repTimer); return; }
       if (document.querySelector('.unlock-pop')) return; // wait while an unlock message is open
       left--; const s = el.querySelector('span'); if (s) s.textContent = left;
-      if (left <= 0) { clearInterval(repTimer); const c = cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; return; } $('#modal').hidden = true; endBattleView(); B = null; const nx = { n: r.n, k: r.k + 1, won }; if (cfg.type === 'stage') startCampaign(cfg.i, nx); else startDungeon(cfg.id, cfg.n, nx); }
+      if (left <= 0) { clearInterval(repTimer); const c = cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n); if (energyWait(c)) { el.innerHTML = `<b>Auto ×${r.n} stopped</b> · out of energy (${won} of ${r.k} won). Enough for the next battle in ${fmtMins(energyWait(c))}.`; done(); return; } $('#modal').hidden = true; endBattleView(); B = null; const nx = { n: r.n, k: r.k + 1, won, sum: r.sum }; if (cfg.type === 'stage') startCampaign(cfg.i, nx); else startDungeon(cfg.id, cfg.n, nx); }
     }, 1000);
-    el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; });
+    el.querySelector('button').addEventListener('click', () => { clearInterval(repTimer); el.innerHTML = `<b>Auto ×${r.n} stopped</b> · ${won} of ${r.k} won`; done(); });
   }
   function modalAction(go) {
     $('#modal').hidden = true;
