@@ -156,7 +156,7 @@ const K = (function () {
       passive: 'kindling', passiveName: 'Ashen Fury', passiveDesc: 'Burn applied by Krogash deals 50% more damage.',
       skills: [
         SK('Ashen Bolt', 'enemy', 'magic', 'fire', 0, 'Attack of 100%. 30% chance of Burn for 2 turns.', [D(1.0), DB('burn', 2, 0.3)]),
-        SK('Ash Storm', 'enemies', 'magic', 'meteor', 3, 'Hits all enemies for 60%. 40% chance of Burn for 2 turns.', [D(0.6), DB('burn', 2, 0.4)]),
+        SK('Ash Storm', 'enemies', 'magic', 'meteor', 3, 'Hits all enemies for 60%. 40% chance of Burn and 40% chance of Speed Down, each for 2 turns.', [D(0.6), DB('burn', 2, 0.4), DB('spdDown', 2, 0.4)]),
         SK('Pyre of the Warlord', 'enemy', 'magic', 'fire', 4, 'Attack of 180%. 60% chance of Burn for 2 turns.', [D(1.8), DB('burn', 2, 0.6)]),
       ] },
     zulgroth: { name: 'Zulgroth', faction: 'Beast Horde', role: 'Support', rar: 1, aff: 'Umbral',
@@ -219,7 +219,7 @@ const K = (function () {
       passive: 'bloodfrenzy', passiveName: 'Blood Frenzy', passiveDesc: '+10% Attack for every enemy he defeats (max. 3 times).',
       skills: [
         SK('Horn Charge', 'enemy', 'melee', 'smash', 0, 'Heavy strike of 110%.', [D(1.1)]),
-        SK('Crush', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 80%.', [D(0.8)]),
+        SK('Crush', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 80%. 40% chance of Defense Down for 2 turns.', [D(0.8), DB('defDown', 2, 0.4)]),
         SK('Unstoppable', 'enemy', 'melee', 'smash', 4, 'Gains Defense Up and Counterattack for 2 turns, then strikes for 130%.', [BF('defUp', 2, 'self'), BF('counter', 2, 'self'), D(1.3)]),
       ] },
     aurelion: { name: 'Aurelion', faction: 'Grey Flame', role: 'Tank', role2: 'Support', rar: 4, aff: 'Radiant',
@@ -240,7 +240,7 @@ const K = (function () {
       passive: 'dragonblood', passiveName: 'Dragon Blood', passiveDesc: '+20% Crit Rate and +20% Crit Damage.',
       skills: [
         SK('Dragon Claw', 'enemy', 'melee', 'claw', 0, 'Claw of 110%. Heals self for 25% of the damage.', [D(1.1, { steal: 0.25 })]),
-        SK('Green Fire', 'enemies', 'magic', 'poison', 3, 'Hits all enemies for 90% and heals for 20% of the damage.', [D(0.9, { steal: 0.2 })]),
+        SK('Green Fire', 'enemies', 'magic', 'poison', 3, 'Hits all enemies for 90% and heals for 20% of the damage. 40% chance of Defense Down for 2 turns.', [D(0.9, { steal: 0.2 }), DB('defDown', 2, 0.4)]),
         SK('Devastation', 'enemy', 'melee', 'dark', 5, 'Attack of 240% and Heal Reduction for 2 turns.', [D(2.4), DB('healRed', 2, 1)]),
       ] },
     keldrax: { name: 'Keldrax', faction: 'Mistspawn', role: 'Warrior', role2: 'Controller', rar: 2, aff: 'Frost',
@@ -296,7 +296,7 @@ const K = (function () {
       passive: 'hellbrand', passiveName: 'Hellbrand', passiveDesc: '+50% damage against enemies with a debuff.',
       skills: [
         SK('Hellfire', 'enemy', 'magic', 'fire', 0, 'Fireball of 115%.', [D(1.15)]),
-        SK('Meteor', 'enemies', 'magic', 'meteor', 4, 'Hits all enemies for 90%. 50% chance of Heal Reduction for 2 turns.', [D(0.9), DB('healRed', 2, 0.5)]),
+        SK('Meteor', 'enemies', 'magic', 'meteor', 4, 'Hits all enemies for 90%. 50% chance of Heal Reduction and 35% chance of Speed Down, each for 2 turns.', [D(0.9), DB('healRed', 2, 0.5), DB('spdDown', 2, 0.35)]),
         SK('Brand of Ruin', 'enemy', 'magic', 'fire', 3, 'Attack of 130%. 70% chance of Burn for 2 turns.', [D(1.3), DB('burn', 2, 0.7)], { startCd: 1 }),
       ] },
     vorlund: { name: 'Vorlund', faction: 'Grey Flame', role: 'Tank', rar: 1, aff: 'Radiant',
@@ -304,13 +304,13 @@ const K = (function () {
       skills: [
         SK('Lance Thrust', 'enemy', 'melee', 'stab', 0, 'Thrust of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
         SK('Golden Bulwark', 'allies', 'buff', 'shield', 4, 'All allies gain Defense Up for 2 turns and a shield of 12% of his max HP.', [BF('defUp', 2), SH(0.12, 2)]),
-        SK('Radiant Judgment', 'enemy', 'melee', 'stab', 3, 'Strike of 130%. 60% chance of Attack Down for 2 turns.', [D(1.3), DB('atkDown', 2, 0.6)], { startCd: 1 }),
+        SK('Radiant Judgment', 'enemy', 'melee', 'stab', 3, 'Strike of 130%. 60% chance of Attack Down and 50% chance of Defense Down, each for 2 turns.', [D(1.3), DB('atkDown', 2, 0.6), DB('defDown', 2, 0.5)], { startCd: 1 }),
       ] },
     karnok: { name: 'Karnok', faction: 'Ironbeard Clans', role: 'Warrior', rar: 1, aff: 'Storm',
       skills: [
         SK('Hammer Blow', 'enemy', 'melee', 'smash', 0, 'Strike of 95%. 20% chance to Stun for 1 turn.', [D(0.95), DB('stun', 1, 0.2)]),
         SK('Anvil Wall', 'allies', 'buff', 'shield', 3, 'All allies gain Defense Up for 2 turns.', [BF('defUp', 2)]),
-        SK('Thunderclap', 'enemies', 'slam', 'quake', 4, 'Hits all enemies for 70%. 25% chance to Stun for 1 turn.', [D(0.7), DB('stun', 1, 0.25)], { startCd: 1 }),
+        SK('Thunderclap', 'enemies', 'slam', 'quake', 4, 'Hits all enemies for 70%. 25% chance to Stun for 1 turn, 40% chance of Defense Down for 2 turns.', [D(0.7), DB('stun', 1, 0.25), DB('defDown', 2, 0.4)], { startCd: 1 }),
       ] },
     // ----- heroes 26-50 (Fate Altar only) -----
     kaelira: { name: 'Kaelira', faction: 'Grey Flame', role: 'Mage', role2: 'Support', rar: 3, aff: 'Radiant',
@@ -318,7 +318,7 @@ const K = (function () {
       skills: [
         SK('Sunbolt', 'enemy', 'magic', 'holy', 0, 'Attack of 100%. 30% chance of Accuracy Down for 2 turns.', [D(1.0), DB('accDown', 2, 0.3)]),
         SK('Radiant Hymn', 'allies', 'buff', 'heal', 3, 'Heals all allies for 20% and grants Crit Rate Up for 2 turns.', [HEAL(0.2), BF('critUp', 2)]),
-        SK('Solar Flare', 'enemies', 'magic', 'sunfall', 4, 'Hits all enemies for 85%. 50% chance of Accuracy Down for 2 turns.', [D(0.85), DB('accDown', 2, 0.5)]),
+        SK('Solar Flare', 'enemies', 'magic', 'sunfall', 4, 'Hits all enemies for 85%. 50% chance of Accuracy Down and 40% chance of Speed Down, each for 2 turns.', [D(0.85), DB('accDown', 2, 0.5), DB('spdDown', 2, 0.4)]),
       ] },
     vorak: { name: 'Vorak', faction: 'Beast Horde', role: 'Tank', rar: 3, aff: 'Ember',
       passive: 'retribution', passiveName: 'Hellforged Hide', passiveDesc: '30% chance to counterattack when hit.',
@@ -331,7 +331,7 @@ const K = (function () {
       passive: 'scavenger', passiveName: 'Hunter’s Instinct', passiveDesc: '+20% damage against targets below 50% HP.',
       skills: [
         SK('Thorn Arrow', 'enemy', 'ranged', 'arrow', 0, 'Arrow of 100%. 40% chance of Poison for 2 turns.', [D(1.0), DB('poison', 2, 0.4)]),
-        SK('Barbed Volley', 'enemies', 'ranged', 'arrowrain', 3, 'Hits all enemies for 60%. 40% chance of Poison for 2 turns.', [D(0.6), DB('poison', 2, 0.4)]),
+        SK('Barbed Volley', 'enemies', 'ranged', 'arrowrain', 3, 'Hits all enemies for 60%. 40% chance of Poison and 35% chance of Defense Down, each for 2 turns.', [D(0.6), DB('poison', 2, 0.4), DB('defDown', 2, 0.35)]),
         SK('Heartseeker', 'lowestEnemy', 'ranged', 'arrow', 4, 'Shoots the weakest enemy for 200%. +50% damage below 35% HP.', [D(2.0, { execute: [0.35, 0.5] })]),
       ] },
     morveth: { name: 'Morveth', faction: 'Silvertongues', role: 'Assassin', role2: 'Mage', rar: 4, aff: 'Umbral',
@@ -395,14 +395,14 @@ const K = (function () {
       skills: [
         SK('Glacier Axe', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 40% chance of Speed Down for 1 turn.', [D(1.0), DB('spdDown', 1, 0.4)]),
         SK('Frost Cleave', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 70%. 25% chance to Freeze for 1 turn.', [D(0.7), DB('freeze', 1, 0.25)]),
-        SK('Shatter', 'enemy', 'melee', 'smash', 4, 'Heavy strike of 170%.', [D(1.7)]),
+        SK('Shatter', 'enemy', 'melee', 'smash', 4, 'Heavy strike of 170%. 60% chance of Defense Down for 2 turns.', [D(1.7), DB('defDown', 2, 0.6)]),
       ] },
     zephara: { name: 'Zephara', faction: 'Silvertongues', role: 'Assassin', rar: 3, aff: 'Storm',
       passive: 'crimsonwings', passiveName: 'Tailwind', passiveDesc: '+15 Speed.',
       skills: [
         SK('Lightning Claws', 'enemy', 'melee', 'slash', 0, 'Two strikes of 55%.', [D(0.55)], { hits: 2 }),
         SK('Storm Dash', 'lowestEnemy', 'melee', 'stab', 3, 'Gains Stealth for 2 turns and strikes the weakest enemy for 150%.', [BF('stealth', 2, 'self'), D(1.5)]),
-        SK('Thunderstrike', 'enemy', 'melee', 'rune', 4, 'Strike of 220%. 40% chance to Stun for 1 turn.', [D(2.2), DB('stun', 1, 0.4)]),
+        SK('Thunderstrike', 'enemy', 'melee', 'rune', 4, 'Strike of 220%. 40% chance to Stun for 1 turn, 50% chance of Defense Down for 2 turns.', [D(2.2), DB('stun', 1, 0.4), DB('defDown', 2, 0.5)]),
       ] },
     malreth: { name: 'Malreth', faction: 'Hellwardens', role: 'Mage', rar: 3, aff: 'Umbral',
       passive: 'deathmark', passiveName: 'Grave Mark', passiveDesc: 'Every second turn he places a Death Mark on a random enemy for 2 turns.',
@@ -442,7 +442,7 @@ const K = (function () {
     seraphine: { name: 'Seraphine', faction: 'Grey Flame', role: 'Support', rar: 3, aff: 'Radiant',
       passive: 'divineward', passiveName: 'Guardian Wings', passiveDesc: 'At the start of battle, all allies gain a shield of 12% of Seraphine’s max HP for 3 turns.',
       skills: [
-        SK('Halo Strike', 'enemy', 'magic', 'holy', 0, 'Attack of 90%. Heals the weakest ally for 8%.', [D(0.9), HEAL(0.08, 'lowestAlly')]),
+        SK('Halo Strike', 'enemy', 'magic', 'holy', 0, 'Attack of 90%. Heals the weakest ally for 8%. 30% chance of Speed Down for 2 turns.', [D(0.9), HEAL(0.08, 'lowestAlly'), DB('spdDown', 2, 0.3)]),
         SK('Blessing of Light', 'allies', 'buff', 'heal', 3, 'Heals all allies for 25%.', [HEAL(0.25)]),
         SK('Seraph’s Grace', 'deadAlly', 'buff', 'revive', 5, 'Revives a fallen ally with 40% HP.', [{ t: 'revive', pct: 0.4 }]),
       ] },
@@ -472,7 +472,7 @@ const K = (function () {
       skills: [
         SK('Phase Strike', 'enemy', 'melee', 'stab', 0, 'Thrust of 105%. 25% chance of Death Mark for 2 turns.', [D(1.05), DB('mark', 2, 0.25)]),
         SK('Void Step', 'lowestEnemy', 'melee', 'stab', 3, 'Gains Stealth for 2 turns and strikes the weakest enemy for 150%.', [BF('stealth', 2, 'self'), D(1.5)]),
-        SK('Aether Rend', 'enemy', 'melee', 'dark', 4, 'Strike of 230%. +60% damage below 35% HP.', [D(2.3, { execute: [0.35, 0.6] })]),
+        SK('Aether Rend', 'enemy', 'melee', 'dark', 4, 'Strike of 230%. +60% damage below 35% HP. 50% chance of Defense Down for 2 turns.', [D(2.3, { execute: [0.35, 0.6] }), DB('defDown', 2, 0.5)]),
       ] },
     orvyn: { name: 'Orvyn', faction: 'Silvertongues', role: 'Ranger', rar: 2, aff: 'Storm',
       passive: 'overcharge', passiveName: 'Charged Arrows', passiveDesc: '+30% Crit Damage.',
