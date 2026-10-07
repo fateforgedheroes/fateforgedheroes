@@ -915,6 +915,8 @@ button, a, input { touch-action: manipulation; }
 .dpanel .inv { margin-top: 12px; }
 .gear-acts { display: flex; gap: 6px; flex-wrap: wrap; }
 .team-tag { display: inline-block; vertical-align: middle; background: var(--gold); color: #1a130a; font-family: var(--font-tag); font-size: 10px; letter-spacing: .06em; padding: 2px 6px; text-transform: uppercase; }
+/* a tag inside a heading must not take over the heading's text shadow (it would look written twice on the gold) */
+.team-tag, h1 .tag, h2 .tag, h3 .tag, h2 .lvbadge, .detail .d-head h2 > * { text-shadow: none; }
 
 /* phones: sticky compact header, app-style tab bar at the bottom, full-width battlefield */
 @media (max-width: 760px) {
