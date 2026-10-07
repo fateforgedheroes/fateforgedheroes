@@ -1082,10 +1082,16 @@
         <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
       </div>`;
   }
+  // what a skill level adds: the skill's damage, healing and shields are multiplied (not added to its %), shown with the
+  // skill's own first damage or heal number so "+8%" cannot be read as "90% becomes 98%"
+  function skillLvTxt(s, lv) {
+    const k = 1 + lv * K.SKILL_STEP, f = (s.fx || []).find(x => x.t === 'dmg' && x.m) || (s.fx || []).find(x => x.pct), v = f && (f.m || f.pct);
+    return `Skill level ${lv}: ×${k.toFixed(2)} damage, healing and shields` + (v ? ` (${Math.round(v * 100)}% → ${Math.round(v * k * 100)}%)` : '');
+  }
   // the skills of a hero (r: its roster entry, or null for a hero not unlocked yet: no skill levels)
   function skillsHtml(id, r) {
     const c = C[id], pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
-    return c.skills.map((s, i) => { const lv = r ? r.sk[i] || 0 : 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${r ? pips(lv) : ''}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">+${Math.round(lv * K.SKILL_STEP * 100)}% power${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
+    return c.skills.map((s, i) => { const lv = r ? r.sk[i] || 0 : 0; const cd = s.cd && lv >= K.SKILL_MAX ? s.cd - 1 : s.cd; return `<div class="skill"><b>${SKILL_TAG[i] || 'A' + (i + 1)} · ${esc(s.name)}</b>${r ? pips(lv) : ''}<span class="cd">${cd ? `cooldown ${cd}` : 'no cooldown'} · ${TARGET_LABEL[s.target]}</span><p>${esc(s.desc)}${lv ? ` <span style="color:var(--violet)">${skillLvTxt(s, lv)}${lv >= K.SKILL_MAX && s.cd ? ', cooldown −1' : ''}</span>` : ''}</p></div>`; }).join('')
       + (c.passive ? `<div class="skill passive"><b>Passive · ${esc(c.passiveName)}</b><p>${esc(c.passiveDesc)}</p></div>` : '');
   }
   // where a hero can be found: a campaign stage unlock (Easy) and/or the Fate Altar
@@ -2053,7 +2059,7 @@
         row('Ascend', 'Spend Ascension Stones and Sigils for an extra star: a higher level cap and +5% stats.'),
         row('Feeding', 'Feed a hero you don\'t use, or a spare copy, to another hero for XP. Rarer and higher-level food gives more.'),
         row('Spare copy / duplicate', 'Summoning a hero you already own gives a spare copy. Feed it to the same hero to level up a skill.'),
-        row('Skill level', `Each skill can be levelled ${K.SKILL_MAX} times: +${Math.round(K.SKILL_STEP * 100)}% power per level, and 1 turn less cooldown at the maximum.`),
+        row('Skill level', `Each skill can be levelled ${K.SKILL_MAX} times. Every level multiplies the skill's damage, healing and shields by another ${Math.round(K.SKILL_STEP * 100)}% of the base (level 1 ×${(1 + K.SKILL_STEP).toFixed(2)}, level ${K.SKILL_MAX} ×${(1 + K.SKILL_MAX * K.SKILL_STEP).toFixed(2)}): a 90% Attack hit becomes ${Math.round(90 * (1 + K.SKILL_STEP))}% at level 1 and ${Math.round(90 * (1 + K.SKILL_MAX * K.SKILL_STEP))}% at level ${K.SKILL_MAX}. At the maximum the cooldown is also 1 turn shorter.`),
         row('Captured', 'Enemies you capture in the campaign (5% per win) join as weak heroes or as fodder to feed.'),
         row('Team', 'Up to 4 heroes fight together. Pick them in Heroes & Gear → Team.'),
       ]),
@@ -2582,7 +2588,7 @@
       const i = K.skillUp(h, f); if (i < 0) return;
       track('feed');
       S.fodder[f]--; SFX.summon(3); save(); render();
-      toast(`${C[f].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}${h.sk[i] >= K.SKILL_MAX && C[f].skills[i].cd ? ' (cooldown −1)' : ''}.`);
+      toast(`${C[f].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}: ${skillLvTxt(C[f].skills[i], h.sk[i]).replace(/^Skill level \d+: /, '')}${h.sk[i] >= K.SKILL_MAX && C[f].skills[i].cd ? ', cooldown −1' : ''}.`);
     } else if (act === 'cfyes') { $('#modal').hidden = true; const f = confirmYes; confirmYes = null; if (f) f(); }
     else if (act === 'cfno') { $('#modal').hidden = true; confirmYes = null; }
     else if (act === 'breakdown') {
@@ -3085,7 +3091,7 @@
   let FADE = 0.8; // this frame's fade factor for hit flashes (frame())
   function setPose(u, pose, ms) { const now = performance.now(); Object.assign(u._rs, { pose, poseAt: now, poseUntil: now + ms / spd }); }
   // test hook (only with ?debug in the address): lets a test page play poses on the battle figures while the battle is paused
-  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter };
+  if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay };
   function frame(now) {
     if (!R.running) return;
     const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
@@ -3182,8 +3188,26 @@
   function fxBadge(k, n, title, extra) {
     const E0 = K.EFFECTS[k] || {}, arrow = /Up$/.test(k) ? '▲' : /Down$|^healRed$/.test(k) ? '▼' : '';
     const kind = k === 'enrage' ? 'rage' : E0.buff ? 'good' : 'bad';
-    return `<span class="fxi ${kind} fx-${k}" title="${esc(title || (E0.n ? `${E0.n}: ${E0.d}` : k))}">${fxSvg(k)}${arrow ? `<em>${arrow}</em>` : ''}${extra != null ? `<i>${extra}</i>` : n != null && n < 99 ? `<i>${n}</i>` : ''}</span>`;
+    const left = n != null && n < 99 ? ` · ${n} turn${n === 1 ? '' : 's'} left` : '';
+    return `<span class="fxi ${kind} fx-${k}" title="${esc((title || (E0.n ? `${E0.n}: ${E0.d}` : k)) + left)}">${fxSvg(k)}${arrow ? `<em>${arrow}</em>` : ''}${extra != null ? `<i>${extra}</i>` : n != null && n < 99 ? `<i>${n}</i>` : ''}</span>`;
   }
+
+  // a status badge says what it does on hover (title); phones have no hover, so a tap shows the same text in a bubble
+  // (the tap is caught before it reaches the unit underneath, so it does not pick a target)
+  document.addEventListener('click', e => {
+    let tip = $('#fx-tip');
+    const b = e.target.closest && e.target.closest('.fxi[title], .fxi[data-tip]');
+    if (!b) { if (tip) tip.hidden = true; return; }
+    e.stopPropagation(); e.preventDefault();
+    if (b.title) { b.dataset.tip = b.title; b.removeAttribute('title'); } // no second (native) tooltip on top of ours
+    if (!tip) { tip = document.createElement('div'); tip.id = 'fx-tip'; tip.setAttribute('role', 'tooltip'); document.body.appendChild(tip); }
+    if (!tip.hidden && tip.textContent === b.dataset.tip) { tip.hidden = true; return; }
+    tip.textContent = b.dataset.tip; tip.hidden = false;
+    const r = b.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2)) + 'px';
+    tip.style.top = (r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + 'px';
+    clearTimeout(tip._t); tip._t = setTimeout(() => (tip.hidden = true), 4000);
+  }, true);
 
   // ----- battle hooks -----
   const SELF_KINDS = ['heal', 'shield', 'buff', 'revive', 'dust'];
@@ -3941,6 +3965,8 @@
       set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); announceReset(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
+      flush: () => save(), // the save in local storage up to date (before switching accounts)
+      busy: () => !!B, // in a battle: no switching accounts
       // short description of any save (also an older version), for the "which save to keep" dialog
       summary: s => {
         const p = s.p || {}, heroes = Object.keys(s.roster || {}).filter(id => C[id]).length;
