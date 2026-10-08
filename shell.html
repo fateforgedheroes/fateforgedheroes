@@ -2391,6 +2391,30 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .top .wallet > .res::before, .top .wallet > .res::after, .top .wallet > .iconbtn::before, .top .wallet > .iconbtn::after { width: 5px; height: 5px; }
   .top .wallet > .res::before, .top .wallet > .iconbtn::before { left: -4px; } .top .wallet > .res::after, .top .wallet > .iconbtn::after { right: -4px; }
 }
+/* global leaderboards (Town Hall tab): the boss or tower picker */
+.lbg .th-head { align-items: center; }
+.lb-pick { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font: 700 .8rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; color: var(--gold); }
+.lb-pick select { flex: 1; max-width: 320px; min-height: 36px; padding: 0 8px; background: var(--panel-2); color: var(--fg); border: 1px solid var(--gold-dim); border-radius: 6px; font: inherit; text-transform: none; letter-spacing: 0; font-family: var(--font-body); font-size: .95rem; }
+/* Auto ×10: which battle of the run this is, over the top left of the battlefield */
+.b-rep { position: absolute; top: 8px; left: 8px; z-index: 6; padding: 3px 10px; border-radius: 999px; background: rgba(10, 7, 12, .85); border: 1px solid var(--gold); color: #f3e3bd; font: 700 .78rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; pointer-events: none; box-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
+.b-rep b { color: #ffe08a; font-size: 1rem; }
+/* ===== gear upgrade burst (app.js upgFx): a gold ring, rays and the new level on a success, a red ring, a crack and
+   "Failed" on a failure, where the upgrade button was ===== */
+.upfx { position: fixed; z-index: 300; width: 0; height: 0; pointer-events: none; }
+.upfx-ring { position: absolute; left: -40px; top: -40px; width: 80px; height: 80px; border-radius: 50%; border: 3px solid; animation: upring .7s ease-out forwards; }
+.upfx.ok .upfx-ring { border-color: #ffd76a; box-shadow: 0 0 24px #ffcf5a, inset 0 0 18px #ffcf5a; }
+.upfx.no .upfx-ring { border-color: #ff4a2a; box-shadow: 0 0 20px #ff4a2a; }
+.upfx-ray { position: absolute; left: -2px; top: -2px; width: 4px; height: 30px; border-radius: 2px; background: linear-gradient(#fff6c8, rgba(255, 200, 80, 0)); transform-origin: 2px 2px; animation: upray .75s ease-out forwards; }
+.upfx-crack { position: absolute; left: -22px; top: -22px; width: 44px; height: 44px; animation: upcrack .9s ease-out forwards;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Cpath d='M22 2 18 14l8 6-10 10 8 4-4 8M18 14 9 17M26 20l9-3M16 30l-7 4' fill='none' stroke='%23ff5a3a' stroke-width='3' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; filter: drop-shadow(0 0 6px #ff4a2a); }
+.upfx b { position: absolute; left: 0; top: -16px; white-space: nowrap; font: 700 1.7rem/1 var(--font-display); text-shadow: 0 2px 4px #000, 0 0 12px currentColor; animation: uptext 1.15s ease-out forwards; }
+.upfx.ok b { color: #ffe08a; }
+.upfx.no b { color: #ff6a50; }
+@keyframes upring { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+@keyframes upray { from { transform: rotate(var(--a)) translateY(6px) scaleY(.3); opacity: 1; } to { transform: rotate(var(--a)) translateY(48px) scaleY(1); opacity: 0; } }
+@keyframes upcrack { 0% { transform: scale(.5); opacity: 0; } 15% { transform: scale(1.1) rotate(-6deg); opacity: 1; } 30% { transform: scale(1) rotate(5deg); } 45% { transform: rotate(-3deg); } 70% { opacity: 1; } 100% { transform: rotate(0); opacity: 0; } }
+@keyframes uptext { 0% { transform: translate(-50%, 6px) scale(.6); opacity: 0; } 20% { transform: translate(-50%, -6px) scale(1.15); opacity: 1; } 70% { opacity: 1; } 100% { transform: translate(-50%, -40px) scale(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .upfx-ring, .upfx-ray, .upfx-crack { animation-duration: .01s; } }
 </style>
 
 <div id="app">
@@ -2422,7 +2446,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   <section id="battle" hidden>
     <div class="b-top"><h2 id="b-title">Stage 1</h2><span id="b-round">Turn 1</span></div>
     <div class="order" id="order" aria-label="Turn order"></div>
-    <div class="stage-wrap"><canvas id="bc" width="480" height="270"></canvas><div id="ov"></div><div id="flash"></div><div id="banner" hidden></div><div id="coach-pop" class="coach-pop" hidden></div>
+    <div class="stage-wrap"><canvas id="bc" width="480" height="270"></canvas><span id="b-rep" class="b-rep" hidden></span><div id="ov"></div><div id="flash"></div><div id="banner" hidden></div><div id="coach-pop" class="coach-pop" hidden></div>
       <div class="b-ctl">
         <button class="rb" id="b-help" type="button" aria-label="Guide (pauses the battle)" title="Guide (pauses the battle)"><b style="font-size:15px">?</b></button>
         <button class="rb" id="b-auto" type="button" aria-label="Auto battle" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 1.6l3.9.4-.9 3.8z" fill="currentColor"/><path d="M6.4 11 8 5.2 9.6 11M6.9 9.3h2.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>

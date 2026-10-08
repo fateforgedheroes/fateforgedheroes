@@ -1093,7 +1093,9 @@ const K = (function () {
   // +16 like RAID: a substat added or boosted at +4, +8, +12 and +16; the main stat grows 4.5% per level, so +16 is what +12 was
   const MAX_GEAR_LVL = 16;
   const upgradeCost = it => Math.round(40 * (it.lvl + 1) * (it.rar + 1) * (1 + it.il / 10));
-  const upgradeChance = it => Math.max(0.15, 1 - it.lvl * 0.06);
+  // chance per try by the current level: low levels almost always succeed, the last steps to +16 are a real gamble
+  const UPG_CHANCE = [1, 0.95, 0.9, 0.85, 0.8, 0.72, 0.65, 0.58, 0.5, 0.44, 0.38, 0.32, 0.26, 0.2, 0.16, 0.12];
+  const upgradeChance = it => UPG_CHANCE[Math.max(0, Math.min(UPG_CHANCE.length - 1, it.lvl | 0))];
   const fmtStat = (k, v) => `${STAT_NAMES[k]} +${v}${PCT_STATS.includes(k) ? '%' : ''}`;
   function upgradeMilestone(it) {
     if (it.lvl % 4 !== 0) return null;

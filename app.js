@@ -542,6 +542,24 @@
     const w = k => b ? (a[k] || 0) * 0.75 + (b[k] || 0) * 0.25 : a[k] || 0;
     return w(it.main) * 2 + it.subs.reduce((s, x) => s + w(x[0]) * 0.5, 0) + it.rar * 0.1;
   }
+  // one upgrade try on a piece of gear, with a burst where its button was (upgFx): gold rays and the new level on a
+  // success, a red crack and "Failed" on a failure
+  function tryUpgrade(item, btn) {
+    const cost = K.upgradeCost(item);
+    if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return false;
+    const r = btn && btn.getBoundingClientRect();
+    S.silver -= cost; track('upg');
+    if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); upgFx(r, true, `+${item.lvl}`); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
+    else { SFX.fail(); upgFx(r, false, 'Failed'); toast('Failed. The Sigils are spent, the item stays intact.', true); }
+    return true;
+  }
+  function upgFx(r, ok, text) {
+    if (!r || !r.width) r = { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
+    const el = document.createElement('div'); el.className = 'upfx ' + (ok ? 'ok' : 'no'); el.setAttribute('aria-hidden', 'true');
+    el.style.left = (r.left + r.width / 2) + 'px'; el.style.top = (r.top + r.height / 2) + 'px';
+    el.innerHTML = `<i class="upfx-ring"></i>${ok ? Array.from({ length: 12 }, (_, k) => `<i class="upfx-ray" style="--a:${k * 30}deg"></i>`).join('') : '<i class="upfx-crack"></i>'}<b>${esc(text)}</b>`;
+    document.body.appendChild(el); setTimeout(() => el.remove(), 1200);
+  }
   // upgrades the hero's gear, most important item first, each as far as it goes, until the Sigils run out
   function upgradeAll(heroId) {
     const list = itemsOf(heroId).sort((x, y) => gearPri(heroId, y) - gearPri(heroId, x));
@@ -719,7 +737,7 @@
     }
   }
   function renderScreen() {
-    if (!B) MUSIC.play('home');
+    if (!B) MUSIC.play(tab === 'kerkers' ? 'boss' : 'home'); // the Boss Hall keeps the boss track from its screen through every fight
     hud();
     const el = $('#screen');
     if (noHero()) { el.innerHTML = createHtml(); return; }
@@ -729,7 +747,7 @@
       const on = tourOn() && el.querySelector('.hb.tour-on'), card = el.querySelector('.tour-card');
       if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
-      if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
+      if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : champsHtml()}</div></div>`;
@@ -1145,6 +1163,17 @@
   }
   // a small popup asking for a team name (Create a team / Rename); onOk(name) with the trimmed name
   let nameOk = null;
+  // every player picks a name of their own once (the default "Adventurer" is not one): asked on Home after the first
+  // battle, and the popup has no way out but saving a name (the first name is free)
+  const needName = () => !noHero() && !firstSteps() && S.p.name === 'Adventurer' && !S.p.renames;
+  function showNameBox() {
+    const m = $('#modal'); if (!m.hidden || !needName()) return;
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pn-t"><h2 id="pn-t">Choose your player name</h2>
+      <form data-form="pname" class="nb-form"><label class="empty-note" for="pn-in">Other players see it in the arena, on the leaderboards, in your guild and in their friend lists. 2 to 20 characters; changing it later costs ${RENAME_COST.toLocaleString('en-US')} Sigils.</label>
+      <input id="pn-in" name="pname" maxlength="20" required autocomplete="nickname" placeholder="Your name">
+      <div class="modal-actions"><button class="btn primary" type="submit">Save name</button></div></form></div>`;
+    m.hidden = false; m.querySelector('input').focus();
+  }
   function nameBox(title, value, ok, onOk) {
     nameOk = onOk;
     const m = $('#modal');
@@ -1918,11 +1947,45 @@
     }).join('');
     return `<section class="th-sec"><div class="th-head"><h3>Achievements</h3><small class="empty-note">${have} / ${total} tiers</small></div>${thBar(have, total)}<ul class="th-achs">${cards}</ul></section>`;
   }
+  // ----- global leaderboards (Town Hall tab): campaign, Boss Hall (all bosses or one), arena, Tower of Essence (all
+  // towers or one). The rows come from the `leaderboard` database function (0003 + 0010); the arena list adds the bots.
+  const LB = { kind: 'campaign', rows: null, err: '', loading: '' };
+  async function lbLoad(kind) {
+    const cl = cloud();
+    LB.kind = kind; LB.rows = null; LB.err = '';
+    if (!cl || !cl.signedIn()) return;
+    LB.loading = kind; if (tab === 'profiel' && !B) render();
+    let rows = null;
+    try { rows = await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
+    if (LB.kind !== kind) return;
+    LB.rows = rows || []; LB.loading = '';
+    if (tab === 'profiel' && TH.tab === 'leaders' && !B) render();
+  }
+  function leadersHtml() {
+    const cl = cloud();
+    if (!cl || !cl.enabled) return '<section class="th-sec"><p class="empty-note">Leaderboards need the online version of the game.</p></section>';
+    if (!cl.signedIn()) return `<section class="th-sec"><div class="lockbox">${LOCK_SVG}<div><h3>Sign in to see the leaderboards</h3><p class="empty-note">Rankings are read from the accounts of signed-in players.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div></section>`;
+    if (!LB.rows && !LB.err && LB.loading !== LB.kind) lbLoad(LB.kind);
+    const main = LB.kind.split(':')[0], sub = LB.kind.split(':')[1] || '';
+    const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence']];
+    const seg = `<div class="seg" role="group" aria-label="Leaderboard">${groups.map(([k, l]) => `<button type="button" data-act="lbkind" data-kind="${k}" aria-pressed="${main === k || (k === 'bosses' && main === 'boss')}">${l}</button>`).join('')}</div>`;
+    // Boss Hall and the towers: everything together, or one boss / one tower
+    const pick = main === 'bosses' || main === 'boss' ? `<label class="lb-pick">Boss <select id="lb-sub" data-base="boss" data-all="bosses"><option value="">All bosses (total levels)</option>${K.BOSS_ORDER.map(id => `<option value="${id}" ${sub === id ? 'selected' : ''}>${esc(K.BOSSES[id].name)}</option>`).join('')}</select></label>`
+      : main === 'tower' ? `<label class="lb-pick">Tower <select id="lb-sub" data-base="tower" data-all="tower"><option value="">All towers (total floors)</option>${K.TOWERS.map(e => `<option value="${e}" ${sub === e ? 'selected' : ''}>${twName(e)}</option>`).join('')}</select></label>` : '';
+    const fmt = r => main === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : main === 'campaign' ? campaignText(r)
+      : main === 'bosses' ? `${r.score} boss levels${r.detail && r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}` : main === 'boss' ? `Level ${r.score} / ${K.BOSS_LEVELS}`
+      : sub ? `Floor ${r.score} / ${K.TOWER.floors}` : `${r.score.toLocaleString('en-US')} floors${r.detail && r.detail.best ? ` · best ${r.detail.best}` : ''}`;
+    const list = LB.rows && main === 'arena' ? LB.rows.concat(boardBots()).sort((a, b) => b.score - a.score) : LB.rows;
+    const rows = list ? list.map(r => `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = main === 'arena' ? 'Ratings from fights the server played; arena bots have no rank.' : 'Top 100 of every player with an account, plus your own place.';
+    return `<section class="th-sec lbg"><div class="th-head"><h3>Leaderboards</h3>${seg}</div>${pick}<p class="empty-note">${note}</p>
+      ${LB.err ? `<p class="ar-err">${esc(LB.err)}</p>` : !LB.rows ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
+  }
   function townHallHtml() {
     const c = thClaims(), dot = n => (n ? `<span class="dot" aria-label="${n} to claim"></span>` : '');
-    const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements]];
+    const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements], ['leaders', 'Leaderboards', 0]];
     const bar = `<div class="dtabs th-tabs" role="tablist" aria-label="Town Hall">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-act="thtab" data-t="${k}" aria-selected="${TH.tab === k}">${l}${dot(n)}</button>`).join('')}</div>`;
-    return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : profileHtml());
+    return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : TH.tab === 'leaders' ? leadersHtml() : profileHtml());
   }
 
   // ================= GEMS AND THE MARKET =================
@@ -2304,6 +2367,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'inv-set') { invSet = e.target.value; render(); const p = document.getElementById('invpanel'); if (p) p.scrollIntoView({ block: 'nearest' }); return; }
     if (e.target.id === 'cp-diff') { S.diff = +e.target.value; delete S.chap; campSel = null; save(); render(); return; }
+    if (e.target.id === 'lb-sub') { const t = e.target; lbLoad(t.value ? `${t.dataset.base}:${t.value}` : t.dataset.all); return; }
     if (e.target.id === 'bh-team') { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
@@ -2341,11 +2405,14 @@
     e.preventDefault();
     const name = f.pname.value.replace(/[<>"&\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
     if (name.length < 2) { toast('Pick a name of at least 2 characters.', true); return; }
+    const forced = !!f.closest('#modal');
+    if (forced && name.toLowerCase() === 'adventurer') { toast('Pick a name of your own.', true); return; }
     if (name === S.p.name) { editName = false; render(); return; }
     const cost = renameCost();
     if (S.silver < cost) { toast(`Changing your name costs ${cost.toLocaleString('en-US')} Sigils.`, true); return; }
     S.silver -= cost; S.p.renames++;
-    S.p.name = name; editName = false; save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} Sigils.` : 'Name saved.');
+    S.p.name = name; editName = false; if (forced) $('#modal').hidden = true;
+    save(); render(); toast(cost ? `Name saved. −${cost.toLocaleString('en-US')} Sigils.` : forced ? `Welcome, ${name}!` : 'Name saved.');
   });
   document.addEventListener('click', e => {
     SFX.unlock(); MUSIC.unlock();
@@ -2385,6 +2452,7 @@
     else if (act === 'arclaim') claimArena().then(socialLoad);
     else if (act === 'hptab') { const box = a.closest('.modal-box'); box.querySelectorAll('[data-act=hptab]').forEach(b => b.setAttribute('aria-selected', b === a ? 'true' : 'false')); box.querySelectorAll('.hp-sec').forEach(s => { s.hidden = s.dataset.sec !== a.dataset.t; }); }
     else if (act === 'thtab') { TH.tab = a.dataset.t; editName = false; render(); }
+    else if (act === 'lbkind') lbLoad(a.dataset.kind);
     else if (act === 'thclaim') thClaim(a);
     else if (act === 'mkbuy') mkBuy(a.dataset.id);
     else if (act === 'soctab') { SO.tab = a.dataset.t; if (SO.tab === 'guild') { GD.view = 'home'; guildLoad(); } render(); }
@@ -2518,11 +2586,8 @@
     else if (act === 'rselmode') { RSUM.selecting = !RSUM.selecting; RSUM.sel.clear(); RSUM.arm = null; repRefresh(); }
     else if (act === 'rselall') { RSUM.arm = null; if (lastRep) lastRep.sum.items.map(i => S.inv.find(x => x.id === i)).filter(it => it && sellable(it)).forEach(it => RSUM.sel.add(it.id)); repRefresh(); }
     else if (act === 'rupg' && item) {
-      const cost = K.upgradeCost(item); RSUM.arm = null;
-      if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return;
-      S.silver -= cost; track('upg');
-      if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
-      else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
+      RSUM.arm = null;
+      if (!tryUpgrade(item, a)) return;
       save(); repRefresh();
     }
     else if (act === 'rlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; RSUM.arm = null; save(); repRefresh(); }
@@ -2561,12 +2626,7 @@
       if (!bad.length) { toast('No spare common or uncommon gear to sell.'); return; }
       const v = bad.reduce((s, x) => s + K.sellValue(x), 0); S.silver += v; S.inv = S.inv.filter(x => !bad.includes(x)); save(); render(); toast(`Sold ${bad.length} items for ${v} Sigils.`);
     } else if (act === 'up' && item) {
-      const cost = K.upgradeCost(item);
-      if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return;
-      S.silver -= cost;
-      track('upg');
-      if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
-      else { SFX.fail(); toast('Failed. The Sigils are spent, the item stays intact.', true); }
+      if (!tryUpgrade(item, a)) return;
       save(); render();
       if (a.dataset.pop) gearPop(item.slot);
     } else if (act === 'gearpop') gearPop(a.dataset.slot);
@@ -2579,7 +2639,7 @@
         const r = upgradeAll(h);
         $('#modal').hidden = true;
         if (!r.ok && !r.fail) { toast('Not enough Sigils for any upgrade.', true); return; }
-        (r.ok ? SFX.up : SFX.fail)(); save(); render();
+        (r.ok ? SFX.up : SFX.fail)(); upgFx(null, r.ok > 0, r.ok ? `+${r.ok}` : 'Failed'); save(); render();
         toast(`${r.ok} ${r.ok === 1 ? 'upgrade' : 'upgrades'} succeeded, ${r.fail} failed · −${r.spent.toLocaleString('en-US')} Sigils.`, !r.ok, 3600);
       });
     } else if (act === 'bestgear') {
@@ -3330,7 +3390,9 @@
       refreshChoice(); coachTurn(u, b);
     }),
     // manual arena fights: every hero action goes to the server at the end (K.arenaReplay)
-    record: (u, act, auto) => { if (B && B.moves && B.cfg.type === 'arena') B.moves.push([...K.arenaMove(u, act), auto ? 1 : 0]); },
+    // an auto move aimed at the focus is sent as a plain move (skill and target), so the server replays exactly that
+    // (the AI took the focus without drawing a random number, so the replay stays in step)
+    record: (u, act, auto) => { if (B && B.moves && B.cfg.type === 'arena') B.moves.push([...K.arenaMove(u, act), auto && !(B.b.focus && act.target === B.b.focus) ? 1 : 0]); },
     turnStart: async u => { await bannerQ; R.active = u; renderBar(u); updateOverlay(); await sleep(u.side === 'enemy' ? 300 : 110); },
     before: animBefore,
     after: animAfter,
@@ -3451,8 +3513,8 @@
     updateOverlay();
     res({ skill: s, target });
   }
-  // on auto (not in the arena, whose fights are replays) tapping an enemy makes it every hero's focus; tap it again to clear
-  const canFocus = () => B && B.b.auto && B.cfg.type !== 'arena' && B.cfg.type !== 'gboss';
+  // on auto tapping an enemy makes it every hero's focus; tap it again to clear (not against the guild boss: one target)
+  const canFocus = () => B && B.b.auto && B.cfg.type !== 'gboss' && !(B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual));
   function clickUnit(u) {
     if (!pending && canFocus() && u.side === 'enemy' && u.alive) {
       const b = B.b; b.focus = b.focus === u ? null : u; SFX.click();
@@ -3575,6 +3637,9 @@
     cvs.width = VIEW.w * RS; cvs.height = H * RS; g.imageSmoothingEnabled = false;
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
+    // Auto ×10 runs may go 8× (only those), and show which battle of the run this is
+    if (cfg.rep) speeds = [...speeds, 8];
+    $('#b-rep').hidden = !cfg.rep; if (cfg.rep) $('#b-rep').innerHTML = `Auto <b>${cfg.rep.k}</b> / ${cfg.rep.n}`;
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
