@@ -16,7 +16,7 @@ const find = name => {
 };
 const read = name => { const p = find(name); return p ? readFileSync(p, 'utf8') : ''; };
 
-const assets = ['shards', 'logo', 'stone', 'sigil', 'home', 'gear', 'manga', 'chbg', 'sheets'].map(n => read(n + '.js')).join('\n');
+const assets = ['shards', 'logo', 'stone', 'sigil', 'menu', 'bg', 'gear', 'manga', 'chbg', 'sheets'].map(n => read(n + '.js')).join('\n');
 const shellSrc = read('shell.html'), engine = read('engine.js'), bgs = read('bgs.js'), sprites = read('sprites.js'), cloud = read('cloud.js'), app = read('app.js');
 if (missing.length) {
   console.error(`\nMissing files: ${missing.join(', ')}\nUpload them to the GitHub repository (in src/ or in the root).\n`);
@@ -31,7 +31,7 @@ const shell = shellSrc
   .replace('/*APP*/', () => `window.FFH_CONFIG = ${JSON.stringify(config)};\n` + cloud + '\n' + app);
 
 const head = `<!doctype html>
-<html lang="en">
+<html lang="en" style="background:#110e13">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -41,7 +41,7 @@ const head = `<!doctype html>
 <meta property="og:description" content="Turn-based fantasy RPG in your browser.">
 <link rel="icon" href="/favicon.png">
 </head>
-<body style="margin:0;background:#110e13">
+<body style="margin:0">
 `;
 const out = new URL('./dist/', import.meta.url);
 mkdirSync(out, { recursive: true });

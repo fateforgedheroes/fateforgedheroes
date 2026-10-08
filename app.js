@@ -25,6 +25,9 @@
   const CHAPTER_BG_OF = [0, 6, 3, 2, 5, 8, 1, 7, 4, 0];
   const chapterBg = c => 'c' + CHAPTER_BG_OF[Math.max(0, Math.min(CHAPTER_BG_OF.length - 1, c))];
 
+  // the painted page background behind every screen (shell.html body::before)
+  if (typeof PAGE_BG !== 'undefined') document.documentElement.style.setProperty('--page-bg', `url(${PAGE_BG})`);
+
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
   const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, tower: { ch: 2 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
@@ -104,6 +107,7 @@
     for (const id in s.roster) { const c = K.CHAMPS[id], h = s.roster[id]; if (c && Array.isArray(h.sk)) while (h.sk.length < c.skills.length) h.sk.push(0); } if (s.p.lvl > PLAYER_MAX) { s.p.lvl = PLAYER_MAX; s.p.xp = 0; } s.tw = s.tw || { prog: {}, team: {}, cur: 'Ember' };
     if (s.p.renames == null) s.p.renames = s.p.name !== 'Adventurer' ? 1 : 0; s.fodder = s.fodder || {};
     if (s.music == null) s.music = true; // background music (MUSIC), on by default
+    s.chr = s.chr || {}; // chapter reward chests claimed: { difficulty: [chapters] }
     // the starter hero (default portrait); older saves did not store it, so take the starter that is in the roster
     if (!s.starter && !s.needStarter) s.starter = ['thalnir', 'krothar', 'zephara', 'ithyra', 'drakulen', ...K.STARTERS].find(id => s.roster[id]) || null;
     // the homebase tour (TOUR) is for new players; anyone past the first stage has found their way already
@@ -590,7 +594,7 @@
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
     b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
     b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
-    if (tab === 'profiel' && TH.tab === 'profile' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = backBar() + townHallHtml();
+    if (tab === 'profiel' && TH.tab === 'profile' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${townHallHtml()}</div></div>`;
   }
   function lockedHtml(t, lede) {
     const u = UNLOCKS[t], prog = u.lvl ? levelProgress(u.lvl) : Math.min(1, (S.cleared + 1) / (u.ch * 7));
@@ -609,51 +613,24 @@
 
   // ---------- tabs ----------
   let tab = 'home', selChamp = 'draelyn', invSlot = null, invSet = 'all', champTab = 'stats';
-
-  // ----- Home: the homebase map is the main menu. Boxes are image pixels of HOME_ART (1536x1024): the building and
-  // its name plate. Zones without `go` are "Coming soon": their names are covered, so the buildings can become any mode later.
-  const HOME_W_L = 1536, HOME_H_L = 1024;
-  // building box and name plate (PLATE_ART[art], drawn at `plate`) in image pixels; the plate is centred under its building
-  const HZP = (cx, cy) => [cx - 128, cy - 41, 256, 82];
-  const HOME_ZONES_L = [
-    { go: 'kerkers', art: 'kerkers', label: 'Boss Hall', box: [10, 0, 460, 300], plate: HZP(235, 285) },
-    { go: 'arena', art: 'arena', label: 'Arena', box: [500, 110, 330, 215], plate: HZP(665, 330) },
-    { go: 'profiel', art: 'profiel', label: 'Town Hall: profile, quests and rewards', box: [820, 0, 350, 290], plate: HZP(995, 290) },
-    { go: 'altaar', art: 'altaar', label: 'Fate Altar', box: [1190, 0, 346, 330], plate: HZP(1365, 330) },
-    { go: 'team', art: 'team', label: 'Heroes & Gear', box: [60, 300, 380, 250], plate: HZP(235, 560) },
-    { go: 'social', art: 'social', label: 'Social: friends and guild', box: [900, 380, 340, 180], plate: HZP(1070, 565) },
-    { go: 'guild', art: 'guild', label: 'Guild Hall: your guild and the guild boss', box: [1290, 380, 246, 210], plate: HZP(1410, 585) },
-    { go: 'expedition', art: 'expedition', label: 'Expeditions: send heroes on a voyage', box: [0, 600, 400, 330], plate: HZP(200, 960) },
-    { go: 'market', art: 'market', label: 'Market: spend Crystals', box: [390, 580, 330, 270], plate: HZP(555, 875) },
-    { go: 'campagne', art: 'campagne', label: 'Campaign', box: [860, 620, 340, 250], plate: HZP(1035, 890) },
-    { go: 'tower', art: 'tower', label: 'Tower of Essence', box: [1250, 600, 286, 330], plate: HZP(1395, 965) },
+  // ----- Home: the main menu, every building as a banner under the other (menu.js MENU_ART: frame, icon and scene
+  // per building) with its name and how it stands (the next stage, rewards to claim, the ship is back, or what opens it).
+  const HOME_LIST = [
+    { go: 'profiel', label: 'Town Hall' }, { go: 'guild', label: 'Guild Hall' }, { go: 'campagne', label: 'Campaign' },
+    { go: 'kerkers', label: 'Boss Hall' }, { go: 'tower', label: 'Tower of Essence' }, { go: 'arena', label: 'Arena' },
+    { go: 'team', label: 'Heroes & Gear' }, { go: 'altaar', label: 'Fate Altar' }, { go: 'social', label: 'Social' },
+    { go: 'market', label: 'Market' }, { go: 'expedition', label: 'Expeditions' },
   ];
-  let homeScroll = null;
-  // First steps: a new player (starter picked, no campaign battle yet) sees only the Campaign lit up on the homebase;
+  // First steps: a new player (own hero made, no campaign battle yet) can only press the Campaign ("Start here");
   // every other building (and the profile) opens after the first campaign battle, won or lost.
   const firstSteps = () => !noHero() && S.cleared < 0 && !(S.p.st.won + S.p.st.lost);
-  const CAMP_AT_L = [1035, 745, 575]; // centre of the Campaign building in image pixels, and where the "Start here" marker points from
-  // Phones held upright get the 9:16 map (HOME_ART_P, 941x1672): every building fits on the screen, no sideways scrolling.
-  // Same zones in the same order (the tour uses zone 8), with their own boxes and larger plates (the map is drawn much narrower).
-  const HZPP = (cx, cy) => [cx - 170, cy - 54, 340, 108];
-  const P_BOXES = { kerkers: [[30, 20, 360, 330], HZPP(210, 340)], arena: [[570, 120, 360, 230], HZPP(760, 355)], profiel: [[290, 220, 390, 250], HZPP(485, 470)], altaar: [[650, 420, 291, 270], HZPP(765, 700)],
-    team: [[0, 410, 350, 250], HZPP(180, 655)], social: [[20, 800, 380, 250], HZPP(210, 1055)], guild: [[600, 800, 341, 220], HZPP(765, 1035)], expedition: [[0, 1310, 470, 300], HZPP(240, 1590)],
-    market: [[20, 1070, 380, 210], HZPP(210, 1285)], campagne: [[420, 1020, 300, 280], HZPP(570, 1315)], tower: [[720, 1095, 221, 375], HZPP(765, 1480)] };
-  const HOME_ZONES_P = HOME_ZONES_L.map(z => ({ ...z, box: P_BOXES[z.art][0], plate: P_BOXES[z.art][1] }));
-  const CAMP_AT_P = [570, 1160, 1030];
-  const PORT_MQ = matchMedia('(max-width: 760px) and (orientation: portrait)');
-  const homePort = () => typeof HOME_ART_P !== 'undefined' && PORT_MQ.matches;
-  let HOME_W = HOME_W_L, HOME_H = HOME_H_L, HOME_ZONES = HOME_ZONES_L, CAMP_AT = CAMP_AT_L;
-  function homeLayout() { const p = homePort(); HOME_W = p ? 941 : HOME_W_L; HOME_H = p ? 1672 : HOME_H_L; HOME_ZONES = p ? HOME_ZONES_P : HOME_ZONES_L; CAMP_AT = p ? CAMP_AT_P : CAMP_AT_L; return p; }
-  // turning the phone switches maps
-  PORT_MQ.addEventListener('change', () => { if (tab === 'home' && !B && S && !noHero()) { homeScroll = null; render(); } });
   // Homebase tour: once the homebase opens (after the first battle) a short tour shows every building, one at a time
-  // (shade, spotlight and a card with Next). The last step leads back to the campaign, where the Fight button is
-  // spotlighted (spotFight). S.seen.tour = done or skipped.
+  // (its button lit, the others dimmed, and a card with Next). The last step leads back to the campaign, where the
+  // Fight button is spotlighted (spotFight). S.seen.tour = done or skipped.
   const TOUR = [
     { go: 'team', title: 'Heroes & Gear', text: 'Your heroes. Level them up, equip and upgrade the gear you win, feed spare heroes for XP and ascend them for higher level caps. Build up to seven teams of four here, one for each game mode.' },
-    { go: 'altaar', title: 'Summon Altar', text: 'The Fate Altar: summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
-    { go: 'kerkers', title: 'Boss Halls', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
+    { go: 'altaar', title: 'Fate Altar', text: 'Summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
+    { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
     { go: 'profiel', title: 'Town Hall', text: 'Daily quests, missions, your collection and achievements, full of Energy and Fate Shards. Also your profile: name, avatar, settings, account and save backups. The Guide (the ? in the top bar, or the ☰ menu on a phone) explains every term.' },
     { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
@@ -661,50 +638,60 @@
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
     { go: 'market', title: 'Market', text: 'Spend Crystals on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Crystals from level-ups, quest chests, missions and achievements.' },
-    { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Halls. On to the next stage!' },
+    { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Hall. On to the next stage!' },
   ];
   let tourStep = 0, spotFight = false;
   const tourOn = () => tab === 'home' && !noHero() && !firstSteps() && S.seen.home && !S.seen.tour;
-  const tourZone = st => (st.go ? HOME_ZONES.find(z => z.go === st.go) : HOME_ZONES[st.zone]);
-  const zoneCentre = z => [z.box[0] + z.box[2] / 2, z.box[1] + z.box[3] / 2];
   function tourCard() {
     const st = TOUR[tourStep], last = tourStep === TOUR.length - 1;
-    const status = !st.go || st.go === 'campagne' ? '' : unlocked(st.go) ? '<span class="tc-open">Open now</span>' : `<span class="tc-lock">${LOCK_SVG} Opens after ${needTxt(st.go)}</span>`;
-    const up = zoneCentre(tourZone(st))[1] > HOME_H * 0.5; // a building in the lower half: the card moves to the top so it never hides it
-    return `<div class="tour-card ${up ? 'up' : ''}" role="dialog" aria-label="Homebase tour"><span class="tag">Homebase tour · ${tourStep + 1} / ${TOUR.length}</span><h3>${esc(st.title)}</h3><p>${esc(st.text)}</p>${status}
+    const status = st.go === 'campagne' ? '' : unlocked(st.go) ? '<span class="tc-open">Open now</span>' : `<span class="tc-lock">${LOCK_SVG} Opens after ${needTxt(st.go)}</span>`;
+    return `<div class="tour-card" role="dialog" aria-label="Homebase tour"><span class="tag">Homebase tour · ${tourStep + 1} / ${TOUR.length}</span><h3>${esc(st.title)}</h3><p>${esc(st.text)}</p>${status}
       <div class="tc-acts">${last ? '' : '<button class="btn small" type="button" data-act="tourskip">Skip tour</button>'}<button class="btn primary" type="button" data-act="tournext">${last ? 'Continue the campaign' : 'Next ›'}</button></div></div>`;
   }
   // a new player's campaign: the Fight button is the only thing to press (before the first battle and after the tour)
   const fightSpot = () => tab === 'campagne' && !(S.diff) && (firstSteps() || spotFight);
+  // a building's state in one short line
+  function homeStatus(go) {
+    if (go === 'campagne') {
+      const d = S.diff || 0, i = clearedOn(d) + 1;
+      if (i >= K.STAGES.length) return `${K.DIFFS[d].name}: every stage cleared`;
+      const st = K.STAGES[i]; return `Next: ${K.DIFFS[d].name} · Chapter ${ROMAN[st.chapter]} · Stage ${st.n + 1}`;
+    }
+    if (go === 'kerkers') return `${K.BOSS_ORDER.filter(id => (S.bh[id] || 0) >= 1).length} / ${K.BOSS_ORDER.length} bosses beaten`;
+    if (go === 'tower') { const best = Math.max(0, ...Object.values(S.tw.prog)); return best ? `Highest floor ${best}` : 'Not climbed yet'; }
+    if (go === 'expedition') return !S.exp ? 'The ship is ready to sail' : expDone() ? 'The ship is back: collect the rewards' : `At sea · back in ${fmtMins(Math.max(1, Math.ceil((S.exp.end - Date.now()) / 60000)))}`;
+    if (go === 'team') return `${Object.keys(S.roster).length} heroes · team power ${teamPower().toLocaleString('en-US')}`;
+    if (go === 'altaar') { const n = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0); return n ? `${n} Fate ${n === 1 ? 'Shard' : 'Shards'} to summon with` : 'No Fate Shards yet'; }
+    if (go === 'arena') return signedIn() ? 'Attack and climb the ranking' : 'Needs a free account';
+    if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : 'Friends and mail'; }
+    if (go === 'guild') return signedIn() ? 'Guild boss and Guild Chest' : 'Needs a free account';
+    if (go === 'profiel') { const n = thClaimN(); return n ? `${n} ${n === 1 ? 'reward' : 'rewards'} to claim` : `Player level ${S.p.lvl}`; }
+    if (go === 'market') return `${(S.gems || 0).toLocaleString('en-US')} Crystals`;
+    return '';
+  }
   function homeHtml() {
-    const port = homeLayout();
-    const pc = (v, d) => (v / d * 100).toFixed(3) + '%';
-    const at = ([x, y, w, h]) => `left:${pc(x, HOME_W)};top:${pc(y, HOME_H)};width:${pc(w, HOME_W)};height:${pc(h, HOME_H)}`;
-    const shardsReady = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
-    const tut = firstSteps();
-    const tour = tourOn() ? TOUR[tourStep] : null, tc = tour && zoneCentre(tourZone(tour));
-    // every building has its painted name plate (PLATE_ART); a building that is not open yet gets a "Coming soon" tag on it
-    const namePlate = z => `<img class="hz-plate-img ${z.go ? '' : 'soon'}" style="${at(z.plate)}" src="${PLATE_ART[z.art]}" alt="">`;
-    const zones = HOME_ZONES.map(z => {
-      // two buttons: one on the building, one on its plate (a single box around both overlapped the next building)
-      const [px, py, pw] = z.plate;
-      const two = (cls, attrs) => `<button type="button" class="${cls}" style="${at(z.box)}" ${attrs}></button><button type="button" class="${cls} hz-pl" style="${at(z.plate)}" tabindex="-1" aria-hidden="true" ${attrs}></button>`;
-      if (tut && z.go && z.go !== 'campagne') return `${two(`hz`, `data-act="tutlock" aria-label="${z.label} (opens after your first battle)"`)}${namePlate(z)}`;
-      if (tut && z.go === 'campagne') return `${two(`hz tut-go`, `data-act="go" data-go="campagne" aria-label="Campaign: start here" title="Campaign"`)}${namePlate(z)}`;
-      if (!z.go) return `${two(`hz soon`, `data-act="soon" aria-label="Coming soon"`)}
-        ${namePlate(z)}<span class="hz-badge lock soon-tag" style="left:${pc(px + pw / 2, HOME_W)};top:${pc(py + 4, HOME_H)}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7.5"/><path d="M5 7V5a3 3 0 0 1 6 0v2"/></svg>Coming soon</span>`;
-      const locked = !unlocked(z.go);
-      const badge = locked ? `<span class="hz-badge lock" style="left:${pc(px + pw - 40, HOME_W)};top:${pc(py + 4, HOME_H)}">${needTag(z.go)}</span>`
-        : z.go === 'altaar' && shardsReady ? `<span class="hz-badge dot" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}"></span>`
-        : z.go === 'profiel' && thClaimN() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="Rewards to claim in the Town Hall"></span>`
-        : z.go === 'expedition' && expDone() ? `<span class="hz-badge dot ready" style="left:${pc(px + pw - 34, HOME_W)};top:${pc(py + 14, HOME_H)}" title="The ship is back"></span>` : '';
-      return `${two(`hz ${locked ? 'locked' : ''}`, `data-act="go" data-go="${z.go}" aria-label="${z.label}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" title="${z.label}"`)}${namePlate(z)}${badge}`;
-    }).join('');
-    // first steps: a shade over the map with a spotlight on the Campaign and a "Start here" marker above it
-    const spot = tut ? `<div class="tut-shade" style="--x:${pc(CAMP_AT[0], HOME_W)};--y:${pc(CAMP_AT[1], HOME_H)}"></div>
-      <div class="tut-call" style="left:${pc(CAMP_AT[0], HOME_W)};top:${pc(CAMP_AT[2], HOME_H)}"><b>Start here</b><span>Your adventure begins in the Campaign</span><i aria-hidden="true"></i></div>` : '';
-    const tourShade = tour ? `<div class="tut-shade" style="--x:${pc(tc[0], HOME_W)};--y:${pc(tc[1], HOME_H)}"></div>` : '';
-    return `<div class="home-map"><div class="home-img ${port ? 'port' : ''} ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}"><img src="${port ? HOME_ART_P : HOME_ART}" alt="Homebase: tap a building">${zones}${spot}${tourShade}</div></div>${tour ? tourCard() : ''}${!port && !tut && !tour && S.p.lvl < 10 && !S.p.prestige ? '<div class="swipe-hint" aria-hidden="true"><span>‹</span>Swipe left and right to see every building<span>›</span></div>' : ''}`;
+    const tut = firstSteps(), tour = tourOn() ? TOUR[tourStep] : null, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const btn = z => {
+      const locked = !unlocked(z.go), main = z.go === 'campagne', start = tut && main;
+      const dot = !locked && !tut && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
+      const act = tut && !main ? 'data-act="tutlock"' : `data-act="go" data-go="${z.go}"`;
+      const st = start ? 'Start here: your adventure begins in the Campaign' : tut ? 'Opens after your first battle' : locked ? `${LOCK_SVG} Opens after ${needTxt(z.go)}` : homeStatus(z.go);
+      return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
+        <img class="hb-bg" src="${MENU_ART[z.go]}" alt="">${z.go === 'market' ? `<img class="hb-ic" src="${CRYSTAL_ART}" alt="">` : ''}<span class="hb-txt"><b class="hb-name">${esc(z.label)}</b><span class="hb-st">${st}</span></span>${dot ? '<i class="hb-dot" aria-hidden="true"></i>' : ''}</button>`;
+    };
+    return `<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
+  }
+  // the icon bar on the left of every screen but Home (and the battle): the Home buildings with their banner icons
+  // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
+  const NAV_OF = { champions: 'team', vault: 'team' };
+  function sideNav() {
+    const cur = tab === 'social' && SO.tab === 'guild' ? 'guild' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
+      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
+      const icon = z.go === 'market' ? `<img src="${CRYSTAL_ART}" alt="">` : '';
+      return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
+        <span class="sn-ic ${z.go}" ${icon ? '' : `style="background-image:url(${MENU_ART[z.go]})"`}>${icon}</span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
+    }).join('')}</nav>`;
   }
   // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
   function backBar() {
@@ -738,15 +725,14 @@
     if (noHero()) { el.innerHTML = createHtml(); return; }
     if (tab === 'home') {
       el.innerHTML = homeHtml();
-      // phones: the map scrolls sideways; start in the middle, later keep where the player left it
-      const map = el.querySelector('.home-map');
-      map.scrollLeft = firstSteps() ? CAMP_AT[0] / HOME_W * map.scrollWidth - map.clientWidth / 2 : tourOn() ? zoneCentre(tourZone(TOUR[tourStep]))[0] / HOME_W * map.scrollWidth - map.clientWidth / 2 : homeScroll ?? (map.scrollWidth - map.clientWidth) / 2;
-      map.addEventListener('scroll', () => { homeScroll = map.scrollLeft; }, { passive: true });
+      // the tour scrolls its building into view, in the room above the tour card
+      const on = tourOn() && el.querySelector('.hb.tour-on'), card = el.querySelector('.tour-card');
+      if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
       if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = backBar() + (tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : champsHtml());
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'vault' ? vaultHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : champsHtml()}</div></div>`;
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -759,124 +745,100 @@
   const isStageCfg = cfg => cfg.type === 'stage';
   const stageName = i => { const st = K.STAGES[i]; return `Chapter ${ROMAN[st.chapter]} · Stage ${st.n + 1}`; };
   const dropName = st => st.slot ? K.SLOT_NAMES[st.slot] : 'Random gear';
-  // the set a chapter drops: name, bonus, rarities on this difficulty and how many pieces the player already owns
-  function setBanner(k, D) {
-    const set = K.SETS[k], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === k).length, hi = D.rars[D.rars.length - 1];
-    return `<div class="set-banner rar-${hi}"><img class="sb-ic" src="${gearArt('borstpantser', hi, 0)}" alt="">
-      <div class="sb-main"><span class="sb-tag">Set drops in this chapter</span><b class="sb-name">${esc(set.name)}</b><span class="sb-bonus"><i>${esc(need)}</i> ${esc(bonus)}</span></div>
-      <div class="sb-side"><span>${rarsHtml(D.rars)}</span><small>${own ? `${own} ${own === 1 ? 'piece' : 'pieces'} owned` : 'none owned yet'}</small></div></div>`;
-  }
-  // Phones get a one-screen campaign (campPhoneHtml): difficulty and chapter on one row, the chapter's set, a path of
-  // seven stage nodes, the selected stage (campSel) with its enemies per phase, and the team; Fight sits in the bottom bar.
+  // Campaign screen (every screen size): the title with the difficulty, the chapter card (its painted background, story
+  // and set), the selected stage (campSel: its phases, drops and Fight / Replay), the team, the chapter row, a card per
+  // stage and the chapter's reward chest. On phones Fight / Replay also sits in the bottom bar.
   const PHONE_MQ = matchMedia('(max-width: 760px)');
   PHONE_MQ.addEventListener('change', () => { if (tab === 'campagne' && !B && S && !noHero()) render(); });
   let campSel = null;
-  function campPhoneHtml() {
+  // Chapter rewards: once per chapter and difficulty, when all seven of its stages are cleared there (S.chr[d] = claimed chapters)
+  function chapterReward(c, d) {
+    const r = { silver: 2000 * (c + 1) * (d + 1), gems: 5 * (d + 1), fs: d ? { greater: d >= 3 ? 2 : 1 } : { fate: 2 }, stones: 2 + Math.floor(c / 3) };
+    if (d >= 2 && (c === 4 || c === 9)) r.fs.ancient = 1;
+    return r;
+  }
+  const chrClaimed = (c, d) => ((S.chr || {})[d] || []).includes(c);
+  const kNum = n => n >= 10000 ? Math.round(n / 1000) + 'K' : n.toLocaleString('en-US');
+  const chapRewardIcons = r => [
+    `<span class="cv-rw" title="${r.silver.toLocaleString('en-US')} Sigils">${ic('coin')}<b>${kNum(r.silver)}</b></span>`,
+    `<span class="cv-rw" title="${r.gems} Crystals">${GEM_SVG}<b>${r.gems}</b></span>`,
+    ...Object.entries(r.fs).map(([k, n]) => `<span class="cv-rw" title="${n} × ${K.FATE_SHARDS.find(f => f.id === k).name}">${shardIc(k)}<b>${n}</b></span>`),
+    `<span class="cv-rw" title="${r.stones} Lesser Ascension Stones">${stoneIc('lesser')}<b>${r.stones}</b></span>`].join('');
+  const CHAP_CHEST = `<svg viewBox="0 0 64 52" aria-hidden="true"><path d="M6 22h52v26H6z" fill="#5a3517" stroke="#e2b452" stroke-width="2.5"/><path d="M6 22C6 8 16 4 32 4s26 4 26 18z" fill="#7a4a20" stroke="#e2b452" stroke-width="2.5"/><path d="M6 22h52M20 5v43M44 5v43" stroke="#e2b452" stroke-width="2.5" fill="none"/><rect x="27" y="18" width="10" height="13" rx="2" fill="#f2cf72" stroke="#3a220c" stroke-width="1.5"/><circle cx="32" cy="25" r="1.8" fill="#3a220c"/></svg>`;
+  function campaignHtml() {
     const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
     const chap = Math.min(S.chap ?? maxChap, maxChap), ch = K.CHAPTERS[chap];
     const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
     const sel = idx.includes(campSel) ? campSel : idx.includes(next) ? next : idx.filter(i => i <= cleared).pop() ?? idx[0];
-    const st = K.STAGES[sel], state = sel <= cleared ? 'cleared' : sel === next ? 'next' : 'locked';
+    const st = K.STAGES[sel], stateOf = i => i <= cleared ? 'cleared' : i === next ? 'next' : 'locked', state = stateOf(sel);
     const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
-    // the chapter's set, big: what it is, what it does, how many pieces you have, which rarities drop here
-    const set = K.SETS[ch.set], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length, hi = D.rars[D.rars.length - 1];
-    const setBox = `<div class="cp-set rar-${hi}"><img src="${gearArt('borstpantser', hi, 0)}" alt="">
-      <div class="cp-set-m"><small>This chapter drops</small><b>${esc(set.name)}</b><span><i>${esc(need)}</i><em>${esc(bonus)}</em></span></div>
-      <div class="cp-set-s"><small>Owned</small><b>${own}</b><span>${D.rars.map(r => `<b class="rartxt rar-${r}">${K.RARITIES[r].slice(0, r === 1 ? 3 : 9)}</b>`).join(' / ')}</span></div></div>`;
-    const nodes = idx.map((i, k) => {
-      const s = i <= cleared ? 'done' : i === next ? 'next' : 'lock', boss = k === 6;
-      return `<button type="button" class="cp-node ${s} ${i === sel ? 'sel' : ''} ${boss ? 'boss' : ''}" data-act="csel" data-stage="${i}" aria-pressed="${i === sel}" aria-label="${boss ? 'Boss stage' : `Stage ${k + 1}`}"><span class="cp-dia"><span>${s === 'done' ? '✓' : boss ? '☠' : s === 'next' ? k + 1 : LOCK_SVG}</span></span><small>${boss ? 'Boss' : `Stage ${k + 1}`}</small></button>`;
-    }).join('<i class="cp-link" aria-hidden="true"></i>');
-    const ul = K.stageUnlock(st, S.starter), firsts = sel > cleared ? [...(!d && ul && !S.roster[ul] ? [`<span class="rw">${por(ul)}${esc(C[ul].short)}</span>`] : []), `<span class="rw">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`] : [];
-    const ess = [...new Set(st.phases.flat().map(f => E[f].aff))];
-    const chapDone = cleared >= chap * 7 + 6;
-    const acts = state === 'cleared' ? `<div class="cp-acts"><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${sel}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[chap]} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
-      : state === 'locked' ? `<p class="cp-lock">${LOCK_SVG} Clear ${stageName(next)} first.</p>` : '';
-    const card = `<section class="cp-card ${st.boss ? 'boss' : ''}"><div class="cp-card-h"><b>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`}</b><span>Enemy level ${K.diffLvl(st, d)} · ${K.PHASES} phases</span></div>
-      ${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}
-      <div class="cp-phases">${st.phases.map((p, i) => `<div class="${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cp-foe" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('')}</div>
-      <div class="cp-meta"><span class="rw"><span class="st-dic">${D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="">`).join('')}</span><b>${dropName(st)}</b></span>${firsts.length ? `<span class="rw cp-first"><small>First clear</small></span>${firsts.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div>
-      ${acts}${fightSpot() && sel === next ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : ''}</section>`;
-    const tids = teamIds('campaign');
-    const team = `<button type="button" class="cp-team" data-act="editteam" data-mode="campaign" aria-label="Edit the campaign team">${tids.map(id => `<span class="cp-tm rar-${C[id].rar}">${por(id)}<i>Lv ${S.roster[id].lvl}</i></span>`).join('')}<span class="cp-pw"><small>Team power</small><b>${teamPower(tids).toLocaleString('en-US')}</b></span></button>`;
-    const fightBtn = state === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${sel}">↻ Replay${enCost(stEn(sel, d))}</button>` : state === 'next' ? `<button class="btn primary" data-act="play" data-stage="${sel}">⚔ Fight${enCost(stEn(sel, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
-    return `<div class="campaign cp ${d ? 'hardmode diff-' + D.id : ''}">
-      <div class="cp-top"><label class="cp-diff"><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select></label>
-        <div class="cp-chap"><button type="button" class="btn small" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button><b>Chapter ${ROMAN[chap]}</b><button type="button" class="btn small" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></div></div>
-      <div class="cp-title"><h2>${esc(ch.name)}</h2><small>${idx.filter(i => i <= cleared).length} / 7 stages cleared${d ? ` · ${esc(D.name)}` : ''}</small></div>
-      ${setBox}
-      <div class="cp-path">${nodes}</div>
-      ${card}
-      ${team}
-      ${fightSpot() ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${fightBtn}</div>`}
-    </div>`;
-  }
-  function campaignHtml() {
-    if (PHONE_MQ.matches) return campPhoneHtml();
-    const d = S.diff || 0, D = K.DIFFS[d], hard = d > 0, cleared = clearedOn(d), next = cleared + 1;
-    const strip = teamIds('campaign').map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('');
-    const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
-    const chap = Math.min(S.chap ?? maxChap, maxChap);
-    const foeImgs = st => st.foes.map(f => `<img class="spr ${K.BOSSES[f] ? 'bossimg' : ''}" src="${SPR.url(f, 1, true)}" alt="${esc(E[f].name)}" title="${esc(E[f].name)}">`).join('');
-    // drop icons from the gear sheet (GEAR_TILE), one per rarity that can drop on this difficulty, in that rarity's colours
-    const dropIc = st => D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="${K.RARITIES[r]}" title="${K.RARITIES[r]} ${esc(dropName(st).toLowerCase())}">`).join('');
-    const firstRewards = (st, i) => {
+    const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[chap]] : '';
+    const chapDone = cleared >= chap * 7 + 6, cdone = idx.filter(i => i <= cleared).length;
+    // drop icons from the gear sheet (GEAR_TILE), one per rarity that can drop on this difficulty
+    const dropIc = s => D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[s.slot || 'random'][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${esc(dropName(s).toLowerCase())}">`).join('');
+    const firsts = i => {
       if (i <= cleared) return [];
-      const rw = [];
-      { const ul = K.stageUnlock(st, S.starter); if (!hard && ul && !S.roster[ul]) rw.push(`<span class="rw">${por(ul)}${esc(C[ul].short)}</span>`); }
-      rw.push(`<span class="rw" title="${st.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(st.n === 6 ? 'greater' : 'fate')}+1</span>`);
+      const s = K.STAGES[i], rw = [], ul = K.stageUnlock(s, S.starter);
+      if (!d && ul && !S.roster[ul]) rw.push(`<span class="rw">${por(ul)}${esc(C[ul].short)}</span>`);
+      rw.push(`<span class="rw" title="${s.n === 6 ? 'Greater Fate Shard' : 'Fate Shard'}">${shardIc(s.n === 6 ? 'greater' : 'fate')}+1</span>`);
       return rw;
     };
-    // a stage tile: what you fight, its level, what it drops, and what tapping it does (Fight / Replay / locked)
-    const tile = (st, i) => {
-      const state = i <= cleared ? 'cleared' : i === next ? 'next' : 'locked';
-      const rw = firstRewards(st, i);
-      const go = state === 'next' ? `Fight ›${enCost(stEn(i, d))}` : `${LOCK_SVG} Locked`;
-      // a cleared stage has two buttons: Replay, and Auto ×10 once the whole chapter is cleared on this difficulty
-      const chapDone = clearedOn(d) >= st.chapter * 7 + 6, tag = state === 'cleared' ? 'div' : 'button';
-      const foot = state === 'cleared'
-        ? `<div class="st-acts"><button type="button" class="btn small" data-act="play" data-stage="${i}">Replay${enCost(stEn(i, d))}</button><button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button></div>`
-        : `<span class="st-go">${go}</span>`;
-      return `<${tag} class="stage ${state} ${st.boss ? 'bossst' : ''}" ${tag === 'button' ? `data-act="play" data-stage="${i}" ${state === 'locked' ? 'disabled' : ''}` : ''}>
-        <div class="st-top"><span class="st-n">Stage ${st.n + 1}</span>${state === 'cleared' ? '<span class="st-state tag">✓</span>' : ''}</div>
-        <div class="st-foes">${foeImgs(st)}</div>
-        <div class="st-meta"><span class="st-ess">${[...new Set(st.phases.flat().map(f => E[f].aff))].map(affChip).join('')}</span><span class="pill">Lv ${K.diffLvl(st, d)}</span></div>
-        ${st.boss ? `<div class="st-boss">Boss: ${esc(st.boss)}</div>` : ''}
-        <div class="st-drop"><span class="st-dic">${dropIc(st)}</span><span class="st-dtx"><b>${dropName(st)}</b></span></div>
-        ${rw.length ? `<div class="st-reward"><span>First clear:</span>${rw.join('')}</div>` : ''}
-        ${foot}</${tag}>`;
-    };
-    const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
-    const chapBtns = K.CHAPTERS.map((ch, c) => {
-      const done = K.STAGES.filter(st => st.chapter === c).filter(st => K.STAGES.indexOf(st) <= cleared).length;
-      return `<button type="button" class="${c === chap ? 'sel' : ''} ${done === 7 ? 'done' : ''}" data-act="chap" data-n="${c}" ${c > maxChap ? 'disabled' : ''} title="${esc(ch.name)} · ${done}/7">${ROMAN[c]}</button>`;
+    const auto = i => `<button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[chap]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>`;
+    const playBtn = i => stateOf(i) === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${i}">↻ Replay${enCost(stEn(i, d))}</button>`
+      : stateOf(i) === 'next' ? `<button class="btn primary" data-act="play" data-stage="${i}">⚔ Fight${enCost(stEn(i, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
+    const spot = fightSpot() && sel === next;
+    // the chapter: its painted scene, story and the set it drops
+    const set = K.SETS[ch.set], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length, hi = D.rars[D.rars.length - 1];
+    const chapCard = `<section class="cv-chap" style="--art:url(${art})">
+      <div class="cv-chap-t"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3><p>${esc(ch.desc)}</p>
+        <span class="cv-set rar-${hi}"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><small>Drops <b>${esc(set.name)}</b> · ${own} owned</small><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span></div>
+      <button type="button" class="cv-arr prev" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button>
+      <button type="button" class="cv-arr next" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></section>`;
+    // the selected stage: its enemies per phase, what it drops and the button to play it
+    const ess = [...new Set(st.phases.flat().map(f => E[f].aff))], fr = firsts(sel);
+    const stage = `<section class="cv-stage ${st.boss ? 'boss' : ''}">
+      <div class="cv-st-h"><b>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`}</b>${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}<span class="cv-st-s ${state}">${state === 'cleared' ? '✓ Cleared' : state === 'next' ? 'Next battle' : `${LOCK_SVG} Locked`}</span></div>
+      <div class="cv-phases">${st.phases.map((p, i) => `<div class="cv-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('<i class="cv-ph-arr" aria-hidden="true">›</i>')}</div>
+      <div class="cv-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(st, d)}</b></span><span class="rw"><small>Drops</small><span class="st-dic">${dropIc(st)}</span></span>${fr.length ? `<span class="rw"><small>First clear</small></span>${fr.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</span></div>
+      <div class="cv-go">${state === 'cleared' ? auto(sel) : ''}${spot ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : playBtn(sel)}</div></section>`;
+    const tids = teamIds('campaign');
+    const team = `<section class="cv-team"><div class="cv-tm"><small class="cv-lbl">Your team</small><div class="cv-heroes">${tids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('')}</div></div>
+      <div class="cv-pw"><small>Team power</small><b>${teamPower(tids).toLocaleString('en-US')}</b><button class="btn" data-act="editteam" data-mode="campaign">Edit team</button></div></section>`;
+    const chapBtns = K.CHAPTERS.map((c2, c) => {
+      const done = K.STAGES.filter(s => s.chapter === c).filter(s => K.STAGES.indexOf(s) <= cleared).length;
+      return `<button type="button" class="${c === chap ? 'sel' : ''} ${done === 7 ? 'done' : ''}" data-act="chap" data-n="${c}" ${c > maxChap ? 'disabled' : ''} title="${esc(c2.name)} · ${done}/7">${ROMAN[c]}</button>`;
     }).join('');
-    const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
-    const cdone = idx.filter(i => i <= cleared).length;
-    // the one big call to action: the next stage on this difficulty
-    const nx = K.STAGES[next], nrw = nx ? firstRewards(nx, next) : [];
-    const cont = nx ? `<section class="camp-next ${nx.boss ? 'boss' : ''}">
-        <div class="cn-main"><div class="cn-head"><span class="tag">Next battle${d ? ' · ' + esc(D.name) : ''}</span><h3>${stageName(next)}</h3>
-          ${nx.boss ? `<span class="st-boss">Boss: ${esc(nx.boss)}</span>` : `<span class="cn-sub">${esc(K.CHAPTERS[nx.chapter].name)}</span>`}</div>
-          <div class="cn-phases">${nx.phases.map((p, i) => `<div class="cn-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><div>${p.map(f => `<span class="cn-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div></div>`).join('')}</div>
-          <div class="cn-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(nx, d)}</b></span><span class="rw cn-drop"><span class="st-dic">${dropIc(nx)}</span><b>${dropName(nx)}</b></span>${nrw.length ? `<span class="rw cn-first"><small>First clear</small></span>${nrw.join('')}` : ''}<span class="rw"><small>Enemies</small>${[...new Set(nx.phases.flat().map(f => E[f].aff))].map(e => `<b style="color:${AFF_COL[e]}">${e}</b>`).join(' ')}</span></div></div>
-        ${fightSpot() ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span></section><div class="spot-block" data-act="spotblock"></div>` : `<button class="btn primary cn-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button></section>`}`
-      : `<section class="camp-next done"><div class="cn-main"><span class="tag">${esc(D.name)} complete</span><h3>Every stage cleared!</h3><span class="cn-sub">${K.DIFFS[d + 1] ? `${K.DIFFS[d + 1].name} is open: pick it above for better gear.` : 'You beat the hardest difficulty.'} Replay stages to farm gear.</span></div></section>`;
-    return `<div class="campaign ${hard ? 'hardmode diff-' + D.id : ''}">
-      <div class="camp-head"><h2>Campaign</h2>
-        <div class="seg diffs" role="group" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<button type="button" data-act="mode" data-diff="${i}" aria-pressed="${i === d}" ${diffOk(i) ? '' : `disabled title="Clear every stage on ${K.DIFFS[i - 1].name} first"`}>${diffOk(i) ? '' : LOCK_SVG}${x.name}</button>`).join('')}</div>
-        <p class="diff-note">Drops ${rarsHtml(D.rars)} gear${d ? ` · enemies Lv ${K.diffLvl(K.STAGES[0], d)}–${K.diffLvl(K.STAGES[K.STAGES.length - 1], d)}` : ''}</p></div>
-      ${cont}
-      <div class="teamstrip">${strip}<div class="power"><span class="tag">Team power</span><b>${teamPower(teamIds('campaign')).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button></div>
-      <div class="chapters" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
-      ${nx && !fightSpot() ? `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button><button class="btn primary" data-act="play" data-stage="${next}">⚔ Fight${enCost(stEn(next, d))}</button></div>` : ''}
-      <div class="chap-head"><h3>Chapter ${ROMAN[chap]} · ${esc(K.CHAPTERS[chap].name)}</h3><span class="tag">${cdone}/7 cleared</span></div>
-      ${setBanner(K.CHAPTERS[chap].set, D)}
-      <div class="stages">${idx.slice(0, 6).map(i => tile(K.STAGES[i], i)).join('')}</div>
-      <div class="stages boss-row">${tile(K.STAGES[idx[6]], idx[6])}</div>
+    // a card per stage: tap it to see it above; cleared stages have Replay and Auto ×10, the next one Fight
+    const cards = idx.map((i, k) => {
+      const s = K.STAGES[i], ss = stateOf(i);
+      const acts = ss === 'cleared' ? `<button type="button" class="btn small" data-act="play" data-stage="${i}" title="Costs ${stEn(i, d)} energy">Replay</button>${auto(i)}`
+        : ss === 'next' ? `<button type="button" class="btn small primary" data-act="play" data-stage="${i}" title="Costs ${stEn(i, d)} energy">Fight</button>` : `<span class="cv-lock">${LOCK_SVG} Locked</span>`;
+      return `<div class="cv-card ${ss} ${s.boss ? 'boss' : ''} ${i === sel ? 'sel' : ''}" style="--art:url(${art});--pos:${k * 16}%">
+        <button type="button" class="cv-card-sel" data-act="csel" data-stage="${i}" aria-label="${s.n === 6 ? 'Boss stage' : `Stage ${s.n + 1}`}" aria-pressed="${i === sel}"></button>
+        <div class="cv-card-h"><b>${s.n === 6 ? 'Boss' : `Stage ${s.n + 1}`}</b>${ss === 'cleared' ? '<span class="cv-ok">✓</span>' : ''}</div>
+        <div class="cv-card-f">${s.foes.slice(0, 4).map(f => `<span class="cv-foe-s ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div>
+        <div class="cv-card-m"><span class="st-dic">${dropIc(s)}</span><span class="pill">Lv ${K.diffLvl(s, d)}</span></div>
+        <div class="cv-card-a">${acts}</div></div>`;
+    }).join('');
+    // the chapter's reward chest
+    const claimed = chrClaimed(chap, d), canClaim = chapDone && !claimed;
+    const reward = `<section class="cv-reward ${canClaim ? 'ready' : ''} ${claimed ? 'done' : ''}"><span class="cv-chest">${CHAP_CHEST}</span>
+      <div class="cv-rw-t"><b>Chapter rewards</b><small>${cdone} / 7 cleared${d ? ` · ${esc(D.name)}` : ''}</small><span class="cv-dots">${idx.map(i => `<i class="${i <= cleared ? 'on' : ''}"></i>`).join('')}</span></div>
+      <div class="cv-rws">${chapRewardIcons(chapterReward(chap, d))}</div>
+      ${claimed ? '<span class="cv-claimed">✓ Claimed</span>' : `<button class="btn ${canClaim ? 'primary' : ''}" data-act="chclaim" data-chap="${chap}" ${canClaim ? '' : `disabled title="Clear all seven stages of Chapter ${ROMAN[chap]} first"`}>Claim</button>`}</section>`;
+    return `<div class="campaign cv ${d ? 'hardmode diff-' + D.id : ''}">
+      <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.campagne})" aria-hidden="true"></span><div class="cv-ht"><h2>Campaign</h2><p>Explore a shattered world and uncover the truth.</p></div>
+        <label class="cv-diff"><span>Difficulty</span><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select><small>Drops ${rarsHtml(D.rars)}</small></label></div>
+      ${chapCard}
+      ${stage}
+      ${team}
+      <div class="chapters cv-chaps" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
+      <div class="cv-stages">${cards}</div>
+      ${reward}
+      ${spot ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${playBtn(sel)}</div>`}
       <details class="camp-info"><summary>How the campaign works</summary>
-        <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
+        <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clearing all seven stages of a chapter opens its reward chest, once per difficulty. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
         <div class="help">
         <div class="help-ess"><h3>Essences</h3><img class="ess-art" src="${ESSENCE_ART}" alt="Essences: Ember beats Verdant, Verdant beats Storm, Storm beats Frost, Frost beats Radiant, Radiant beats Umbral, Umbral beats Ember; Aether is neutral">
         <p><b>Strong Hit</b>: +20% damage, stronger debuffs, 2 Break damage. <b>Weak Hit</b>: −25% damage, no crits, half debuff chance, no Break damage. ${affChip('Aether')} Aether is neutral and always lands a Normal Hit.</p></div>
@@ -1285,7 +1247,7 @@
     delete S.needStarter;
     linkTeams(S); syncHero(S);
     pcSel = { g: 'm', cls: null, name: '' };
-    tab = 'home'; homeScroll = null; save(); render();
+    tab = 'home'; save(); render();
     const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
     toast(old ? `${name} joins your teams and will fight at your side in every battle.` : `${name} is ready. Tap the Campaign to begin your adventure.`, false, 4500);
   }
@@ -2279,7 +2241,7 @@
     if (noHero()) return;
     backupRaw(JSON.stringify(S), true);
     const s = linkTeams(resetSave(S)); delete s.wasReset;
-    S = s; homeScroll = null; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });
+    S = s; tab = 'home'; save(); hud(); render(); window.scrollTo({ top: 0 });
     toast('Your adventure starts over. Create your hero!', false, 5000);
   }
   function backupsHtml() {
@@ -2392,6 +2354,8 @@
     if (e.target.closest('#sound')) { toggleAudio(); return; }
     if (e.target.closest('.brand') && !B && !noHero()) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#guide')) { if (B) return; SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
+    // the + next to a header counter: get more in the Market
+    if (e.target.closest('.res-plus')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('market'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#account')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); editName = false; TH.tab = 'profile'; setTab('profiel'); window.scrollTo({ top: 0 }); return; }
     const a = e.target.closest('[data-act]');
@@ -2457,6 +2421,7 @@
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; campSel = null; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'csel') { campSel = +a.dataset.stage; render(); }
+    else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); toast(`Chapter ${ROMAN[c]} rewards claimed!`); } }
     else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
     else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
     else if (act === 'bhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
@@ -3795,7 +3760,7 @@
     toast(`The ship is back: ${got.join(' · ')}${ups.length ? `. Level up: ${ups.join(', ')}` : ''}.`, false, 6000);
   }
   // keep the time left on the Expeditions screen and the ship's badge on the homebase current
-  setInterval(() => { if (!S || !S.exp) return; if (tab === 'expedition' && $('#modal').hidden) { const el = document.querySelector('.exp-left'); if (el && !expDone()) { el.textContent = `Back in ${fmtLeft(S.exp.end - Date.now())}`; const b = document.querySelector('.exp-bar i'); if (b) b.style.width = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100)) + '%'; } else if (expDone() && !document.querySelector('[data-act=expclaim]')) render(); } else if (tab === 'home' && expDone() && !document.querySelector('.hz-badge.ready')) render(); }, 30000);
+  setInterval(() => { if (!S || !S.exp) return; if (tab === 'expedition' && $('#modal').hidden) { const el = document.querySelector('.exp-left'); if (el && !expDone()) { el.textContent = `Back in ${fmtLeft(S.exp.end - Date.now())}`; const b = document.querySelector('.exp-bar i'); if (b) b.style.width = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100)) + '%'; } else if (expDone() && !document.querySelector('[data-act=expclaim]')) render(); } else if (tab === 'home' && expDone() && !document.querySelector('.hb-dot')) render(); }, 30000);
   // ---------- Energy (K.ENERGY): S.energy, refilled by time from S.enAt (ms) ----------
   const EN_MS = K.ENERGY.regenMin * 60000;
   const enMax = () => K.energyMax(effLvl(S));
