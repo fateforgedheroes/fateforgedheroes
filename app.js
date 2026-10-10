@@ -895,7 +895,11 @@
       <div class="bhv locked">${hero}<section class="bhv-panel"><div class="bhv-title"><h3>${esc(B0.name)}</h3></div><p class="empty-note">${LOCK_SVG} ${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></section></div></div>`;
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === B0.aff);
     const icon = (svg, c) => `<span class="bhv-ic" style="--c:${c}">${svg}</span>`;
-    const sets = K.bossSets(ci).map(k => { const [need, bonus] = K.SETS[k].desc.split(': '); return `<li>${icon(BH_GLYPH.set, '#e3c06a')}<b>${esc(K.SETS[k].name)}</b><span>${esc(need)}: ${esc(bonus || '')}</span></li>`; }).join('');
+    // its own six-piece set: the bonus at 2, 4 and 6 pieces, and the essence family bonus it counts towards
+    const SS = K.SETS[K.bossSets(ci)[0]], fam = K.SET_FAMILY[SS.ess];
+    const sets = `<li class="bhv-sethead">${icon(BH_GLYPH.set, '#e3c06a')}<b>${esc(SS.name)}</b><span>${esc(SS.role)} · six-piece set</span></li>`
+      + SS.tiers.map(t => `<li><span class="bhv-pc">${t.n}</span><b>${t.n} pieces</b><span>${esc(t.d)}</span></li>`).join('')
+      + (fam ? `<li class="bhv-fam"><span class="bhv-pc">✦</span><b>${SS.ess} family</b><span>${esc(fam.d)} (4+ pieces from two different ${SS.ess} boss sets)</span></li>` : '');
     const trait = sel >= K.BTRAIT.from ? (() => {
       const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.teams[bossTeamIdx(B0.aff)].ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]));
       return `<div class="bhv-row trait">${fxBadge(tr)}<div><b>${ef.n}</b> <small class="tag">level ${K.BTRAIT.from} and up</small><small>${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</small></div></div>`;
@@ -1063,7 +1067,12 @@
       rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${stoneIc(rc.tier)} ${rc.stones} ${stoneName(rc.tier, rc.stones)} (you have ${stoneN(rc.tier)}) · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
     }
     const items = itemsOf(id), counts = K.setCounts(items);
-    const setInfo = Object.keys(counts).map(k => { const SS = K.SETS[k], on = counts[k] >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${counts[k]}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }).join('');
+    // campaign sets: one bonus; boss sets: the 2/4/6-piece tiers, each lit when reached; then any essence family bonus
+    const setInfo = Object.keys(counts).filter(k => K.SETS[k]).map(k => {
+      const SS = K.SETS[k], c = counts[k];
+      if (!SS.tiers) { const on = c >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${c}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }
+      return `<div class="set-tiers"><b>${esc(SS.name)} (${c}/6)</b>${SS.tiers.map(t => `<div class="${c >= t.n ? 'on' : 'off'}">${c >= t.n ? '✓' : '·'} ${t.n} pieces: ${esc(t.d)}</div>`).join('')}</div>`;
+    }).join('') + K.setTiers(items).filter(t => t.fam).map(t => `<div class="on">✓ ${t.fam} family: ${esc(t.d)}</div>`).join('');
     // gear: one compact tile per slot (tap it for the item's stats), with its own Upgrade button
     const gear = K.SLOTS.map(slot => {
       const it = items.find(x => x.slot === slot);
@@ -1213,7 +1222,7 @@
     m.innerHTML = `<div class="modal-box gear-pop rar-${it.rar}" role="dialog" aria-modal="true" aria-labelledby="gp-t">
       <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${esc(itemName(it))}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
       ${itemStatsHtml(it)}
-      <p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>
+      ${SS.tiers ? `<div class="gp-set"><b>${esc(SS.name)}</b> · ${SS.ess} boss set${SS.tiers.map(t => `<div><i>${t.n} pieces:</i> ${esc(t.d)}</div>`).join('')}</div>` : `<p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>`}
       ${maxed ? '' : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
       <div class="modal-actions"><button class="btn primary" data-act="up" data-item="${it.id}" data-pop="1" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Upgrade'}</button><button class="btn" data-act="inv" data-slot="${slot}">Swap</button><button class="btn" data-act="unequip" data-item="${it.id}">Remove</button><button class="btn" data-act="gpclose">Close</button></div></div>`;
     m.hidden = false;
@@ -3308,7 +3317,7 @@
     bang: 'M6.4 1.3h3.2L9 10H7zM6.7 11.4h2.6v2.9H6.7z',
     cross: 'M7.2.8h1.6v4.4H7.2zM7.2 10.8h1.6v4.4H7.2zM.8 7.2h4.4v1.6H.8zM10.8 7.2h4.4v1.6h-4.4zM8 5.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2z',
   };
-  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull', ironhide: 'shield', swift: 'bolt' };
+  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', iceTomb: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull', ironhide: 'shield', swift: 'bolt' };
   const fxSvg = k => `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="${FXP[FX_ICON[k] || 'star']}"/></svg>`;
   // one badge; n = turns left (none for lasting effects), extra = a count shown instead (stacks)
   function fxBadge(k, n, title, extra) {

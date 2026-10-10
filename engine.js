@@ -73,8 +73,9 @@ const K = (function () {
     taunt: { n: 'Taunt', s: 'TNT', buff: false, d: 'Must attack the taunter' },
     mark: { n: 'Death Mark', s: 'MRK', buff: false, d: 'Takes 30% more damage' },
     broken: { n: 'Affinity Break', s: 'BRK', buff: false, d: 'Stunned, takes 15% more damage' },
+    iceTomb: { n: 'Encased in Ice', s: 'ICE', buff: true, d: 'Takes no damage and cannot act; shatters in a Frozen Nova' },
   };
-  const SKIP = ['stun', 'freeze', 'broken'];
+  const SKIP = ['stun', 'freeze', 'broken', 'iceTomb'];
   // Enrage (Boss Hall bosses only, u.hall): a boss that is still standing after ENRAGE.at of its own turns gets an Attack stack, and another one every
   // ENRAGE.every turns after that, so a team that cannot kill it in time is worn down. Counted per battle (phase).
   // blightAt: bosses with a Blight Aura fight longer (more HP, and a team needs time to out-heal the aura), so they enrage later
@@ -1019,8 +1020,8 @@ const K = (function () {
   const bossLvl = (i, n) => bossRoom(i, n).lvl;
   // the enemies of phase p of Boss Hall level n (minions, minions, boss), toughened like the matching campaign stage
   function bossUnits(id, n, p) { const r = bossRoom(BOSS_ORDER.indexOf(id), n); return bossPhases(id, n)[p].map(f => { const u = toughen(enemyUnit(f, r.lvl), r.f); if (u.isBoss) u.hall = true; if (u.isBoss && n >= BTRAIT.from) u.trait = bossTrait(BOSS_ORDER.indexOf(id)); return n >= BLIGHT.bh ? blighted(u, r.d) : u; }); }
-  const SET_GROUPS = [['vlammenhart', 'scherpte', 'nachtscherf'], ['woede', 'asvloek', 'vampierbloed'], ['wilgenbast', 'levensbron', 'wraak'], ['windloper', 'scherpte', 'vlammenhart']];
-  const bossSets = i => SET_GROUPS[i % SET_GROUPS.length];
+  // every boss drops its own set (see BOSS_SET_LIST); Fury, Nightshard, Vengeance and Ashcurse no longer drop
+  const bossSets = i => ['bs_' + BOSS_ORDER[i]];
   function bossFoes(id, n) { return [id]; }
   // Boss Hall: two phases of three minions sharing the boss's essence, then the boss
   function bossPhases(id, n) {
@@ -1034,7 +1035,8 @@ const K = (function () {
   // ---------- Gear ----------
   const SLOTS = ['wapen', 'helm', 'schild', 'handschoenen', 'borstpantser', 'laarzen'];
   const SLOT_NAMES = { wapen: 'Weapon', helm: 'Helmet', schild: 'Shield', handschoenen: 'Gloves', borstpantser: 'Chestplate', laarzen: 'Boots' };
-  // Campaign sets: one per chapter (see CHAPTERS[].set). Fury, Nightshard, Vengeance and Ashcurse only drop in the Boss Hall.
+  // Campaign sets: one per chapter (see CHAPTERS[].set). Fury, Nightshard, Vengeance and Ashcurse were the old Boss Hall sets:
+  // they no longer drop (every boss has its own set now, BOSS_SET_LIST) but items that have them keep working.
   const SETS = {
     krijger: { name: 'Warrior Set', n: 2, bonus: { atkP: 8, defP: 8 }, desc: '2 pieces: +8% Attack and +8% Defense' },
     levensbron: { name: 'Vitality Set', n: 2, bonus: { hpP: 15 }, desc: '2 pieces: +15% HP' },
@@ -1050,6 +1052,101 @@ const K = (function () {
     nachtscherf: { name: 'Nightshard', n: 4, flag: 'extraTurn', desc: '4 pieces: 18% chance of an extra turn after a critical hit' },
     wraak: { name: 'Vengeance', n: 4, flag: 'counter', desc: '4 pieces: 25% chance to counterattack when hit' },
     asvloek: { name: 'Ashcurse', n: 4, flag: 'curse', desc: '4 pieces: +25% chance for your debuffs to land' },
+  };
+  // Boss sets (Boss Hall): every boss drops its own six-piece set (id 'bs_' + boss id) with bonuses at 2, 4 and 6 pieces
+  // (tiers): a stat at 2, a mechanic at 4 and its signature at 6. They are side-grades with a role each, not a ladder.
+  // The mechanics are flags the Battle reads (see "boss set" in Battle). Wearing 4 or more pieces from boss sets of one
+  // essence, spread over at least two different sets, adds that essence's family bonus (SET_FAMILY).
+  const BOSS_SET_LIST = [
+    ['grakk', "Warlord's Trophies", 'Ember', 'Bruiser', { atkP: 12 }, '+12% Attack',
+      'killAtkUp', 'defeating an enemy grants Attack Up for 2 turns',
+      'warlord', 'defeating an enemy fills 30% Turn Meter; +15% damage to enemies below 50% HP'],
+    ['lizardking', 'Scales of the Swamp King', 'Verdant', 'Bruiser', { defP: 12 }, '+12% Defense',
+      'strongRes', 'take 15% less damage from Strong Hits',
+      'critCounter', 'when hit by a critical hit, strike back'],
+    ['plaguelord', "Plaguebearer's Rags", 'Verdant', 'Poison', { acc: 30 }, '+30 Accuracy',
+      'poisonHit', 'your hits have a 25% chance to Poison for 2 turns',
+      'plague', 'your Poisons also apply Heal Reduction'],
+    ['boneking', 'Ossuary Regalia', 'Umbral', 'Tank', { defP: 12 }, '+12% Defense',
+      'fallShield', 'when an ally falls, gain a Shield of 20% of your max HP',
+      'boneKing', 'once per battle, a killing blow leaves you at 1 HP with Immunity for 2 turns'],
+    ['frostcolossus', 'Regalia of the Frozen Heart', 'Frost', 'Tank', { defP: 15 }, '+15% Defense',
+      'skillSlow', 'skills have a 20% chance to apply Speed Down for 2 turns',
+      'iceTomb', 'once per battle below 30% HP: encased in ice for 2 turns (no damage, cannot act), then a Frozen Nova hits all enemies for 80% Attack with a 40% chance to Freeze'],
+    ['ashenphoenix', 'Plumes of the Ashen Phoenix', 'Ember', 'Rebirth', { hpP: 12 }, '+12% HP',
+      'burnHit', 'your hits have a 20% chance to Burn for 2 turns',
+      'phoenix', 'once per battle, when defeated: rise with 30% HP and Burn every enemy for 2 turns'],
+    ['celestial', 'Raiment of the Celestial Choir', 'Radiant', 'Guardian', { hpP: 12 }, '+12% HP',
+      'choir', 'at the start of your turn, the weakest ally heals 5% of their max HP',
+      'guardian', 'once per battle, an ally who would die survives with 1 HP and is Immune for 1 turn'],
+    ['treant', 'Bark of the Worldroot', 'Verdant', 'Tank', { hpP: 15 }, '+15% HP',
+      'treantRegen', 'heal 3% of your max HP at the start of your turn',
+      'treantWard', 'allies take 10% less damage while you are alive'],
+    ['dunewyrm', 'Sandstorm Carapace', 'Verdant', 'Evasion', { spdP: 10 }, '+10% Speed',
+      'accHit', 'your hits have a 30% chance to apply Accuracy Down for 2 turns',
+      'sandBurrow', 'once per battle below 50% HP: burrow for 1 turn (untargetable) and gain Attack Up'],
+    ['stormbehemoth', 'Thundercore Harness', 'Storm', 'Speed', { spdP: 10 }, '+10% Speed',
+      'startTm', 'start the battle with +25% Turn Meter',
+      'chain', 'basic attacks have a 30% chance to chain to another enemy for 40% Attack'],
+    ['ironjuggernaut', 'Juggernaut Plating', 'Storm', 'Breaker', { atkP: 12 }, '+12% Attack',
+      'pierce15', 'attacks ignore 15% of Defense',
+      'juggernaut', 'Strong Hits deal +2 Break damage; +20% damage to Broken enemies'],
+    ['serpentpriest', 'Vestments of the Coiled Faith', 'Verdant', 'Healer', { res: 30 }, '+30 Resistance',
+      'healPlus', 'your heals are 20% stronger',
+      'healCleanse', 'healing or shielding an ally also removes 1 debuff from them'],
+    ['bloodempress', 'Crimson Court', 'Umbral', 'Lifesteal', { atkP: 12 }, '+12% Attack',
+      'steal20', 'heal 20% of the damage you deal',
+      'overheal', 'healing beyond full HP becomes a Shield (up to 25% of max HP)'],
+    ['voidtitan', 'Void-Touched Plate', 'Umbral', 'Protector', { hpP: 15 }, '+15% HP',
+      'aoeRes', 'take 15% less damage from attacks that hit all allies',
+      'voidBarrier', 'at the start of battle and every 4 of your turns: a Shield of 10% of your max HP on the whole team'],
+    ['brimstone', 'Brimstone Scales', 'Ember', 'Area damage', { cdmg: 15 }, '+15% Crit Damage',
+      'aoeDmg', 'attacks on all enemies deal +15% damage',
+      'brimstone', 'your Burns deal 50% more damage; a critical hit on a Burning enemy spreads Burn to another enemy'],
+    ['shadowlich', 'Phylactery Robes', 'Umbral', 'Debuffer', { acc: 30 }, '+30 Accuracy',
+      'silenceHit', 'your hits have a 20% chance to Silence for 1 turn',
+      'lich', 'enemies with 2 or more of your debuffs take 15% more damage from you'],
+    ['frostwitch', "Witch's Winter Veil", 'Frost', 'Control', { spdP: 10 }, '+10% Speed',
+      'freezeHit', 'your hits have a 15% chance to Freeze for 1 turn',
+      'frozenDmg', 'Frozen enemies take 25% more damage from you'],
+    ['sealeviathan', "Tidecaller's Scales", 'Frost', 'Waves', { hpP: 15 }, '+15% HP',
+      'aoeSlow', 'attacks on all enemies have a 25% chance to apply Speed Down for 2 turns',
+      'tidal', 'every 3rd turn, a Tidal Wave also hits all enemies for 40% Attack'],
+    ['overlord', 'Infernal Crown', 'Ember', 'Berserker', { crit: 12 }, '+12% Crit Rate',
+      'fury', 'deal up to +30% damage as your HP drops',
+      'overlord', 'below 40% HP: +25% Crit Damage and heal 20% of the damage you deal'],
+    ['netherqueen', 'Thorns of the Nether', 'Umbral', 'Marker', { crit: 12 }, '+12% Crit Rate',
+      'critMark', 'critical hits have a 40% chance to apply Death Mark for 1 turn',
+      'markTm', 'hitting a Marked enemy fills 15% Turn Meter'],
+    ['vampirelord', "Nightlord's Mantle", 'Umbral', 'Assassin', { spdP: 10 }, '+10% Speed',
+      'startStealth', 'start the battle in Stealth for 1 turn',
+      'killStealth', 'defeating an enemy grants Stealth for 1 turn and heals 15% of your max HP'],
+    ['doomharvester', "Reaper's Shroud", 'Storm', 'Executioner', { crit: 12 }, '+12% Crit Rate',
+      'execute20', '+20% damage to enemies below 30% HP',
+      'reaper', 'attacks on enemies below 30% HP always crit'],
+    ['crystaltitan', 'Prismatic Shell', 'Aether', 'Reflect', { hpP: 15 }, '+15% HP',
+      'reflect', 'reflect 15% of the damage you take back to the attacker',
+      'prism', 'every 3rd turn, gain Immunity for 1 turn'],
+    ['chaosabom', 'Aberrant Fragments', 'Aether', 'Chaos', { cdmg: 15 }, '+15% Crit Damage',
+      'chaosDebuff', 'your hits have a 20% chance to apply a random debuff for 2 turns',
+      'chaosBuff', 'at the start of your turn, gain a random buff for 2 turns'],
+    ['stonedragon', 'Mountainheart Armor', 'Frost', 'Tank', { defP: 15 }, '+15% Defense',
+      'tauntHit', 'when hit, 20% chance to Taunt the attacker for 1 turn',
+      'mountain', 'start the battle with a Shield of 25% of your max HP; when it breaks, Stun the attacker for 1 turn'],
+  ];
+  const bossSetId = id => 'bs_' + id;
+  for (const [boss, name, ess, role, b2, d2, f4, d4, f6, d6] of BOSS_SET_LIST) {
+    const tiers = [{ n: 2, bonus: b2, d: d2 }, { n: 4, flag: f4, d: d4 }, { n: 6, flag: f6, d: d6 }];
+    SETS[bossSetId(boss)] = { name, boss, ess, role, n: 2, tiers, desc: tiers.map(t => `${t.n} pieces: ${t.d}`).join(' · ') };
+  }
+  // the family bonus per essence (Radiant has one boss, so none)
+  const SET_FAMILY = {
+    Ember: { flag: 'burnPlus', d: 'your Burns last 1 turn longer' },
+    Verdant: { flag: 'regenPlus', d: 'your Regeneration heals 50% more' },
+    Umbral: { flag: 'drain5', d: 'your attacks heal you for 5% of the damage dealt' },
+    Frost: { flag: 'freezePlus', d: '+5% chance for your Freezes to land' },
+    Storm: { bonus: { spdP: 5 }, d: '+5% Speed' },
+    Aether: { bonus: { res: 20 }, d: '+20 Resistance' },
   };
   const BASIC_SETS = ['krijger', 'levensbron', 'vlammenhart', 'wilgenbast'];
   const MAIN_OPTIONS = {
@@ -1109,6 +1206,19 @@ const K = (function () {
   function activeSets(items) {
     const c = setCounts(items), out = [];
     for (const k in c) if (SETS[k] && c[k] >= SETS[k].n) out.push(k);
+    return out;
+  }
+  // every set bonus a gear loadout gives: campaign sets at their piece count, boss sets per reached tier (2/4/6), and the
+  // family bonus of an essence with 4+ boss pieces from 2+ different sets. Each: { k, n, bonus?, flag?, d, fam? }
+  function setTiers(items) {
+    const c = setCounts(items), out = [], fam = {};
+    for (const k in c) {
+      const S = SETS[k]; if (!S) continue;
+      if (S.tiers) { for (const t of S.tiers) if (c[k] >= t.n) out.push({ k, n: t.n, bonus: t.bonus, flag: t.flag, d: t.d }); }
+      else if (c[k] >= S.n) out.push({ k, n: S.n, bonus: S.bonus, flag: S.flag, d: S.desc });
+      if (S.ess) { const f = fam[S.ess] || (fam[S.ess] = { n: 0, sets: 0 }); f.n += c[k]; f.sets++; }
+    }
+    for (const e in fam) if (fam[e].n >= 4 && fam[e].sets >= 2 && SET_FAMILY[e]) out.push({ k: 'family:' + e, fam: e, ...SET_FAMILY[e] });
     return out;
   }
 
@@ -1208,7 +1318,7 @@ const K = (function () {
     };
     for (const it of items) for (const [k, v] of gearStats(it)) add(k, v);
     const flags = {};
-    for (const k of activeSets(items)) { const S = SETS[k]; if (S.bonus) for (const bk in S.bonus) add(bk, S.bonus[bk]); if (S.flag) flags[S.flag] = true; }
+    for (const t of setTiers(items)) { if (t.bonus) for (const bk in t.bonus) add(bk, t.bonus[bk]); if (t.flag) flags[t.flag] = true; }
     for (const k in s) s[k] = Math.round(s[k]);
     s.crit = Math.min(CRIT_CAP, s.crit);
     s.flags = flags;
@@ -1302,6 +1412,33 @@ const K = (function () {
     async start() {
       for (const u of this.heroes) if (u.passive === 'divineward') for (const a of this.heroes) this.addEffect(a, { k: 'shield', n: 3, v: Math.round(u.maxHp * 0.12) }, true);
       for (const u of this.enemies) if (u.passive === 'divinebarrier') this.addEffect(u, { k: 'shield', n: 4, v: Math.round(u.maxHp * 0.25) }, true);
+      // boss sets that act at the start of battle (either side: arena defenders wear gear too)
+      for (const u of this.all()) {
+        if (u.sets.startStealth) this.addEffect(u, { k: 'stealth', n: 1 }, true);
+        if (u.sets.startTm) u.tm = Math.min(99, u.tm + 25);
+        if (u.sets.voidBarrier) this.teamShield(u);
+        if (u.sets.mountain) { this.addEffect(u, { k: 'shield', n: 99, v: Math.round(u.maxHp * 0.25) }, true); const sh = u.effects.find(e => e.k === 'shield'); if (sh) sh.mountain = true; }
+      }
+    }
+    unit(uid) { return uid ? this.all().find(x => x.uid === uid) || null : null; }
+    teamShield(u) { for (const a of this.living(this.allies(u))) this.addEffect(a, { k: 'shield', n: 3, v: Math.round(u.maxHp * 0.1) }, true); this.h.float(u, 'Void Barrier', 'buff'); }
+    // boss sets at the start of a unit's own turn
+    setTurn(u) {
+      const S = u.sets; let did = false;
+      if (S.treantRegen) { this.heal(u, u.maxHp * 0.03, u, 'Worldroot'); did = true; }
+      if (S.choir) { const l = lowest(this.living(this.allies(u))); if (l && l.hp < l.maxHp) { this.heal(l, l.maxHp * 0.05, u, 'Celestial Choir'); did = true; } }
+      if (S.chaosBuff) { this.addEffect(u, { k: pick(['atkUp', 'critUp', 'spdUp', 'defUp']), n: 2 }); did = true; }
+      if (S.prism && (u.stacks.prism = (u.stacks.prism || 0) + 1) % 3 === 0) { this.addEffect(u, { k: 'immune', n: 1 }); did = true; }
+      if (S.voidBarrier && (u.stacks.void = (u.stacks.void || 0) + 1) % 4 === 0) { this.teamShield(u); did = true; }
+      return did;
+    }
+    // a strike from a set (Frozen Nova, Tidal Wave, chain lightning): m × Attack on each target, no further set effects
+    setStrike(u, list, m, label, freezeCh) {
+      for (const t of list.filter(t => t.alive)) {
+        const r = this.calc(u, t, m, {}, { name: label, target: 'enemies' });
+        this.damage(t, r.dmg, u, r);
+        if (freezeCh && t.alive && rnd() < freezeCh + (u.sets.freezePlus ? 0.05 : 0)) this.addEffect(t, { k: 'freeze', n: 1, src: u.uid });
+      }
     }
     async run() {
       await this.start();
@@ -1325,9 +1462,11 @@ const K = (function () {
       let ticked = false;
       for (const e of u.effects.filter(e => DOT[e.k])) {
         if (!u.alive) break;
-        this.damage(u, Math.round((u.baseHp || u.maxHp) * DOT[e.k] * (e.v || 1)), null, { kind: e.k, from: e.src }); ticked = true;
+        const by = this.unit(e.src), boost = e.k === 'burn' && by && by.sets.brimstone ? 1.5 : 1; // Brimstone Scales: stronger Burns
+        this.damage(u, Math.round((u.baseHp || u.maxHp) * DOT[e.k] * (e.v || 1) * boost), null, { kind: e.k, from: e.src }); ticked = true;
       }
-      if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1, u, 'Regeneration'); ticked = true; }
+      if (u.alive && this.has(u, 'regen')) { this.heal(u, u.maxHp * 0.1 * (u.sets.regenPlus ? 1.5 : 1), u, 'Regeneration'); ticked = true; }
+      if (u.alive && this.setTurn(u)) ticked = true;
       if (u.alive && u.passive === 'deeproots') { this.heal(u, u.maxHp * 0.05, u, 'Passive'); ticked = true; }
       if (u.alive && u.passive === 'beacon') { const l = lowest(this.living(this.allies(u))); if (l.hp < l.maxHp) { this.heal(l, l.maxHp * 0.05, u, 'Passive'); ticked = true; } }
       if (u.alive && u.passive === 'harmony') for (const a of this.living(this.allies(u))) if (a.hp < a.maxHp) { this.heal(a, a.maxHp * 0.04, u, 'Passive'); ticked = true; }
@@ -1338,7 +1477,7 @@ const K = (function () {
       let used = null;
       const skip = SKIP.find(k => this.has(u, k));
       if (skip) {
-        this.h.log(`${u.name} is ${skip === 'broken' ? 'broken' : skip === 'freeze' ? 'frozen' : 'stunned'} and loses the turn.`, u.side);
+        this.h.log(`${u.name} is ${skip === 'broken' ? 'broken' : skip === 'freeze' ? 'frozen' : skip === 'iceTomb' ? 'encased in ice' : 'stunned'} and loses the turn.`, u.side);
         this.h.float(u, EFFECTS[skip].n, 'debuff');
         await this.h.pause(480);
       } else {
@@ -1363,6 +1502,11 @@ const K = (function () {
             await this.h.pause(300);
           } else break;
         } while (true);
+        // Tidecaller's Scales: every 3rd turn a Tidal Wave
+        if (u.alive && u.sets.tidal && (u.stacks.tide = (u.stacks.tide || 0) + 1) % 3 === 0 && !this.check()) {
+          this.h.float(u, 'Tidal Wave', 'buff'); this.h.log(`${u.name}'s Tidal Wave crashes over the enemies.`, u.side);
+          this.setStrike(u, this.living(this.foes(u)), 0.4, 'Tidal Wave'); await this.h.pause(300);
+        }
       }
       // boss end-of-turn passives
       if (u.alive && u.passive === 'toxicpresence') for (const t of this.living(this.foes(u))) if (rnd() < 0.15) this.addEffect(t, { k: 'poison', n: 2, v: 1 });
@@ -1395,8 +1539,13 @@ const K = (function () {
     endTurn(u, used) {
       for (const s of u.skills) s.cdLeft = s === used ? s.cd : Math.max(0, s.cdLeft - 1);
       for (const e of u.effects) { if (e.fresh) e.fresh = false; else e.n--; }
-      const wasBroken = this.has(u, 'broken');
+      const wasBroken = this.has(u, 'broken'), wasTomb = this.has(u, 'iceTomb');
       u.effects = u.effects.filter(e => e.n > 0);
+      // Regalia of the Frozen Heart: the ice shatters in a Frozen Nova
+      if (wasTomb && !this.has(u, 'iceTomb') && u.alive) {
+        this.h.float(u, 'Frozen Nova', 'buff'); this.h.log(`The ice around ${u.name} shatters in a Frozen Nova.`, u.side);
+        this.setStrike(u, this.living(this.foes(u)), 0.8, 'Frozen Nova', 0.4);
+      }
       if (wasBroken && !this.has(u, 'broken')) { this.h.float(u, 'Recovered', 'resist'); this.h.log(`${u.name} recovers from the Affinity Break.`, u.side); }
       this.h.update();
     }
@@ -1484,6 +1633,7 @@ const K = (function () {
               if (was && !t.alive) killed++;
               hitMap.set(t, r.hit);
               if (dealt > 0) this.onHitPassives(u, t, r, skill);
+              if (dealt > 0) this.setHit(u, t, r, skill, dealt, isCounter, counters);
               if (!isCounter && t.alive && dealt > 0 && !SKIP.some(k => this.has(t, k)) && !counters.includes(t)) {
                 const ch = (t.passive === 'retribution' ? 0.3 : 0) + (t.sets.counter ? 0.25 : 0) + (this.has(t, 'counter') ? 0.5 : 0);
                 if (ch > 0 && rnd() < ch) counters.push(t);
@@ -1508,9 +1658,9 @@ const K = (function () {
           for (const t of (list.length ? list : [u]).filter(t => t.alive)) this.addEffect(t, { k: fx.k, n: fx.n });
         } else if (fx.t === 'heal') {
           const list = fx.to === 'lowestAlly' ? [lowest(this.living(this.allies(u)))] : targets.filter(t => t.side === u.side);
-          for (const t of list.filter(t => t.alive)) this.heal(t, t.maxHp * fx.pct * lvMult * (u.passive === 'bloom' ? 1.2 : 1), u, skill.name);
+          for (const t of list.filter(t => t.alive)) { this.heal(t, t.maxHp * fx.pct * lvMult * (u.passive === 'bloom' ? 1.2 : 1), u, skill.name); if (u.sets.healCleanse) this.cleanseOne(t); }
         } else if (fx.t === 'shield') {
-          for (const t of targets.filter(t => t.alive && t.side === u.side)) this.addEffect(t, { k: 'shield', n: fx.n, v: Math.round(u.maxHp * fx.pct * lvMult) });
+          for (const t of targets.filter(t => t.alive && t.side === u.side)) { this.addEffect(t, { k: 'shield', n: fx.n, v: Math.round(u.maxHp * fx.pct * lvMult) }); if (u.sets.healCleanse) this.cleanseOne(t); }
         } else if (fx.t === 'cleanse') {
           for (const t of targets.filter(t => t.alive && t.side === u.side)) {
             const before = t.effects.length;
@@ -1531,7 +1681,15 @@ const K = (function () {
           if (n) this.h.log(`${u.name} summons reinforcements.`, u.side);
         }
       }
+      // Thundercore Harness: a basic attack may chain to another enemy
+      if (u.sets.chain && !isCounter && u.alive && skill === u.skills[0] && skill.fx.some(f => f.t === 'dmg') && rnd() < 0.3) {
+        const o = this.living(this.foes(u)).filter(x => !targets.includes(x));
+        if (o.length) { const c = pick(o); this.h.float(c, 'Chain Lightning', 'debuff'); this.setStrike(u, [c], 0.4, 'Chain Lightning'); }
+      }
       if (killed) {
+        if (u.alive && u.sets.killAtkUp) this.addEffect(u, { k: 'atkUp', n: 2 });
+        if (u.alive && u.sets.warlord) u.tm = Math.min(100, u.tm + 30);
+        if (u.alive && u.sets.killStealth) { this.addEffect(u, { k: 'stealth', n: 1 }); this.heal(u, u.maxHp * 0.15, u, "Nightlord's Mantle"); }
         if (u.passive === 'bloodfrenzy') u.stacks.smids = Math.min(3, (u.stacks.smids || 0) + killed);
         if (u.passive === 'killingspree' && u.alive) u.tm = Math.min(100, u.tm + 50);
         if (u.passive === 'sanguine') this.heal(u, u.maxHp * 0.05 * killed, u, 'Passive');
@@ -1545,6 +1703,32 @@ const K = (function () {
         await this.perform(c, c.skills[0], u, true);
       }
     }
+    // boss sets on every damaging hit: the attacker's procs and lifesteal, then the target's answers
+    setHit(u, t, r, skill, dealt, isCounter, counters) {
+      const A = u.sets, T = t.sets;
+      const steal = (A.steal20 ? 0.2 : 0) + (A.drain5 ? 0.05 : 0) + (A.overlord && u.hp < u.maxHp * 0.4 ? 0.2 : 0);
+      if (steal && u.alive) this.heal(u, dealt * steal, u, 'Lifesteal');
+      if (t.alive && t.side !== u.side) {
+        const add = (k, n, ch) => { if (rnd() < ch) this.addEffect(t, { k, n, src: u.uid }); };
+        if (A.burnHit) add('burn', 2, 0.2);
+        if (A.poisonHit) add('poison', 2, 0.25);
+        if (A.accHit) add('accDown', 2, 0.3);
+        if (A.silenceHit) add('silence', 1, 0.2);
+        if (A.freezeHit) add('freeze', 1, 0.15 + (A.freezePlus ? 0.05 : 0));
+        if (A.chaosDebuff && rnd() < 0.2) this.addEffect(t, { k: pick(['burn', 'poison', 'defDown', 'spdDown', 'atkDown']), n: 2, src: u.uid });
+        if (A.skillSlow && skill && skill.cd > 0) add('spdDown', 2, 0.2);
+        if (A.aoeSlow && skill && skill.target === 'enemies') add('spdDown', 2, 0.25);
+        if (A.critMark && r.crit) add('mark', 1, 0.4);
+        if (A.markTm && this.has(t, 'mark')) u.tm = Math.min(100, u.tm + 15);
+        if (A.brimstone && r.crit && this.has(t, 'burn')) { const o = this.living(this.foes(u)).filter(x => x !== t); if (o.length) this.addEffect(pick(o), { k: 'burn', n: 2, src: u.uid }); }
+      }
+      if (t.alive && u.alive && t.side !== u.side) {
+        if (T.tauntHit && rnd() < 0.2) this.addEffect(u, { k: 'taunt', n: 1, src: t.uid });
+        if (T.reflect) this.damage(u, Math.max(1, Math.round(dealt * 0.15)), null, { kind: 'reflect', from: t.uid });
+        if (T.critCounter && r.crit && !isCounter && !SKIP.some(k => this.has(t, k)) && !counters.includes(t)) counters.push(t);
+      }
+    }
+    cleanseOne(t) { const i = t.effects.findIndex(e => !EFFECTS[e.k].buff && e.k !== 'broken'); if (i >= 0) { t.effects.splice(i, 1); this.h.float(t, 'Cleansed', 'buff'); } }
     onHitPassives(a, t, r) {
       if (!t.alive || !a.alive) return;
       if (t.passive === 'molten' && r.hit === 'weak' && rnd() < 0.2) this.addEffect(a, { k: 'burn', n: 2 });
@@ -1554,6 +1738,10 @@ const K = (function () {
     }
     addEffect(t, e, quiet) {
       if (!EFFECTS[e.k].buff && e.k !== 'broken' && this.has(t, 'immune')) return;
+      // boss sets of the one who placed it: Ember family Burns last a turn longer, Plaguebearer's Poison cuts healing
+      const by = e.src && (e.k === 'burn' || e.k === 'poison') ? this.unit(e.src) : null;
+      if (by && e.k === 'burn' && by.sets.burnPlus) e.n += 1;
+      if (by && e.k === 'poison' && by.sets.plague) this.addEffect(t, { k: 'healRed', n: e.n, src: e.src }, true);
       e.fresh = t === this.active;
       const ex = t.effects.find(x => x.k === e.k);
       if (ex) { ex.n = Math.max(ex.n, e.n); if (e.v) ex.v = Math.max(ex.v || 0, e.v); if (e.src) ex.src = e.src; ex.fresh = ex.fresh || e.fresh; }
@@ -1571,7 +1759,8 @@ const K = (function () {
       if (a.passive === 'bloodlust' && a.hp < a.maxHp * 0.5) atk *= 1.3;
       if (a.passive === 'soulharvest') atk *= 1 + 0.1 * Math.min(5, this.deaths);
       let def = t.def;
-    if (a.sets && a.sets.pierce) def *= 0.75;
+      if (a.sets && a.sets.pierce) def *= 0.75;
+      if (a.sets && a.sets.pierce15) def *= 0.85;
       if (this.has(t, 'defUp')) def *= 1.6;
       if (this.has(t, 'defDown')) def *= 0.4;
       if (t.passive === 'steadfast' && t.hp < t.maxHp * 0.5) def *= 1.5;
@@ -1587,8 +1776,9 @@ const K = (function () {
         let cr = a.crit + (this.has(a, 'critUp') ? 25 : 0);
         if (a.passive === 'shadowhunter' && t.effects.some(e => !EFFECTS[e.k].buff)) cr += 25;
         crit = rnd() * 100 < Math.min(CRIT_CAP, cr);
+        if (a.sets.reaper && t.hp < t.maxHp * 0.3) crit = true; // Reaper's Shroud
       }
-      if (crit) raw *= 1 + (a.cdmg + (this.has(a, 'cdmgUp') ? 30 : 0)) / 100;
+      if (crit) raw *= 1 + (a.cdmg + (this.has(a, 'cdmgUp') ? 30 : 0) + (a.sets.overlord && a.hp < a.maxHp * 0.4 ? 25 : 0)) / 100;
       let d = raw * H.mult * (100 / (100 + def));
       if (t.trait === 'ironhide' && !this.has(t, 'defDown')) d *= BTRAIT.dmg;
       // attacker modifiers
@@ -1608,26 +1798,45 @@ const K = (function () {
       if (t.passive === 'scalearmor' && skill && skill.anim === 'melee') d *= 0.75;
       if (t.passive === 'thickhide') d *= 0.9;
       if (this.living(this.allies(t)).some(x => x.passive === 'lightbearer')) d *= 0.9;
+      // boss sets: the attacker's damage boosts, then the target's protection
+      const A = a.sets, T = t.sets, aoe = skill && skill.target === 'enemies';
+      if (A.aoeDmg && aoe) d *= 1.15;
+      if (A.fury) d *= 1 + 0.3 * (1 - a.hp / a.maxHp);
+      if (A.warlord && t.hp < t.maxHp * 0.5) d *= 1.15;
+      if (A.execute20 && t.hp < t.maxHp * 0.3) d *= 1.2;
+      if (A.frozenDmg && this.has(t, 'freeze')) d *= 1.25;
+      if (A.juggernaut && this.has(t, 'broken')) d *= 1.2;
+      if (A.lich && t.effects.filter(e => !EFFECTS[e.k].buff && e.src === a.uid).length >= 2) d *= 1.15;
+      if (T.strongRes && hit === 'strong') d *= 0.85;
+      if (T.aoeRes && aoe) d *= 0.85;
+      if (this.living(this.allies(t)).some(x => x.sets.treantWard)) d *= 0.9;
       d *= 0.95 + rnd() * 0.1;
       return { dmg: Math.max(1, Math.round(d)), crit, hit, skill };
     }
     damage(t, amount, src, info) {
       if (!t.alive) return 0;
-      if (this.has(t, 'burrow')) { this.h.float(t, 'Immune', 'resist'); return 0; }
+      if (this.has(t, 'burrow') || this.has(t, 'iceTomb')) { this.h.float(t, 'Immune', 'resist'); return 0; }
       let left = amount;
       const sh = t.effects.find(e => e.k === 'shield');
       const hpBefore = t.hp;
-      if (sh) { const ab = Math.min(sh.v, left); sh.v -= ab; left -= ab; if (sh.v <= 0) t.effects = t.effects.filter(e => e !== sh); }
+      if (sh) {
+        const ab = Math.min(sh.v, left); sh.v -= ab; left -= ab;
+        if (sh.v <= 0) {
+          t.effects = t.effects.filter(e => e !== sh);
+          // Mountainheart Armor: the opening Shield stuns whoever breaks it
+          if (sh.mountain && src && src.alive && src.side !== t.side) { this.addEffect(src, { k: 'stun', n: 1, src: t.uid }); this.h.log(`${t.name}'s stone shield shatters and stuns ${src.name}.`, t.side); }
+        }
+      }
       t.hp -= left;
       if (t.immortal) t.hp = Math.max(1, t.hp);
       const real = amount - left + Math.min(left, Math.max(0, hpBefore)), by = src || (info && info.from && this.all().find(x => x.uid === info.from));
-      if (by) this.note(by, 'dmg', info && info.skill ? info.skill.name : info && info.kind ? EFFECTS[info.kind].n : 'Other', real);
+      if (by) this.note(by, 'dmg', info && info.skill ? info.skill.name : info && info.kind ? (EFFECTS[info.kind] ? EFFECTS[info.kind].n : 'Reflect') : 'Other', real);
       this.note(t, 'taken', null, real);
       if (src) { this.stats.dmg[src.uid] = (this.stats.dmg[src.uid] || 0) + amount; if (info && info.crit) this.stats.crits++; this.stats.maxHit = Math.max(this.stats.maxHit, amount); }
       this.h.hit(t, amount, info || {}, left < amount);
       // break meter
       if (src && t.isBoss && t.alive && info && info.hit && !this.has(t, 'broken')) {
-        let b = HIT[info.hit].brk * (info.skill && info.skill.brk || 1) * (1 - (t.breakRes || 0));
+        let b = (HIT[info.hit].brk * (info.skill && info.skill.brk || 1) + (src.sets.juggernaut && info.hit === 'strong' ? 2 : 0)) * (1 - (t.breakRes || 0));
         if (t.passive === 'aethercore' && src.aff === 'Aether') b *= 1.5;
         if (b > 0) {
           t.brk = Math.max(0, t.brk - b); this.h.breakHit(t, b);
@@ -1646,14 +1855,41 @@ const K = (function () {
         t.flags.fated = true; t.hp = 1;
         this.h.float(t, 'Fate holds!', 'buff'); this.h.log(`The Fate Set keeps ${t.name} standing.`, t.side);
       }
+      // boss sets that save a hero from a killing blow, once per battle each
+      if (t.hp <= 0 && t.sets.boneKing && !t.flags.boneUsed) {
+        t.flags.boneUsed = true; t.hp = 1; this.addEffect(t, { k: 'immune', n: 2 }, true);
+        this.h.float(t, 'Ossuary Regalia!', 'buff'); this.h.log(`${t.name} refuses to fall: Immune for 2 turns.`, t.side);
+      }
+      if (t.hp <= 0) {
+        const g = this.living(this.allies(t)).find(x => x.sets.guardian && !x.flags.guardUsed);
+        if (g) { g.flags.guardUsed = true; t.hp = 1; this.addEffect(t, { k: 'immune', n: 1 }, true); this.h.float(t, 'Guardian Angel!', 'buff'); this.h.log(`${g.name}'s Celestial Choir keeps ${t.name} alive.`, t.side); }
+      }
       if (t.hp <= 0) {
         if ((t.passive === 'undying' || t.passive === 'rebirth') && !t.flags.revived) {
           t.flags.revived = true; t.hp = Math.round(t.maxHp * (t.passive === 'rebirth' ? 0.25 : 0.3)); t.effects = [];
           this.h.float(t, t.passive === 'rebirth' ? 'Rebirth!' : 'Undying!', 'buff'); this.h.log(`${t.name} refuses to die.`, t.side);
+        } else if (t.sets.phoenix && !t.flags.phoenixUsed) {
+          // Plumes of the Ashen Phoenix: rise again and set the enemy team on fire
+          t.flags.phoenixUsed = true; t.hp = Math.round(t.maxHp * 0.3); t.effects = [];
+          this.h.float(t, 'Phoenix Rebirth!', 'buff'); this.h.log(`${t.name} rises from the ashes.`, t.side);
+          for (const f of this.living(this.foes(t))) this.addEffect(f, { k: 'burn', n: 2, src: t.uid });
         } else {
           t.hp = 0; t.alive = false; t.effects = []; this.deaths++;
           this.h.death(t); this.h.log(`${t.name} is defeated.`, t.side === 'hero' ? 'enemy' : 'hero');
           if (t.isBoss) for (const m of this.enemies) if (m.summoned && m.alive) { m.hp = 0; m.alive = false; this.h.death(m); }
+          // Ossuary Regalia: the fallen one's allies with it gain a Shield
+          for (const a of this.living(this.allies(t))) if (a.sets.fallShield) this.addEffect(a, { k: 'shield', n: 3, v: Math.round(a.maxHp * 0.2) });
+        }
+      }
+      // boss sets that react to falling low, once per battle each
+      if (t.alive && t.hp > 0) {
+        if (t.sets.sandBurrow && !t.flags.sandUsed && t.hp < t.maxHp * 0.5) {
+          t.flags.sandUsed = true; this.addEffect(t, { k: 'burrow', n: 1 }, true); this.addEffect(t, { k: 'atkUp', n: 3 }, true);
+          this.h.float(t, 'Burrowed!', 'buff'); this.h.log(`${t.name} burrows into the sand.`, t.side);
+        }
+        if (t.sets.iceTomb && !t.flags.tombUsed && t.hp < t.maxHp * 0.3) {
+          t.flags.tombUsed = true; this.addEffect(t, { k: 'iceTomb', n: 2 }, true);
+          this.h.float(t, 'Encased in Ice!', 'buff'); this.h.log(`${t.name} is encased in ice.`, t.side);
         }
       }
       if (t.alive && t.isBoss) this.checkPhase(t);
@@ -1675,7 +1911,14 @@ const K = (function () {
     // by + label: who healed and with what, for the damage meter
     heal(t, amt, by, label) {
       if (!t.alive) return;
+      if (by && by.sets.healPlus && label !== 'Lifesteal') amt *= 1.2; // Vestments of the Coiled Faith
       if (this.has(t, 'healRed')) amt *= 0.4;
+      // Crimson Court: healing beyond full HP becomes a Shield (up to 25% of max HP)
+      const over = amt - (t.maxHp - t.hp);
+      if (t.sets.overheal && over >= 1) {
+        const cap = Math.round(t.maxHp * 0.25), sh = t.effects.find(e => e.k === 'shield');
+        if (sh) sh.v = Math.max(sh.v, Math.min(cap, sh.v + Math.round(over))); else this.addEffect(t, { k: 'shield', n: 3, v: Math.min(cap, Math.round(over)) }, true);
+      }
       amt = Math.round(Math.min(amt, t.maxHp - t.hp));
       if (amt <= 0) return;
       t.hp += amt;
@@ -1913,7 +2156,7 @@ const K = (function () {
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
-    SLOTS, SLOT_NAMES, SETS, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
+    SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
