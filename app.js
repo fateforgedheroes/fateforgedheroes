@@ -526,7 +526,11 @@
   // Uncommon's, Mythical gets the last 5) and an item always shows the same icon of its group (by item id)
   const GEAR_GROUPS = [[0, 4], [0, 4], [4, 4], [8, 4], [12, 4], [16, 5]];
   function gearArt(slot, rar, id) { const [s, n] = GEAR_GROUPS[rar] || GEAR_GROUPS[0], list = GEAR_ART[slot]; return list[Math.min(list.length - 1, s + ((id || 0) % n))]; }
-  const gearIcon = (it, cls) => `<img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">`;
+  // an ascended item (Item Ascension) shows its orange stars on its icon everywhere
+  const ascStars = it => (it.asc ? `<i class="asc-st" title="Ascended ${it.asc}/${K.MAX_ASC}">${'★'.repeat(it.asc)}</i>` : '');
+  const gearIcon = (it, cls) => it.asc ? `<span class="gear-asc"><img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">${ascStars(it)}</span>` : `<img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">`;
+  // ascended gear is worn only by heroes of K.ASC_STARS stars or more, whatever their rarity
+  const wearOk = (id, it) => !it.asc || ((S.roster[id] && S.roster[id].stars) || 0) >= K.ASC_STARS;
   // which stats matter most per role, used by "Upgrade all" to upgrade the most important gear first
   const GEAR_PRI = {
     Tank: { hp: 3, hpP: 3, def: 3, defP: 3, res: 2, spd: 2, acc: 1, atk: 0.5, atkP: 0.5, crit: 0.3, cdmg: 0.3 },
@@ -577,7 +581,8 @@
   const rarsHtml = rars => rars.map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' / ');
   const sigils = n =>`${ic('coin')} ${n.toLocaleString('en-US')} Sigils`;
   const itemsOf = id => S.inv.filter(it => it.owner === id);
-  const itemName = it => `${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()}${it.lvl ? ' +' + it.lvl : ''}`;
+  const itemName = it => `${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()}${it.lvl ? ' +' + it.lvl : ''}${it.asc ? ' ' + '★'.repeat(it.asc) : ''}`;
+  const itemNameH = it => esc(itemName({ ...it, asc: 0 })) + (it.asc ? ' ' + ascStars(it) : '');
   const starStr = (n, max) => `<span class="stars" title="${n} stars">${'★'.repeat(n)}<i>${'★'.repeat(Math.max(0, (max || K.MAX_STARS) - n))}</i></span>`;
   function itemStatsHtml(it) {
     return `<ul class="item-stats">${K.gearStats(it).map(([k, v], i) => `<li class="${i === 0 ? 'main' : ''}">${K.fmtStat(k, v)}</li>`).join('')}</ul>`;
@@ -898,7 +903,7 @@
     // its own six-piece set: the bonus at 2, 4 and 6 pieces, and the essence family bonus it counts towards
     const SS = K.SETS[K.bossSets(ci)[0]], fam = K.SET_FAMILY[SS.ess];
     const sets = `<li class="bhv-sethead">${icon(BH_GLYPH.set, '#e3c06a')}<b>${esc(SS.name)}</b><span>${esc(SS.role)} · six-piece set</span></li>`
-      + SS.tiers.map(t => `<li><span class="bhv-pc">${t.n}</span><b>${t.n} pieces</b><span>${esc(t.d)}</span></li>`).join('')
+      + SS.tiers.map(t => t.asc ? `<li class="bhv-ascl"><span class="bhv-pc asc">★</span><b>Ascended</b><span>${esc(t.d)} (all six pieces at <span class="asc-st">★★★</span>)</span></li>` : `<li><span class="bhv-pc">${t.n}</span><b>${t.n} pieces</b><span>${esc(t.d)}</span></li>`).join('')
       + (fam ? `<li class="bhv-fam"><span class="bhv-pc">✦</span><b>${SS.ess} family</b><span>${esc(fam.d)} (4+ pieces from two different ${SS.ess} boss sets)</span></li>` : '');
     const trait = sel >= K.BTRAIT.from ? (() => {
       const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.teams[bossTeamIdx(B0.aff)].ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]));
@@ -1068,18 +1073,20 @@
     }
     const items = itemsOf(id), counts = K.setCounts(items);
     // campaign sets: one bonus; boss sets: the 2/4/6-piece tiers, each lit when reached; then any essence family bonus
+    const active = K.setTiers(items);
     const setInfo = Object.keys(counts).filter(k => K.SETS[k]).map(k => {
       const SS = K.SETS[k], c = counts[k];
       if (!SS.tiers) { const on = c >= SS.n; return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${SS.name} (${c}/${SS.n}): ${SS.desc.replace(/^\d pieces: /, '')}</div>`; }
-      return `<div class="set-tiers"><b>${esc(SS.name)} (${c}/6)</b>${SS.tiers.map(t => `<div class="${c >= t.n ? 'on' : 'off'}">${c >= t.n ? '✓' : '·'} ${t.n} pieces: ${esc(t.d)}</div>`).join('')}</div>`;
-    }).join('') + K.setTiers(items).filter(t => t.fam).map(t => `<div class="on">✓ ${t.fam} family: ${esc(t.d)}</div>`).join('');
+      const asc = active.some(t => t.k === k && t.asc);
+      return `<div class="set-tiers"><b>${esc(SS.name)} (${c}/6)</b>${SS.tiers.map(t => { const on = t.asc ? asc : c >= t.n && !(t.n === 6 && asc); return `<div class="${on ? 'on' : 'off'}">${on ? '✓' : '·'} ${t.asc ? 'Ascended <span class="asc-st">★★★</span>' : t.n + ' pieces'}: ${esc(t.d)}</div>`; }).join('')}</div>`;
+    }).join('') + active.filter(t => t.fam).map(t => `<div class="on">✓ ${t.fam} family: ${esc(t.d)}</div>`).join('');
     // gear: one compact tile per slot (tap it for the item's stats), with its own Upgrade button
     const gear = K.SLOTS.map(slot => {
       const it = items.find(x => x.slot === slot);
       if (!it) return `<div class="gtile empty"><button type="button" class="gt-main" data-act="inv" data-slot="${slot}" aria-label="Choose a ${K.SLOT_NAMES[slot].toLowerCase()}"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${SLOT_GLYPH[slot]}</span><span class="gt-name">Empty</span></button><button type="button" class="btn small" data-act="inv" data-slot="${slot}">Choose</button></div>`;
       const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it);
       return `<div class="gtile rar-${it.rar}"><button type="button" class="gt-main" data-act="gearpop" data-slot="${slot}" aria-label="${esc(itemName(it))}: show stats"><span class="gt-slot">${K.SLOT_NAMES[slot]}</span><span class="gt-ic">${gearIcon(it)}${it.lvl ? `<i class="gt-lv">+${it.lvl}</i>` : ''}</span><span class="gt-name rartxt">${K.RARITIES[it.rar]}</span><span class="gt-set">${K.SETS[it.set].name.replace(/ Set$/, '')}</span></button>
-        <button type="button" class="btn small primary gt-up" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade<small>${ic('coin')}${cost.toLocaleString('en-US')}</small>`}</button></div>`;
+        ${maxed && K.ascCost(it) ? `<button type="button" class="btn small violet gt-up" data-act="gearpop" data-slot="${slot}">Ascend <span class="asc-st">★</span></button>` : `<button type="button" class="btn small primary gt-up" data-act="up" data-item="${it.id}" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : `Upgrade<small>${ic('coin')}${cost.toLocaleString('en-US')}</small>`}</button>`}</div>`;
     }).join('');
     let inv = '';
     if (invSlot) {
@@ -1091,8 +1098,8 @@
       const setSel = sets.length > 1 ? `<label class="inv-set">Set <select id="inv-set"><option value="all">All sets (${all.length})</option>${sets.map(k => { const w = worn.filter(x => x.set === k).length; return `<option value="${k}" ${k === invSet ? 'selected' : ''}>${esc(K.SETS[k].name)} (${all.filter(x => x.set === k).length})${w ? ` · ${w} worn` : ''}</option>`; }).join('')}</select></label>` : '';
       inv = `<div class="inv" id="invpanel"><div class="section-head"><h3>Choose ${K.SLOT_NAMES[invSlot].toLowerCase()}</h3><div class="row" style="display:flex;gap:6px"><button class="btn small" data-act="sellbad" data-slot="${invSlot}">Sell spare common and uncommon</button><button class="btn small" data-act="invclose">Close</button></div></div>
         ${setSel}${invSet !== 'all' ? `<p class="empty-note inv-setnote">${esc(K.SETS[invSet].desc)}</p>` : ''}
-        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemName(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
-          <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}">Equip</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
+        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemNameH(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
+          <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}" ${wearOk(id, x) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, x) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
     }
     const inTeam = S.team.includes(id);
@@ -1215,16 +1222,29 @@
     m.hidden = false; m.querySelector('.btn').focus();
   }
   // popup with the stats of the item in `slot` of the selected hero, with Upgrade / Swap / Remove
+  // Item Ascension: what the next orange star costs and gives, and its button (worn gear needs a 5★ hero)
+  function ascHtml(it) {
+    const ac = K.ascCost(it), n = it.asc || 0;
+    if (!ac) return n >= K.MAX_ASC ? '<p class="gp-ascp">Fully ascended: <span class="asc-st">★★★</span> · +30% to all its stats.</p>' : '';
+    const t = ac.greater ? 'greater' : 'ancient', need = ac.greater || ac.ancient;
+    const who = it.owner && S.roster[it.owner] && S.roster[it.owner].stars < K.ASC_STARS ? ` <b class="warn">${esc(C[it.owner].short)} needs ${K.ASC_STARS}★ to wear ascended gear.</b>` : '';
+    return `<p class="gp-ascp">Ascend to <span class="asc-st">${'★'.repeat(n + 1)}</span>: ${stoneIc(t)} ${need} ${stoneName(t, need)} (you have ${stoneN(t)}) + ${sigils(ac.silver)} · +${(n + 1) * 10}% to all its stats. Always succeeds; ascended gear is worn by heroes of ${K.ASC_STARS}★ or more.${who}</p>`;
+  }
+  function ascBtn(it, pop) {
+    const ac = K.ascCost(it); if (!ac) return '';
+    const t = ac.greater ? 'greater' : 'ancient', ok = stoneN(t) >= (ac.greater || ac.ancient) && S.silver >= ac.silver && !(it.owner && !wearOk(it.owner, { asc: 1 }));
+    return `<button class="btn violet" data-act="ascend" data-item="${it.id}" ${pop ? 'data-pop="1"' : ''} ${ok ? '' : 'disabled'}>Ascend <span class="asc-st">★</span></button>`;
+  }
   function gearPop(slot) {
     const it = itemsOf(selChamp).find(x => x.slot === slot), m = $('#modal');
     if (!it) { m.hidden = true; return; }
     const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it), SS = K.SETS[it.set];
     m.innerHTML = `<div class="modal-box gear-pop rar-${it.rar}" role="dialog" aria-modal="true" aria-labelledby="gp-t">
-      <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${esc(itemName(it))}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
+      <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${itemNameH(it)}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
       ${itemStatsHtml(it)}
-      ${SS.tiers ? `<div class="gp-set"><b>${esc(SS.name)}</b> · ${SS.ess} boss set${SS.tiers.map(t => `<div><i>${t.n} pieces:</i> ${esc(t.d)}</div>`).join('')}</div>` : `<p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>`}
-      ${maxed ? '' : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
-      <div class="modal-actions"><button class="btn primary" data-act="up" data-item="${it.id}" data-pop="1" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Upgrade'}</button><button class="btn" data-act="inv" data-slot="${slot}">Swap</button><button class="btn" data-act="unequip" data-item="${it.id}">Remove</button><button class="btn" data-act="gpclose">Close</button></div></div>`;
+      ${SS.tiers ? `<div class="gp-set"><b>${esc(SS.name)}</b> · ${SS.ess} boss set${SS.tiers.map(t => `<div${t.asc ? ' class="gp-asc"' : ''}><i>${t.asc ? 'Ascended (all six at <span class="asc-st">★★★</span>)' : t.n + ' pieces'}:</i> ${esc(t.d)}</div>`).join('')}</div>` : `<p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>`}
+      ${maxed ? ascHtml(it) : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
+      <div class="modal-actions">${maxed && K.ascCost(it) ? ascBtn(it, true) : `<button class="btn primary" data-act="up" data-item="${it.id}" data-pop="1" ${maxed || S.silver < cost ? 'disabled' : ''}>${maxed ? 'Maxed' : 'Upgrade'}</button>`}<button class="btn" data-act="inv" data-slot="${slot}">Swap</button><button class="btn" data-act="unequip" data-item="${it.id}">Remove</button><button class="btn" data-act="gpclose">Close</button></div></div>`;
     m.hidden = false;
     const f = m.querySelector('.btn:not(:disabled)'); if (f) f.focus();
   }
@@ -1592,7 +1612,7 @@
   const sellable = it => !it.owner && !it.lock;
   function vaultItems() {
     return S.inv.filter(it => (VT.slot === 'all' || it.slot === VT.slot) && (VT.rar === 'all' || it.rar === +VT.rar) && (VT.set === 'all' || it.set === VT.set)
-      && (VT.st === 'all' || (VT.st === 'free' ? !it.owner : VT.st === 'worn' ? !!it.owner : !!it.lock))).sort(VT_SORTS[VT.sort][1]);
+      && (VT.st === 'all' || (VT.st === 'free' ? !it.owner : VT.st === 'worn' ? !!it.owner : VT.st === 'asc' ? !!it.asc : !!it.lock))).sort(VT_SORTS[VT.sort][1]);
   }
   function vaultHtml() {
     const list = vaultItems(), sets = [...new Set(S.inv.map(it => it.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
@@ -1602,7 +1622,7 @@
       <label>Slot<select data-vf="slot">${opt('all', 'All slots', VT.slot)}${K.SLOTS.map(s => opt(s, K.SLOT_NAMES[s], VT.slot)).join('')}</select></label>
       <label>Rarity<select data-vf="rar">${opt('all', 'All rarities', VT.rar)}${K.RARITIES.map((r, i) => opt(i, r, VT.rar)).join('')}</select></label>
       <label>Set<select data-vf="set">${opt('all', 'All sets', VT.set)}${sets.map(k => opt(k, K.SETS[k].name, VT.set)).join('')}</select></label>
-      <label>Show<select data-vf="st">${opt('all', 'All gear', VT.st)}${opt('free', 'Not worn', VT.st)}${opt('worn', 'Worn', VT.st)}${opt('lock', 'Locked', VT.st)}</select></label>
+      <label>Show<select data-vf="st">${opt('all', 'All gear', VT.st)}${opt('free', 'Not worn', VT.st)}${opt('worn', 'Worn', VT.st)}${opt('lock', 'Locked', VT.st)}${opt('asc', 'Ascended', VT.st)}</select></label>
       <label>Sort<select data-vf="sort">${Object.keys(VT_SORTS).map(k => opt(k, VT_SORTS[k][0], VT.sort)).join('')}</select></label></div>`;
     const selItems = S.inv.filter(it => VT.sel.has(it.id)), selValue = selItems.reduce((t, it) => t + K.sellValue(it), 0);
     const sellBar = VT.sell
@@ -1617,9 +1637,9 @@
         <span class="vt-main">${K.fmtStat(...K.gearStats(it)[0])}</span>${picked ? '<span class="vt-check">✓</span>' : ''}</button>`;
     }).join('');
     const o = VT.open && !VT.sell ? S.inv.find(it => it.id === VT.open) : null;
-    const detail = o ? `<section class="vt-detail rar-${o.rar}">${gearIcon(o)}<div class="vt-dmain"><b class="rartxt">${itemName(o)}</b><small>${esc(K.SETS[o.set] ? K.SETS[o.set].name + ' · ' + K.SETS[o.set].desc : '')} · item level ${o.il}</small>${itemStatsHtml(o)}
+    const detail = o ? `<section class="vt-detail rar-${o.rar}">${gearIcon(o)}<div class="vt-dmain"><b class="rartxt">${itemNameH(o)}</b><small>${esc(K.SETS[o.set] ? K.SETS[o.set].name + ' · ' + K.SETS[o.set].desc : '')} · item level ${o.il}</small>${itemStatsHtml(o)}
         <small>${o.owner && C[o.owner] ? `Worn by ${esc(C[o.owner].name)}` : 'Not worn'}</small></div>
-        <div class="vt-dacts"><button type="button" class="btn small" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn small" data-act="sell" data-item="${o.id}">Sell · ${ic('coin')} ${K.sellValue(o).toLocaleString('en-US')}</button>` : `<small class="empty-note">${o.lock ? 'Locked gear cannot be sold.' : 'Take it off its hero to sell it.'}</small>`}</div></section>` : '';
+        <div class="vt-dacts">${o.lvl >= K.MAX_GEAR_LVL ? `<div class="vt-asc">${ascHtml(o)}${ascBtn(o)}</div>` : ''}<button type="button" class="btn small" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn small" data-act="sell" data-item="${o.id}">Sell · ${ic('coin')} ${K.sellValue(o).toLocaleString('en-US')}</button>` : `<small class="empty-note">${o.lock ? 'Locked gear cannot be sold.' : 'Take it off its hero to sell it.'}</small>`}</div></section>` : '';
     return `<div class="section-head"><div><h2>Gear</h2><p class="lede">All your gear: filter, sort, lock what you want to keep and sell the rest for Sigils.</p></div>
         <div class="row"><span class="tag">${S.inv.length} pieces · ${S.inv.filter(it => !it.owner).length} not worn</span>${VT.sell ? '' : '<button type="button" class="btn primary small" data-act="vsellmode">Sell gear</button>'}</div></div>
       ${filters}${sellBar}${detail}
@@ -1656,7 +1676,7 @@
     const bossRows = bh.slice(0, 3).map(([id, n]) => `<li>${por(id)}<span>${esc(K.BOSSES[id].name)}</span><b>Lv ${n}</b></li>`).join('');
     const sel = heroes.find(x => x.id === PF.sel);
     const slots = sel ? K.SLOTS.map(slot => { const it = itemsFor(sel.id).find(x => x.slot === slot); return it
-      ? `<div class="pf-item rar-${it.rar}">${gearIcon(it)}<div><b class="rartxt">${itemName(it)}</b><small>${esc(K.SETS[it.set] ? K.SETS[it.set].name : '')}</small>${itemStatsHtml(it)}</div></div>`
+      ? `<div class="pf-item rar-${it.rar}">${gearIcon(it)}<div><b class="rartxt">${itemNameH(it)}</b><small>${esc(K.SETS[it.set] ? K.SETS[it.set].name : '')}</small>${itemStatsHtml(it)}</div></div>`
       : `<div class="pf-item empty"><span class="pf-slot">${SLOT_GLYPH[slot] || ''}</span><div><b>${K.SLOT_NAMES[slot]}</b><small>Empty</small></div></div>`; }).join('') : '';
     return `${close}<header class="pf-head">${p.avatar && C[p.avatar] ? por(p.avatar) : ''}<div><h2>${esc(p.name)}</h2><span class="empty-note">Player level ${p.lvl || 1}${p.guild ? ` · ${esc(p.guild)}` : ''}</span></div></header>
       <div class="pf-stats">
@@ -2588,10 +2608,12 @@
     else if (act === 'ctab') { champTab = a.dataset.t; invSlot = null; render(); }
     else if (act === 'inv') { $('#modal').hidden = true; invSlot = a.dataset.slot; champTab = 'gear'; render(); const p = $('#invpanel'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
     else if (act === 'invclose') { invSlot = null; render(); }
+    else if (act === 'equip' && item && !wearOk(selChamp, item)) toast(`Ascended gear needs a ${K.ASC_STARS}★ hero.`, true);
     else if (act === 'equip' && item) {
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = selChamp; invSlot = null; save(); render(); toast(`${itemName(item)} equipped.`);
     } else if (act === 'unequip' && item) { $('#modal').hidden = true; item.owner = null; save(); render(); }
+    else if (act === 'repequip' && item && S.roster[a.dataset.id] && !wearOk(a.dataset.id, item)) toast(`Ascended gear needs a ${K.ASC_STARS}★ hero.`, true);
     else if (act === 'repequip' && item && S.roster[a.dataset.id]) {
       // from the Auto ×10 summary: on the hero it suits best, in place of what that hero wore in that slot
       const id = a.dataset.id;
@@ -2616,18 +2638,31 @@
     else if (act === 'rlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; RSUM.arm = null; save(); repRefresh(); }
     else if (act === 'rsell1' && item && sellable(item)) {
       // Epic or better asks once more (on the button itself: a confirm dialog would replace the result)
-      if (item.rar >= 3 && RSUM.arm !== 'one' + item.id) { RSUM.arm = 'one' + item.id; repRefresh(); return; }
+      if ((item.rar >= 3 || item.asc) && RSUM.arm !== 'one' + item.id) { RSUM.arm = 'one' + item.id; repRefresh(); return; }
       const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); RSUM.open = null; RSUM.arm = null; save(); SFX.up(); toast(`Sold for ${v.toLocaleString('en-US')} Sigils.`); repRefresh();
     }
     else if (act === 'rsellsel') {
       const list = S.inv.filter(it => RSUM.sel.has(it.id) && sellable(it)); if (!list.length) return;
-      if (list.some(it => it.rar >= 3) && RSUM.arm !== 'sel') { RSUM.arm = 'sel'; repRefresh(); return; }
+      if (list.some(it => it.rar >= 3 || it.asc) && RSUM.arm !== 'sel') { RSUM.arm = 'sel'; repRefresh(); return; }
       const v = list.reduce((t, it) => t + K.sellValue(it), 0); S.silver += v; S.inv = S.inv.filter(it => !list.includes(it));
       RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; save(); SFX.up(); toast(`Sold ${list.length} ${list.length === 1 ? 'piece' : 'pieces'} for ${v.toLocaleString('en-US')} Sigils.`); repRefresh();
     }
     else if (act === 'sell' && item) {
       if (item.lock) { toast('This gear is locked. Unlock it first to sell it.', true); return; }
-      const v = K.sellValue(item); S.silver += v; S.inv = S.inv.filter(x => x !== item); if (VT.open === item.id) VT.open = null; save(); render(); toast(`Sold for ${v} Sigils.`);
+      const v = K.sellValue(item), doSell = () => { $('#modal').hidden = true; S.silver += v; S.inv = S.inv.filter(x => x !== item); if (VT.open === item.id) VT.open = null; save(); render(); toast(`Sold for ${v} Sigils.`); };
+      // ascended gear cost Ascension Stones and Sigils: ask first
+      if (item.asc) confirmBox('Sell ascended gear?', `${esc(itemName(item))} is ascended (${item.asc}/${K.MAX_ASC} orange stars). Selling it gives ${v.toLocaleString('en-US')} Sigils; the Ascension Stones are not returned.`, 'Sell', doSell); else doSell();
+    }
+    else if (act === 'ascend' && item) {
+      // Item Ascension: always succeeds, costs Ascension Stones and Sigils (K.ASC_COST)
+      const ac = K.ascCost(item); if (!ac) return;
+      if (item.owner && !wearOk(item.owner, { asc: 1 })) { toast(`${C[item.owner].short} needs ${K.ASC_STARS}★ to wear ascended gear.`, true); return; }
+      const t = ac.greater ? 'greater' : 'ancient', need = ac.greater || ac.ancient;
+      if (stoneN(t) < need || S.silver < ac.silver) { toast(`You need ${need} ${stoneName(t, need)} and ${ac.silver.toLocaleString('en-US')} Sigils.`, true); return; }
+      const r = a.getBoundingClientRect();
+      S.stx[t] -= need; S.silver -= ac.silver; item.asc = (item.asc || 0) + 1;
+      SFX.up(); upgFx(r, true, '★'.repeat(item.asc)); toast(`Ascended: ${itemName(item)}${item.asc >= K.MAX_ASC ? ' · fully ascended!' : ''}`);
+      save(); render(); if (a.dataset.pop) gearPop(item.slot);
     }
     else if (act === 'vsellmode') { VT.sell = !VT.sell; VT.sel.clear(); VT.open = null; render(); }
     else if (act === 'vpick' && item) {
@@ -2639,7 +2674,7 @@
     else if (act === 'vlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; save(); render(); toast(item.lock ? 'Locked: this gear cannot be sold.' : 'Unlocked.'); }
     else if (act === 'vsell') {
       const list = S.inv.filter(it => VT.sel.has(it.id) && sellable(it)); if (!list.length) return;
-      const v = list.reduce((t, it) => t + K.sellValue(it), 0), rare = list.filter(it => it.rar >= 3).length;
+      const v = list.reduce((t, it) => t + K.sellValue(it), 0), rare = list.filter(it => it.rar >= 3 || it.asc).length;
       const doSell = () => { S.silver += v; S.inv = S.inv.filter(it => !list.includes(it)); VT.sel.clear(); save(); render(); hud(); SFX.up(); toast(`Sold ${list.length} ${list.length === 1 ? 'piece' : 'pieces'} for ${v.toLocaleString('en-US')} Sigils.`); };
       // Epic or better in the selection: ask first
       if (rare) confirmBox('Sell this gear?', `You are selling ${list.length} pieces, <b>${rare} of them Epic or better</b>, for ${v.toLocaleString('en-US')} Sigils.`, 'Sell', doSell); else doSell();
@@ -2674,7 +2709,7 @@
         for (const slot of K.SLOTS) {
           const cur = S.inv.find(x => x.owner === selChamp && x.slot === slot);
           const others = itemsOf(selChamp).filter(x => x.slot !== slot);
-          const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === selChamp));
+          const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === selChamp) && wearOk(selChamp, x));
           let best = cur, bestP = power(K.heroStats(selChamp, h, cur ? [...others, cur] : others));
           for (const c of cands) { const pw = power(K.heroStats(selChamp, h, [...others, c])); if (pw > bestP + 1e-9) { best = c; bestP = pw; } }
           if (best && best !== cur) { if (cur) cur.owner = null; best.owner = selChamp; more = true; }
@@ -4003,7 +4038,7 @@
     for (const [t, n] of Object.entries(stones)) if (n > 0) items.push(`<li ${d()}>${stoneIc(t)}+${n} ${stoneName(t, n)}</li>`);
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
-    loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemName(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
+    loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemNameH(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
     if (captured) items.push(`<li class="loot rar-${C[captured.id].rar}" ${d()}>${por(captured.id)}<span>${captured.isNew ? `Captured: <b class="rartxt">${esc(C[captured.id].name)}</b> joins your roster as a hero.` : `Captured another <b class="rartxt">${esc(C[captured.id].name)}</b> as fodder.`}</span></li>`);
     if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})${S.team.includes(unlock) ? ' joins your team' : ''}</span></li>`);
     // MVP
@@ -4072,7 +4107,7 @@
     let best = null;
     for (const ids of [pool.filter(inAnyTeam), pool]) {
       for (const id of ids) {
-        const h = S.roster[id], cur = itemsOf(id).find(x => x.slot === it.slot); if (cur === it) continue;
+        const h = S.roster[id], cur = itemsOf(id).find(x => x.slot === it.slot); if (cur === it || !wearOk(id, it)) continue;
         const rest = itemsOf(id).filter(x => x.slot !== it.slot), p0 = power(K.heroStats(id, h, cur ? [...rest, cur] : rest)), p1 = power(K.heroStats(id, h, [...rest, it]));
         const g = (p1 - p0) / Math.max(1, p0); if (g > 0.0005 && (!best || g > best.g)) best = { id, g };
       }
@@ -4108,7 +4143,7 @@
         : w ? `<button class="btn small primary" type="button" data-act="repequip" data-item="${op.id}" data-id="${w.id}" title="${esc(C[w.id].short)}'s power goes up by about ${Math.max(1, Math.round(w.g * 100))}%">Equip on ${esc(C[w.id].short)} <small>+${Math.max(1, Math.round(w.g * 100))}%</small></button>`
         : '<small class="empty-note">No upgrade for your heroes</small>';
       const armed = RSUM.arm === 'one' + op.id;
-      detail = `<div class="rdet rar-${op.rar}">${gearIcon(op, 'rdet-ic')}<div class="rdet-main"><b class="item-name">${itemName(op)}</b> <span class="item-set">${esc(K.SETS[op.set].name)}</span>${itemStatsHtml(op)}</div>
+      detail = `<div class="rdet rar-${op.rar}">${gearIcon(op, 'rdet-ic')}<div class="rdet-main"><b class="item-name">${itemNameH(op)}</b> <span class="item-set">${esc(K.SETS[op.set].name)}</span>${itemStatsHtml(op)}</div>
         <div class="rdet-acts">${eq}
           ${maxed ? '<small class="empty-note">Fully upgraded</small>' : `<button class="btn small" type="button" data-act="rupg" data-item="${op.id}" ${S.silver < cost ? 'disabled' : ''}>Upgrade ${ic('coin')} ${n(cost)} <small>${Math.round(K.upgradeChance(op) * 100)}%</small></button>`}
           ${sellable(op) ? `<button class="btn small ${armed ? 'danger' : ''}" type="button" data-act="rsell1" data-item="${op.id}">${armed ? 'Sure? Sell' : 'Sell'} ${ic('coin')} ${n(val)}</button>` : ''}

@@ -2452,6 +2452,14 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .set-tiers { display: grid; gap: 2px; margin-bottom: 4px; }
 .set-tiers > b { color: var(--fg); font-family: var(--font-display); }
 .gp-set > div { color: var(--muted); font-size: .92rem; margin-top: 2px; } .gp-set > div i { color: var(--gold); font-style: normal; }
+/* item ascension: orange stars */
+.asc-st { color: #ff9a2e; font-style: normal; letter-spacing: -1px; text-shadow: 0 0 4px rgba(255, 140, 30, .75), 0 1px 0 #000; }
+.gear-asc { position: relative; display: inline-block; line-height: 0; }
+.gear-asc > .asc-st { position: absolute; left: 50%; bottom: -3px; transform: translateX(-50%); font-size: .62rem; line-height: 1; white-space: nowrap; pointer-events: none; }
+.gp-set > div.gp-asc i { color: #ff9a2e; }
+.gp-ascp { margin: 6px 0 0; font-size: .9rem; color: var(--muted); }
+.vt-asc { display: grid; gap: 6px; margin-top: 6px; }
+.bhv-sets .bhv-pc.asc { color: #ff9a2e; border-color: rgba(255, 154, 46, .7); }
 .bhv-sets li > span:last-child { color: #d9ccb6; font-size: .9rem; }
 /* the team */
 .bhv-team-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding-bottom: 8px; margin-bottom: 10px; border-bottom: 1px solid rgba(217, 180, 90, .3); }
