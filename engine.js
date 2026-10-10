@@ -867,17 +867,14 @@ const K = (function () {
   ];
   // enemy level of a campaign stage on difficulty d
   const diffLvl = (st, d) => { const D = DIFFS[d || 0]; return Math.round(D.base + st.lvl * D.slope); };
-  // gear drop options for a campaign stage: the higher rarity gets likelier in later chapters and on the boss stage
-  function stageLoot(st, d) {
-    const D = DIFFS[d || 0], hi = D.rars[D.rars.length - 1];
-    const up = hi === 5 ? 0.06 + st.chapter * 0.015 + (st.n === 6 ? 0.06 : 0) : 0.15 + st.chapter * 0.035 + (st.n === 6 ? 0.15 : 0);
-    return { rars: D.rars, up: Math.min(0.6, up) };
-  }
+  // gear drop options for a campaign stage: the first rarity 80%, the second LOOT_UP (20%), the same everywhere
+  const LOOT_UP = 0.2;
+  const stageLoot = (st, d) => ({ rars: DIFFS[d || 0].rars, up: LOOT_UP });
   // Boss Hall gear: the loot of the level's campaign difficulty (bossDiff): levels 1-2 Easy (Uncommon/Rare),
   // 3-4 Normal (Rare/Epic), 5-6 Hard (Epic/Legendary), 7-8 Brutal (Legendary), 9-10 Nightmare (Legendary/Mythical).
-  // The higher rarity is a bit likelier on the second level of a pair.
+  // Like the campaign: the first rarity 80%, the second 20%.
   const bossDiff = n => Math.min(DIFFS.length - 1, Math.floor((n - 1) / 2));
-  const bossLoot = n => { const D = DIFFS[bossDiff(n)], hi = D.rars[D.rars.length - 1]; return { rars: D.rars, up: (hi === 5 ? 0.06 : 0.2) + (n - 1) % 2 * (hi === 5 ? 0.04 : 0.1) }; };
+  const bossLoot = n => ({ rars: DIFFS[bossDiff(n)].rars, up: LOOT_UP });
   // Campaign difficulty (the grind): enemies get stronger than same-level heroes chapter by chapter (chDiff per chapter,
   // squeezed by each difficulty's spread), chBoss scales the chapter boss itself, bossWall the whole boss stage.
   // Rewards per win are scaled by xp/silver. Tuned with campaign-sim.cjs (Easy) and balance-sim.html (all difficulties):
@@ -2201,7 +2198,7 @@ const K = (function () {
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, CRIT_CAP, stageUnits,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,

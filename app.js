@@ -578,7 +578,7 @@
     return { ok, fail, spent };
   }
   // gear rarities as coloured words, e.g. "Rare / Epic"
-  const rarsHtml = rars => rars.map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' / ');
+  const rarsHtml = rars => rars.map((r, i) => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>${rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}`).join(' / ');
   const sigils = n =>`${ic('coin')} ${n.toLocaleString('en-US')} Sigils`;
   const itemsOf = id => S.inv.filter(it => it.owner === id);
   const itemName = it => `${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()}${it.lvl ? ' +' + it.lvl : ''}${it.asc ? ' ' + '★'.repeat(it.asc) : ''}`;
