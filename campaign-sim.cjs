@@ -36,6 +36,12 @@ function reward(st, S, first) {
   for (const id in st.fodder || {}) while (st.fodder[id] > 0 && st.roster[id] && K.skillUp(st.roster[id], id) >= 0) st.fodder[id]--;
   st.silver += K.winSilver(S.lvl); { const g = K.stageStones(S, 0, first); for (const t in g) st.stones[t] += g[t]; }
   if (first || Math.random() < 0.65) st.inv.push(K.genGear({ il: S.lvl, slot: S.slot || K.pick(K.SLOTS), ...K.stageLoot(S, 0), sets: [S.set] }, st.nid++));
+  // an Essence Elixir now and then: drunk at once by the lowest team hero it fits
+  if (Math.random() < K.ELIXIR.camp) {
+    const e = Math.random() < K.ELIXIR.aether ? 'Aether' : K.ALL_UNITS[K.pick(S.phases.flat())].aff;
+    const id = st.team.filter(x => K.elixirFits(e, x) && st.roster[x].lvl < K.maxLvl(st.roster[x].stars, x)).sort((a, b) => st.roster[a].lvl - st.roster[b].lvl)[0];
+    if (id) { const h = st.roster[id], cap = K.maxLvl(h.stars, id); h.xp += K.elixirXp(h.lvl); while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; } }
+  }
   // strongest four heroes for the next stage form the team (essence matters: avoid heroes the enemies are strong against),
   // then gear, ascension and upgrades
   const next = K.STAGES[Math.min(st.cleared + 1, K.STAGES.length - 1)], foes = next.phases.flat().map(f => K.ALL_UNITS[f].aff);

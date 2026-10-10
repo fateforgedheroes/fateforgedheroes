@@ -97,6 +97,7 @@
   const bossTeamIdx = aff => { const i = S.bossTeam && S.bossTeam[aff]; return i != null && i < S.teams.length ? i : (S.modeTeam.boss || 0); };
   function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
+    if (!s.elx || typeof s.elx !== 'object') s.elx = {}; // Essence Elixirs per essence
     // the Support class was dropped before release: a test save's Support hero becomes a Healer (same id everywhere)
     if (s.hero && s.hero.cls === 'support') {
       const o = `"pc_support_${s.hero.g}"`, n = `"pc_healer_${s.hero.g}"`, t = JSON.parse(JSON.stringify(s).split(o).join(n));
@@ -1116,7 +1117,7 @@
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl></div>
         <div class="dpanel" data-p="skills">${skills}</div>
         <div class="dpanel" data-p="gear"><div class="section-head" style="margin-bottom:6px"><span class="empty-note">${items.length} of ${K.SLOTS.length} slots filled</span><div class="gear-acts"><button class="btn small" data-act="bestgear">Equip best gear</button><button class="btn small primary" data-act="upall" ${items.some(x => x.lvl < K.MAX_GEAR_LVL) ? '' : 'disabled'}>Upgrade all</button><button class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div></div><div class="gear-grid">${gear}</div>${setInfo ? `<div class="setbonus">${setInfo}<small class="empty-note">A set bonus counts once, however many extra pieces you wear.</small></div>` : ''}${inv}</div>
-        <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${fodderHtml(id)}</div>
+        <div class="dpanel" data-p="upgrade"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>${elixirHtml(id)}${fodderHtml(id)}</div>
       </div>`;
   }
   // what a skill level adds: the skill's damage, healing and shields are multiplied (not added to its %), shown with the
@@ -1172,6 +1173,19 @@
 
   // Feed: spare copies (captured enemies and summoned duplicates) and any other hero outside the team can be fed for XP;
   // a copy of the selected hero itself levels one of its skills instead
+  // Essence Elixirs (K.ELIXIR): a hero drinks the elixirs of its own essence and Aether Elixirs for XP at its own level
+  const elxName = (e, n) => `${e} Elixir${n === 1 ? '' : 's'}`;
+  const elxIc = e => `<svg class="elx-ic" viewBox="0 0 16 16" aria-hidden="true" style="--c:${AFF_COL[e] || '#ccc'}"><path d="M6 1.5h4M6.6 1.5v4L3 12.3A1.5 1.5 0 0 0 4.3 14.5h7.4A1.5 1.5 0 0 0 13 12.3L9.4 5.5v-4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M4.6 10h6.8l1 2.4a.8.8 0 0 1-.7 1.1H4.3a.8.8 0 0 1-.7-1.1z" fill="var(--c)"/></svg>`;
+  const unitAff = id => { const u = K.ENEMIES[id] || K.BOSSES[id] || C[id]; return u && u.aff ? u.aff : 'Aether'; };
+  function elixirHtml(id) {
+    const h = S.roster[id], atCap = h.lvl >= K.maxLvl(h.stars, id), gain = K.elixirXp(h.lvl);
+    const kinds = [...new Set([C[id].aff, 'Aether'])];
+    const row = e => { const n = S.elx[e] || 0; return `<div class="fd elx-row" style="--c:${AFF_COL[e]}">${elxIc(e)}<div><b>${elxName(e, 2)}</b> <span class="tag">×${n}</span><small class="empty-note">${e === 'Aether' ? 'Fits every hero' : `Fits ${e} heroes`}</small></div>
+        <div class="row"><button class="btn small primary" data-act="elixir" data-e="${e}" data-n="1" ${!n || atCap ? 'disabled' : ''}>Drink · +${gain.toLocaleString('en-US')} XP</button>${n > 1 ? `<button class="btn small" data-act="elixir" data-e="${e}" data-n="10" ${atCap ? 'disabled' : ''}>×${Math.min(10, n)}</button>` : ''}</div></div>`; };
+    return `<div class="fodder elixirs"><h3 style="margin:0 0 4px">Essence Elixirs</h3>
+      <p class="empty-note">Each elixir gives ${esc(C[id].short)} the XP of ${K.ELIXIR.wins} campaign wins at its level${atCap ? '. Max level for this star: ascend first.' : '.'} They drop now and then from campaign and Boss Hall wins and every 10th Tower floor.</p>
+      <div class="fodder-list">${kinds.map(row).join('')}</div></div>`;
+  }
   function fodderHtml(id) {
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
     const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
@@ -2167,6 +2181,7 @@
         row('Spare copy / duplicate', 'Summoning a hero you already own gives a spare copy. Feed it to the same hero to level up a skill.'),
         row('Skill level', `Each skill can be levelled ${K.SKILL_MAX} times. Every level multiplies the skill's damage, healing and shields by another ${Math.round(K.SKILL_STEP * 100)}% of the base (level 1 ×${(1 + K.SKILL_STEP).toFixed(2)}, level ${K.SKILL_MAX} ×${(1 + K.SKILL_MAX * K.SKILL_STEP).toFixed(2)}): a 90% Attack hit becomes ${Math.round(90 * (1 + K.SKILL_STEP))}% at level 1 and ${Math.round(90 * (1 + K.SKILL_MAX * K.SKILL_STEP))}% at level ${K.SKILL_MAX}. At the maximum the cooldown is also 1 turn shorter.`),
         row('Captured', 'Enemies you capture in the campaign (5% per win) join as weak heroes or as fodder to feed.'),
+        row('Essence Elixirs', `One kind per essence. A hero drinks elixirs of its own essence (Team · Upgrade) for the XP of ${K.ELIXIR.wins} campaign wins at its own level; an Aether Elixir fits every hero. They drop now and then: ${Math.round(K.ELIXIR.camp * 100)}% per campaign win (a foe's essence), ${Math.round(K.ELIXIR.hall * 100)}% per Boss Hall win (the boss's essence), and one on the first clear of every 10th Tower floor.`),
         row('Team', 'Up to 4 heroes fight together. Pick them in Heroes & Gear → Team.'),
       ]),
       sec('gear', 'Gear', [
@@ -2266,6 +2281,7 @@
     // a hero gift (e.g. the developer hero): joins the roster, or becomes a spare copy when already owned
     if (r.hero && C[r.hero]) { if (!S.roster[r.hero]) S.roster[r.hero] = newHero(r.hero); else S.fodder[r.hero] = (S.fodder[r.hero] || 0) + 1; }
     if (+r.silver > 0) S.silver += Math.floor(+r.silver);
+    if (r.elx) for (const e of K.ESSENCES) if (+r.elx[e] > 0) S.elx[e] = (S.elx[e] || 0) + Math.floor(+r.elx[e]);
     if (+r.gems > 0) S.gems += Math.floor(+r.gems);
     if (+r.energy > 0) { energyTick(); S.energy += Math.floor(+r.energy); paintEnergy(); } // may go above the cap; regen waits until it drops below
     addStones(rewardStones(r));
@@ -2721,6 +2737,15 @@
       const worn = itemsOf(selChamp);
       worn.forEach(x => (x.owner = null));
       invSlot = null; save(); render(); toast(`Removed ${worn.length} ${worn.length === 1 ? 'piece' : 'pieces'} of gear.`);
+    } else if (act === 'elixir') {
+      // drink elixirs one by one (each at the hero's current level) until the count, the stock or the level cap runs out
+      const e = a.dataset.e, h = S.roster[selChamp], to = selChamp;
+      if (!h || !K.elixirFits(e, to)) return;
+      let n = Math.min(+a.dataset.n || 1, S.elx[e] || 0), used = 0, gain = 0; const l0 = h.lvl;
+      while (n-- > 0 && h.lvl < K.maxLvl(h.stars, to)) { const g = K.elixirXp(h.lvl); S.elx[e]--; used++; gain += g; giveXp(g); }
+      if (!used) return;
+      track('feed'); SFX.up(); save(); render();
+      toast(`${C[to].short} drank ${used} ${elxName(e, used)}: +${gain.toLocaleString('en-US')} XP${h.lvl > l0 ? `, now level ${h.lvl}` : ''}.`);
     } else if (act === 'feed') {
       const f = a.dataset.f, h = S.roster[selChamp], to = selChamp;
       if (!(S.fodder[f] > 0) || h.lvl >= K.maxLvl(h.stars, selChamp)) return;
@@ -3969,7 +3994,7 @@
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
     const items = [], loot = [];
-    let xp, silver, stones = {}, unlock = null, first = false, captured = null;
+    let xp, silver, stones = {}, unlock = null, first = false, captured = null, elixir = null;
     const gotShards = [];
     if (win) {
       xp = K.winXp(lvl); silver = K.winSilver(lvl);
@@ -3986,12 +4011,14 @@
           if (!S.roster[cid]) { S.roster[cid] = newHero(cid); captured = { id: cid, isNew: true }; }
           else { S.fodder[cid] = (S.fodder[cid] || 0) + 1; captured = { id: cid, isNew: false }; }
         }
+        if (Math.random() < K.ELIXIR.camp) { const foes = cfg.stage.phases.flat(); elixir = unitAff(K.pick(foes)); }
         if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
       } else if (cfg.type === 'tower') {
         // a floor pays once, on its first clear (the tower climbs one floor at a time)
         if (cfg.floor > (S.tw.prog[cfg.ess] || 0)) { S.tw.prog[cfg.ess] = cfg.floor; first = true; }
         const rw = K.towerReward(cfg.floor);
         if (first) { silver = rw.silver; xp = rw.xp; for (const [t, n] of Object.entries(rw.fs)) for (let i = 0; i < n; i++) gotShards.push(t); stones = rw.st; } else { silver = 0; xp = 0; }
+        if (first && cfg.floor % 10 === 0) elixir = cfg.ess === 'All' ? 'Aether' : cfg.ess;
       } else {
         if (cfg.n > (S.bh[cfg.id] || 0)) { S.bh[cfg.id] = cfg.n; first = true; S.bhSel[cfg.id] = Math.min(K.BOSS_LEVELS, cfg.n + 1); }
         stones = K.bossStones(cfg.n, first);
@@ -4001,11 +4028,15 @@
         const drops = 1 + (cfg.n >= 5 ? 1 : 0) + (first ? 1 : 0);
         for (let i = 0; i < drops; i++) loot.push(K.genGear({ il: lvl, ...K.bossLoot(cfg.n), sets: K.bossSets(cfg.bi) }, S.nid++));
         if (first && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length) S.bhCur = K.BOSS_ORDER[cfg.bi + 1];
+        if (Math.random() < K.ELIXIR.hall) elixir = unitAff(cfg.id);
       }
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
     } else if (cfg.type === 'tower') { xp = 0; silver = 0; } // tower tries are free, so a defeat pays nothing
     else { xp = Math.round(K.winXp(lvl) * 0.25); silver = Math.round(K.winSilver(lvl) * 0.3); }
     if (win && cfg.type !== 'tower') gotShards.push(...K.rollShards());
+    // an elixir drop: now and then an Aether Elixir (fits any hero) instead (the tower's own reward stays as it is)
+    if (elixir && cfg.type !== 'tower' && Math.random() < K.ELIXIR.aether) elixir = 'Aether';
+    if (elixir) S.elx[elixir] = (S.elx[elixir] || 0) + 1;
     S.silver += silver; addStones(stones);
     for (const t of gotShards) S.fs[t] = (S.fs[t] || 0) + 1;
     loot.forEach(it => S.inv.push(it));
@@ -4025,6 +4056,7 @@
       for (const [t, n] of Object.entries(stones)) if (n > 0) s.st[t] = (s.st[t] || 0) + n;
       loot.forEach(it => s.items.push(it.id));
       if (captured) s.caps.push(captured.id);
+      if (elixir) { s.elx = s.elx || {}; s.elx[elixir] = (s.elx[elixir] || 0) + 1; }
       ups.forEach(([id, l]) => (s.ups[id] = l));
     }
     const unlocks = newUnlocks();
@@ -4039,6 +4071,7 @@
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
     loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemNameH(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
+    if (elixir) items.push(`<li class="loot elx-loot" ${d()}>${elxIc(elixir)}<span>+1 <b style="color:${AFF_COL[elixir]}">${elxName(elixir, 1)}</b> · ${elixir === 'Aether' ? 'any hero' : `${elixir} heroes`} drink it for XP (Team · Upgrade)</span></li>`);
     if (captured) items.push(`<li class="loot rar-${C[captured.id].rar}" ${d()}>${por(captured.id)}<span>${captured.isNew ? `Captured: <b class="rartxt">${esc(C[captured.id].name)}</b> joins your roster as a hero.` : `Captured another <b class="rartxt">${esc(C[captured.id].name)}</b> as fodder.`}</span></li>`);
     if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})${S.team.includes(unlock) ? ' joins your team' : ''}</span></li>`);
     // MVP
@@ -4126,6 +4159,7 @@
     if (s.pxp) tot.push(`<span class="aff" style="--c:var(--gold)">P</span> +${n(s.pxp)} player XP`);
     for (const [t, c] of Object.entries(s.fs)) tot.push(`${shardIc(t)} +${c} ${esc(K.SHARD[t].name)}`);
     for (const [t, c] of Object.entries(s.st)) tot.push(`${stoneIc(t)} +${c} ${stoneName(t, c)}`);
+    for (const [e, c] of Object.entries(s.elx || {})) tot.push(`${elxIc(e)} +${c} ${elxName(e, c)}`);
     for (const id of s.caps) if (C[id]) tot.push(`${por(id)} Captured ${esc(C[id].short)}`);
     const ups = Object.entries(s.ups).filter(([id]) => C[id]).map(([id, l]) => `${esc(C[id].short)} ${l}`).join(', ');
     if (ups) tot.push(`<span class="aff" style="--c:var(--info)">▲</span> Levels now: ${ups}`);

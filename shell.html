@@ -2452,6 +2452,12 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .set-tiers { display: grid; gap: 2px; margin-bottom: 4px; }
 .set-tiers > b { color: var(--fg); font-family: var(--font-display); }
 .gp-set > div { color: var(--muted); font-size: .92rem; margin-top: 2px; } .gp-set > div i { color: var(--gold); font-style: normal; }
+/* Essence Elixirs: a flask in the essence colour */
+.elx-ic { width: 1.25em; height: 1.25em; color: var(--c); vertical-align: -0.25em; flex: none; filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c) 55%, transparent)); }
+.elx-row > .elx-ic { width: 40px; height: 40px; }
+.loot.elx-loot > .elx-ic { width: 28px; height: 28px; }
+.elixirs { margin-bottom: 10px; }
+.elx-row .row { flex-wrap: wrap; gap: 6px; } .elx-row .btn { white-space: nowrap; }
 /* item ascension: orange stars */
 .asc-st { color: #ff9a2e; font-style: normal; letter-spacing: -1px; text-shadow: 0 0 4px rgba(255, 140, 30, .75), 0 1px 0 #000; }
 .gear-asc { position: relative; display: inline-block; line-height: 0; }

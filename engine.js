@@ -972,6 +972,14 @@ const K = (function () {
   // rewards per cleared stage or Boss Hall level; kept low on purpose so progress needs replays (see TUNE)
   const winXp = lvl => Math.round(TUNE.xp * (40 + lvl * 28));
   const winSilver = lvl => Math.round(TUNE.silver * (120 + lvl * 60));
+  // Essence Elixirs: one kind per essence. A hero of that essence (an Aether Elixir: any hero) drinks one for the XP of
+  // ELIXIR.wins campaign wins at its own level, so an elixir stays worth having as heroes grow (feeding gives a fixed
+  // amount). Rare drops in the existing modes: camp per campaign win (a foe's essence), hall per Boss Hall win (the
+  // boss's essence), one on the first clear of every 10th Tower floor (that tower's essence, Aether for the Tower of
+  // Fate); aether = the share of drops that are Aether instead.
+  const ELIXIR = { camp: 0.07, hall: 0.1, wins: 5, aether: 0.1 };
+  const elixirXp = lvl => winXp(lvl) * ELIXIR.wins;
+  const elixirFits = (ess, id) => ess === 'Aether' || (CHAMPS[id] && CHAMPS[id].aff === ess);
 
   // ---------- Energy (like RAID) ----------
   // Every campaign stage and Boss Hall level costs energy when it starts (won or lost); energy refills by 1 every
@@ -2198,7 +2206,7 @@ const K = (function () {
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, CRIT_CAP, stageUnits,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
