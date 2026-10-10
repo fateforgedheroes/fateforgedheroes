@@ -850,7 +850,9 @@ const K = (function () {
       const foes = s === 6 ? [ch.boss, ...ch.adds] : s === 0 && ch.first ? ch.first[2] : stageGroup(ch, c, s, 0);
       const shape = Math.min(s, STAGE_SHAPE.length - 1);
       const phases = s === 0 && ch.first ? ch.first : [stageGroup(ch, c, shape, 1), stageGroup(ch, c, shape, 2), foes];
-      STAGES.push({ chapter: c, n: s, lvl, foes, phases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
+      // Normal and up skip Chapter I's small tutorial groups (hiPhases: the usual stage shapes instead)
+      const hiPhases = c === 0 && s < 3 ? [0, 1, 2].map(k => { const [n, elite] = STAGE_SHAPE[s], f = []; for (let j = 0; j < n; j++) f.push(j >= n - elite ? ch.pool[1][(j + s + k) % ch.pool[1].length] : ch.pool[0][(j + s * 2 + k * 2) % ch.pool[0].length]); return f; }) : null;
+      STAGES.push({ chapter: c, n: s, lvl, foes, phases, hiPhases, slot: STAGE_SLOTS[s], set: ch.set, area: ch.area, boss: s === 6 ? BOSSES[ch.boss].name : null, unlock: ch.unlock && ch.unlock[s] });
     }
   });
   // Campaign difficulties: the whole campaign again at a higher level band. Enemy level = base + stage level × slope,
@@ -860,10 +862,10 @@ const K = (function () {
   // (the higher one is rarer, see stageLoot). Easy is the base campaign that campaign-sim.cjs tunes.
   const DIFFS = [
     { id: 'easy', name: 'Easy', base: 0, slope: 1, f: 1, spread: 1, rars: [1, 2] },
-    { id: 'normal', name: 'Normal', base: 18, slope: 0.75, f: 1.5, spread: 0.75, rars: [2, 3] },
-    { id: 'hard', name: 'Hard', base: 30, slope: 0.65, f: 2.1, spread: 0.7, rars: [3, 4] },
-    { id: 'brutal', name: 'Brutal', base: 40, slope: 0.6, f: 2.4, spread: 0.65, rars: [4] },
-    { id: 'nightmare', name: 'Nightmare', base: 50, slope: 0.55, f: 2.9, spread: 0.6, rars: [4, 5] },
+    { id: 'normal', name: 'Normal', base: 57, slope: 0.117, f: 1.5, spread: 0.75, rars: [2, 3] },
+    { id: 'hard', name: 'Hard', base: 62, slope: 0.134, f: 2.1, spread: 0.7, rars: [3, 4] },
+    { id: 'brutal', name: 'Brutal', base: 68, slope: 0.15, f: 2.4, spread: 0.65, rars: [4] },
+    { id: 'nightmare', name: 'Nightmare', base: 75, slope: 0.15, f: 2.9, spread: 0.6, rars: [4, 5] },
   ];
   // enemy level of a campaign stage on difficulty d
   const diffLvl = (st, d) => { const D = DIFFS[d || 0]; return Math.round(D.base + st.lvl * D.slope); };
@@ -903,10 +905,30 @@ const K = (function () {
   // but have more HP (TUNE.foeHp). Fights last longer and the damage comes as a steady stream, which healing absorbs and a
   // team without healing does not: measured, a team without a healer then needs ~1.4x the power, one with a healer about
   // the same as before. (Harder hits did the opposite: burst kills heroes before a healer can help.)
-  const attrition = (u, st) => { if (!u.isBoss && st.chapter >= TUNE.hitFrom) { u.atk = Math.round(u.atk * TUNE.hit); u.maxHp = u.hp = Math.round(u.maxHp * TUNE.foeHp); } return u; };
+  const attrition = (u, st, d) => { if (!u.isBoss && (st.chapter >= TUNE.hitFrom || d)) { u.atk = Math.round(u.atk * TUNE.hit); u.maxHp = u.hp = Math.round(u.maxHp * TUNE.foeHp); } return u; };
   // Easy Chapter I · Stage 1 is the starter's solo fight: soft enough that every starter, even an Uncommon, wins it
   const FIRST_PW = 0.7;
-  const stageUnits = (st, lvl, p, d) => (p == null ? st.foes : st.phases[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (!d && !st.chapter && !st.n ? FIRST_PW : 1) * (isWall(st) ? TUNE.wall : 1) * (BOSSES[f] ? TUNE.chBoss : 1)), st));
+  // Normal and up: every difficulty starts where the one before it ended. Chapter peaks (the boss stages) climb evenly
+  // from the previous difficulty's last boss to this one's (unchanged from before), and every chapter is a sawtooth: its
+  // stage 1 is 95% of the peak before it, stage 2 97.5%, stage 3 back at that peak, stages 4-7 climb to the new peak.
+  // DIFF_PW[d - 1][stage] is the strength factor that puts each stage on that curve: first estimated from the enemies'
+  // HP, Attack and Defense, then calibrated like STAGE_PW (four end-of-Easy teams, the strength at which each stage is
+  // won half the time, compared with Easy's last boss; 75% of the correction applied). Walls and chBoss come on top.
+  // Their enemy levels follow too: Normal 57-64, Hard 62-70, Brutal 68-77, Nightmare 75-84 (Easy ends at 61).
+  const DIFF_PW = [
+    [6.83, 5.05, 5.12, 4.05, 5.05, 4.03, 3.61, 6.23, 4.56, 4.25, 3.52, 4.21, 3.46, 3.32, 4.47, 3.42, 3.61, 2.52, 3.23, 2.53, 2.5, 5.92, 4.48, 4.27, 3.29, 3.87, 3.11, 3.09, 6.08, 4.56, 3.86, 3.18, 3.36, 2.96, 2.61, 5.55, 4.17, 4.27, 3.22, 3.89, 3.2, 3.18, 5.11, 4.05, 3.58, 2.97, 3.6, 2.82, 2.71, 5.22, 3.87, 3.88, 3.13, 4.03, 2.83, 2.3, 4.96, 4.05, 3.8, 2.73, 2.93, 2.26, 2.55, 4.55, 3.27, 3.28, 2.43, 3.03, 2.75, 2.65],
+    [8.48, 6.36, 6.24, 4.95, 6.22, 4.96, 4.56, 7.73, 5.71, 5.43, 4.4, 5.28, 4.26, 4.21, 5.66, 4.26, 4.56, 3.19, 4.11, 3.24, 3.13, 7.44, 5.67, 5.34, 4.29, 4.98, 4.07, 3.99, 7.88, 5.8, 4.77, 4.01, 4.25, 3.86, 3.41, 7.26, 5.49, 5.49, 4.17, 4.91, 4.14, 4.05, 6.5, 5.26, 4.77, 3.96, 4.77, 3.73, 3.54, 6.97, 5.16, 5.16, 4.08, 5.25, 3.8, 3, 6.65, 5.39, 4.92, 3.61, 3.79, 2.99, 3.43, 6.04, 4.36, 4.31, 3.22, 4.01, 3.68, 3.52],
+    [11.45, 8.58, 8.49, 6.6, 8.41, 6.61, 6, 10.37, 7.53, 7.07, 5.62, 6.86, 5.54, 5.48, 7.41, 5.56, 5.86, 4.07, 5.1, 4.04, 3.87, 9.53, 7.11, 6.8, 5.41, 6.33, 4.95, 4.83, 9.79, 7.21, 6.04, 4.94, 5.29, 4.67, 4.1, 8.62, 6.61, 6.63, 5.14, 6.09, 5.05, 4.84, 7.64, 6.28, 5.5, 4.67, 5.59, 4.47, 4.19, 8, 5.93, 5.95, 4.75, 6.03, 4.38, 3.45, 7.59, 6.05, 5.63, 4.09, 4.23, 3.33, 3.81, 6.86, 4.93, 4.94, 3.57, 4.44, 4.01, 3.84],
+    [12.67, 9.39, 9.25, 7.27, 9.07, 7.28, 6.73, 11.2, 8.22, 7.74, 6.27, 7.53, 6.2, 5.93, 8.14, 6.02, 6.48, 4.56, 5.63, 4.48, 4.18, 10.59, 7.86, 7.57, 6.05, 6.95, 5.57, 5.5, 10.73, 8.08, 6.78, 5.62, 5.91, 5.3, 4.67, 9.84, 7.47, 7.5, 5.75, 6.89, 5.67, 5.4, 8.62, 7.12, 6.31, 5.22, 6.35, 5.01, 4.72, 9.2, 6.83, 6.68, 5.44, 6.87, 4.98, 4.01, 8.72, 7.01, 6.46, 4.61, 4.76, 3.79, 4.39, 7.81, 5.69, 5.62, 4.09, 5.13, 4.57, 4.39],
+  ];
+  const stagePhases = (st, d) => (d && st.hiPhases) || st.phases;
+  // Walls on Normal and up: the curve is flat there, so a wall lifts its stage to 99% of the chapter's boss stage
+  // (stage 7 stays the hardest) instead of TUNE.wall. DIFF_G = the chapter-to-chapter growth of each difficulty,
+  // sawT = a stage's share of its chapter's peak on the sawtooth above.
+  const DIFF_G = [1.032, 1.0418, 1.0214, 1.0265];
+  const sawT = (n, g) => (n === 0 ? 0.95 / g : n === 1 ? 0.975 / g : Math.pow(g, (n - 2) / 4) / g);
+  const wallMult = (st, d) => (!isWall(st) ? 1 : d ? Math.max(1, 0.99 / sawT(st.n, DIFF_G[d - 1])) : TUNE.wall);
+  const stageUnits = (st, lvl, p, d) => (p == null ? (d && st.hiPhases ? st.hiPhases[2] : st.foes) : stagePhases(st, d)[p]).map(f => attrition(toughen(enemyUnit(f, BOSSES[f] ? Math.max(1, lvl - 3) : lvl), (d ? DIFF_PW[d - 1][st.chapter * 7 + st.n] : stageDiff(st, d) * STAGE_PW[st.chapter * 7 + st.n] * (!st.chapter && !st.n ? FIRST_PW : 1)) * wallMult(st, d) * (BOSSES[f] ? TUNE.chBoss : 1)), st, d));
   // ---------- Tower of Essence: six essence towers (only heroes of that essence) and the Tower of Fate (all heroes) ----------
   // One fight per floor (no phases), each floor won once. Floor f: enemy level and strength climb from Easy Chapter I to
   // past the end of Brutal (t = how far up, curved: gentle at first, steep near the top) while the team is limited to one
@@ -1017,10 +1039,18 @@ const K = (function () {
   // that chapter's third stage, the second like its boss stage. Enemies get that stage's level and
   // strength, times BOSS_ROOM for the boss room.
   const BOSS_ROOM = 1.1;
+  // Normal and up (levels 3-10): the strength factor per difficulty, chapter and level of the pair, set so each level
+  // changed as much as its campaign stage did when difficulties were made to start where the one before ended
+  const ROOM_PW = [
+    [4.04, 4.04, 3.71, 3.66, 3.86, 3.83, 4.12, 3.97, 3.73, 3.58, 3.97, 3.85, 3.57, 3.45, 3.64, 3.43, 3.29, 3.15, 3.27, 3.12],
+    [5.53, 5.49, 4.89, 4.69, 5.05, 4.84, 5.22, 5.07, 4.74, 4.59, 4.99, 4.83, 4.64, 4.47, 4.64, 4.47, 4.3, 4.19, 4.29, 4.18],
+    [7.7, 7.28, 6.48, 6.27, 6.49, 6.12, 6.58, 6.18, 5.81, 5.55, 6.02, 5.63, 5.38, 5.2, 5.3, 5.03, 4.84, 4.58, 4.75, 4.56],
+    [8.61, 8.21, 7.28, 6.92, 7.14, 6.77, 7.31, 6.92, 6.52, 6.17, 6.67, 6.31, 6.02, 5.87, 6.02, 5.76, 5.45, 5.2, 5.4, 5.23],
+  ];
   function bossRoom(i, n) {
     const c = Math.min(CHAPTERS.length - 1, Math.floor(i * CHAPTERS.length / BOSS_ORDER.length));
     const d = bossDiff(n), st = STAGES[c * 7 + [2, 6][(n - 1) % 2]];
-    return { lvl: diffLvl(st, d), f: stageDiff(st, d) * BOSS_ROOM, d };
+    return { lvl: diffLvl(st, d), f: d ? ROOM_PW[d - 1][c * 2 + (n - 1) % 2] : stageDiff(st, d) * BOSS_ROOM, d };
   }
   const bossLvl = (i, n) => bossRoom(i, n).lvl;
   // the enemies of phase p of Boss Hall level n (minions, minions, boss), toughened like the matching campaign stage
@@ -2206,7 +2236,7 @@ const K = (function () {
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
-    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
+    ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,

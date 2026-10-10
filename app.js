@@ -122,6 +122,11 @@
     return s;
   }
   const clearedOn = d => (d ? S.dcl[d] ?? -1 : S.cleared);
+  // a campaign difficulty is open once every stage of the one before it is cleared; Boss Hall levels open with theirs
+  // (levels 3-4 with Normal, 5-6 Hard, 7-8 Brutal, 9-10 Nightmare), so the Boss Hall is never a shortcut to better gear
+  const diffOpen = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
+  const bhLvlOpen = n => diffOpen(K.bossDiff(n));
+  const bhLvlNeed = n => `Opens with ${K.DIFFS[K.bossDiff(n)].name}: clear all of ${K.DIFFS[K.bossDiff(n) - 1].name} in the campaign`;
   function newHero(id) { return { lvl: 1, xp: 0, stars: K.baseStars(id), sk: C[id].skills.map(() => 0) }; }
   // A new save has no heroes yet: the player first creates their own hero (createHtml), the rest is earned in Chapter I.
   function fresh() {
@@ -796,7 +801,7 @@
     const idx = K.STAGES.map((st, i) => i).filter(i => K.STAGES[i].chapter === chap);
     const sel = idx.includes(campSel) ? campSel : idx.includes(next) ? next : idx.filter(i => i <= cleared).pop() ?? idx[0];
     const st = K.STAGES[sel], stateOf = i => i <= cleared ? 'cleared' : i === next ? 'next' : 'locked', state = stateOf(sel);
-    const diffOk = i => !i || clearedOn(i - 1) >= K.STAGES.length - 1;
+    const diffOk = diffOpen;
     const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[chap]] : '';
     const chapDone = cleared >= chap * 7 + 6, cdone = idx.filter(i => i <= cleared).length;
     // drop icons from the gear sheet (GEAR_TILE), one per rarity that can drop on this difficulty
@@ -820,10 +825,10 @@
       <button type="button" class="cv-arr prev" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button>
       <button type="button" class="cv-arr next" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></section>`;
     // the selected stage: its enemies per phase, what it drops and the button to play it
-    const ess = [...new Set(st.phases.flat().map(f => E[f].aff))], fr = firsts(sel);
+    const ess = [...new Set(K.stagePhases(st, d).flat().map(f => E[f].aff))], fr = firsts(sel);
     const stage = `<section class="cv-stage ${st.boss ? 'boss' : ''}">
       <div class="cv-st-h"><b>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`}</b>${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}<span class="cv-st-s ${state}">${state === 'cleared' ? '✓ Cleared' : state === 'next' ? 'Next battle' : `${LOCK_SVG} Locked`}</span></div>
-      <div class="cv-phases">${st.phases.map((p, i) => `<div class="cv-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('<i class="cv-ph-arr" aria-hidden="true">›</i>')}</div>
+      <div class="cv-phases">${K.stagePhases(st, d).map((p, i) => `<div class="cv-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('<i class="cv-ph-arr" aria-hidden="true">›</i>')}</div>
       <div class="cv-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(st, d)}</b></span><span class="rw"><small>Drops</small><span class="st-dic">${dropIc(st)}</span></span>${fr.length ? `<span class="rw"><small>First clear</small></span>${fr.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</span></div>
       <div class="cv-go">${state === 'cleared' ? auto(sel) : ''}${spot ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : playBtn(sel)}</div></section>`;
     const tids = teamIds('campaign');
@@ -841,7 +846,7 @@
       return `<div class="cv-card ${ss} ${s.boss ? 'boss' : ''} ${i === sel ? 'sel' : ''}" style="--art:url(${art});--pos:${k * 16}%">
         <button type="button" class="cv-card-sel" data-act="csel" data-stage="${i}" aria-label="${s.n === 6 ? 'Boss stage' : `Stage ${s.n + 1}`}" aria-pressed="${i === sel}"></button>
         <div class="cv-card-h"><b>${s.n === 6 ? 'Boss' : `Stage ${s.n + 1}`}</b>${ss === 'cleared' ? '<span class="cv-ok">✓</span>' : ''}</div>
-        <div class="cv-card-f">${s.foes.slice(0, 4).map(f => `<span class="cv-foe-s ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div>
+        <div class="cv-card-f">${K.stagePhases(s, d)[2].slice(0, 4).map(f => `<span class="cv-foe-s ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div>
         <div class="cv-card-m"><span class="st-dic">${dropIc(s)}</span><span class="pill">Lv ${K.diffLvl(s, d)}</span></div>
         <div class="cv-card-a">${acts}</div></div>`;
     }).join('');
@@ -893,7 +898,8 @@
         <img class="spr" src="${SPR.url(id, 1)}" alt=""><span class="bh-nm">${open ? esc(bo.name) : '???'}</span>${affChip(bo.aff)}<span class="bh-prog">${best}/${K.BOSS_LEVELS}</span></button>`;
     }).join('');
     const open = bossOpen(ci), best = S.bh[cur] || 0;
-    const sel = Math.min(S.bhSel[cur] || best + 1, K.BOSS_LEVELS, best + 1);
+    const openMax = Array.from({ length: K.BOSS_LEVELS }, (_, i) => i + 1).filter(bhLvlOpen).pop() || 1;
+    const sel = Math.min(S.bhSel[cur] || best + 1, K.BOSS_LEVELS, best + 1, openMax);
     const lv = K.bossLvl(ci, sel), col = AFF_COL[B0.aff];
     const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length))]] : '';
     const hero = `<div class="bhv-hero" style="--art:url(${art});--c:${col}"><img class="bhv-boss" src="${bossBig(cur)}" alt="${esc(B0.name)}"></div>`;
@@ -923,9 +929,10 @@
     const team = `<section class="bhv-panel bhv-team"><div class="bhv-team-h"><span class="bhv-team-t">${icon(essIcon(B0.aff), col)}Team against ${B0.aff} bosses</span><select id="bh-team" data-aff="${B0.aff}" aria-label="Team against ${B0.aff} bosses">${opts}</select></div>
         <div class="bhv-team-b"><div class="bhv-heroes">${ids.map(id => { const h = S.roster[id]; return `<span class="bhv-hc rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span class="bhv-hc-e" style="--c:${AFF_COL[C[id].aff]}">${essIcon(C[id].aff)}</span><span class="bhv-hc-f"><i>${'★'.repeat(h.stars || 1)}</i><b>Lv ${h.lvl}</b></span></span>`; }).join('')}</div>
           <div class="bhv-pw"><small>Team power</small><b>${teamPower(ids).toLocaleString('en-US')}</b><button class="btn" data-act="editbteam" data-aff="${B0.aff}">Edit</button></div></div></section>`;
-    const lvls = Array.from({ length: K.BOSS_LEVELS }, (_, i) => `<button type="button" class="${i < best ? 'done' : ''} ${i + 1 === sel ? 'sel' : ''}" data-act="bhlvl" data-id="${cur}" data-n="${i + 1}" ${i > best ? 'disabled' : ''} aria-label="Level ${i + 1}">${i + 1}</button>`).join('');
-    const level = `<section class="bhv-panel bhv-lv"><div class="lvls" role="group" aria-label="Level">${lvls}</div><p>Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</p></section>`;
-    const go = `<div class="bhv-go"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">⚔ Challenge${enCost(K.bossEnergy(sel))}</button></div>`;
+    const lvls = Array.from({ length: K.BOSS_LEVELS }, (_, i) => `<button type="button" class="${i < best ? 'done' : ''} ${i + 1 === sel ? 'sel' : ''}" data-act="bhlvl" data-id="${cur}" data-n="${i + 1}" ${i > best || !bhLvlOpen(i + 1) ? `disabled${bhLvlOpen(i + 1) ? '' : ` title="${bhLvlNeed(i + 1)}"`}` : ''} aria-label="Level ${i + 1}">${bhLvlOpen(i + 1) ? i + 1 : LOCK_SVG}</button>`).join('');
+    const lockedTo = Array.from({ length: K.BOSS_LEVELS }, (_, i) => i + 1).find(x => !bhLvlOpen(x));
+    const level = `<section class="bhv-panel bhv-lv"><div class="lvls" role="group" aria-label="Level">${lvls}</div><p>Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</p>${lockedTo && best + 1 >= lockedTo ? `<p class="bhv-need">${LOCK_SVG} Level ${lockedTo} and up open with ${K.DIFFS[K.bossDiff(lockedTo)].name}: clear all of ${K.DIFFS[K.bossDiff(lockedTo) - 1].name} in the campaign.</p>` : ''}</section>`;
+    const go = `<div class="bhv-go"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}" ${bhLvlOpen(sel) ? '' : `disabled title="${bhLvlNeed(sel)}"`}>⚔ Challenge${enCost(K.bossEnergy(sel))}</button></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
       <div class="bh"><div class="bh-list">${list}</div><div class="bhv">${hero}${info}${team}${level}${go}</div></div>`;
   }
@@ -1099,7 +1106,7 @@
       const setSel = sets.length > 1 ? `<label class="inv-set">Set <select id="inv-set"><option value="all">All sets (${all.length})</option>${sets.map(k => { const w = worn.filter(x => x.set === k).length; return `<option value="${k}" ${k === invSet ? 'selected' : ''}>${esc(K.SETS[k].name)} (${all.filter(x => x.set === k).length})${w ? ` · ${w} worn` : ''}</option>`; }).join('')}</select></label>` : '';
       inv = `<div class="inv" id="invpanel"><div class="section-head"><h3>Choose ${K.SLOT_NAMES[invSlot].toLowerCase()}</h3><div class="row" style="display:flex;gap:6px"><button class="btn small" data-act="sellbad" data-slot="${invSlot}">Sell spare common and uncommon</button><button class="btn small" data-act="invclose">Close</button></div></div>
         ${setSel}${invSet !== 'all' ? `<p class="empty-note inv-setnote">${esc(K.SETS[invSet].desc)}</p>` : ''}
-        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemNameH(x)}</span><span class="item-set">${K.SETS[x.set].name} · level ${x.il}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
+        ${list.length ? `<div class="inv-list">${list.map(x => `<div class="inv-item rar-${x.rar}"><div class="inv-head">${gearIcon(x)}<div><span class="item-name">${itemNameH(x)}</span><span class="item-set">${K.SETS[x.set].name}</span></div></div>${x.owner ? `<span class="owner">Worn by ${esc(C[x.owner].short)}</span>` : ''}${itemStatsHtml(x)}
           <div class="row"><button class="btn small primary" data-act="equip" data-item="${x.id}" ${wearOk(id, x) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, x) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button>${x.owner ? '' : `<button class="btn small" data-act="sell" data-item="${x.id}">Sell · ${K.sellValue(x)}</button>`}</div></div>`).join('')}</div>`
           : `<p class="empty-note">You have no spare ${K.SLOT_NAMES[invSlot].toLowerCase()}. Play stages or the Boss Hall to find gear.</p>`}</div>`;
     }
@@ -1254,7 +1261,7 @@
     if (!it) { m.hidden = true; return; }
     const maxed = it.lvl >= K.MAX_GEAR_LVL, cost = K.upgradeCost(it), SS = K.SETS[it.set];
     m.innerHTML = `<div class="modal-box gear-pop rar-${it.rar}" role="dialog" aria-modal="true" aria-labelledby="gp-t">
-      <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${itemNameH(it)}</h2><span class="tag">${K.SLOT_NAMES[slot]} · item level ${it.il} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
+      <div class="gp-head"><span class="gt-ic big">${gearIcon(it)}</span><div><h2 id="gp-t" class="rartxt">${itemNameH(it)}</h2><span class="tag">${K.SLOT_NAMES[slot]} · upgrade ${it.lvl} / ${K.MAX_GEAR_LVL}</span></div></div>
       ${itemStatsHtml(it)}
       ${SS.tiers ? `<div class="gp-set"><b>${esc(SS.name)}</b> · ${SS.ess} boss set${SS.tiers.map(t => `<div${t.asc ? ' class="gp-asc"' : ''}><i>${t.asc ? 'Ascended (all six at <span class="asc-st">★★★</span>)' : t.n + ' pieces'}:</i> ${esc(t.d)}</div>`).join('')}</div>` : `<p class="gp-set"><b>${SS.name}</b> · ${SS.desc}</p>`}
       ${maxed ? ascHtml(it) : `<p class="empty-note">Upgrade: ${sigils(cost)} · ${Math.round(K.upgradeChance(it) * 100)}% chance. You have ${sigils(S.silver)}.</p>`}
@@ -1622,11 +1629,11 @@
   // rarity, set and whether it is worn, sort it, lock pieces you want to keep (it.lock) and sell several at once.
   // Sell mode: tap pieces to select them; worn and locked gear can never be selected.
   const VT = { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar', sell: false, sel: new Set(), open: null };
-  const VT_SORTS = { rar: ['Rarity', (a, b) => b.rar - a.rar || b.lvl - a.lvl || b.il - a.il], lvl: ['Level', (a, b) => b.lvl - a.lvl || b.rar - a.rar], il: ['Item level', (a, b) => b.il - a.il || b.rar - a.rar], new: ['Newest', (a, b) => b.id - a.id], value: ['Sell value', (a, b) => K.sellValue(b) - K.sellValue(a)] };
+  const VT_SORTS = { rar: ['Rarity', (a, b) => b.rar - a.rar || b.lvl - a.lvl || b.il - a.il], lvl: ['Upgrade level', (a, b) => b.lvl - a.lvl || b.rar - a.rar], new: ['Newest', (a, b) => b.id - a.id], value: ['Sell value', (a, b) => K.sellValue(b) - K.sellValue(a)] };
   const sellable = it => !it.owner && !it.lock;
   function vaultItems() {
     return S.inv.filter(it => (VT.slot === 'all' || it.slot === VT.slot) && (VT.rar === 'all' || it.rar === +VT.rar) && (VT.set === 'all' || it.set === VT.set)
-      && (VT.st === 'all' || (VT.st === 'free' ? !it.owner : VT.st === 'worn' ? !!it.owner : VT.st === 'asc' ? !!it.asc : !!it.lock))).sort(VT_SORTS[VT.sort][1]);
+      && (VT.st === 'all' || (VT.st === 'free' ? !it.owner : VT.st === 'worn' ? !!it.owner : VT.st === 'asc' ? !!it.asc : !!it.lock))).sort((VT_SORTS[VT.sort] || VT_SORTS.rar)[1]);
   }
   function vaultHtml() {
     const list = vaultItems(), sets = [...new Set(S.inv.map(it => it.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
@@ -1651,7 +1658,7 @@
         <span class="vt-main">${K.fmtStat(...K.gearStats(it)[0])}</span>${picked ? '<span class="vt-check">✓</span>' : ''}</button>`;
     }).join('');
     const o = VT.open && !VT.sell ? S.inv.find(it => it.id === VT.open) : null;
-    const detail = o ? `<section class="vt-detail rar-${o.rar}">${gearIcon(o)}<div class="vt-dmain"><b class="rartxt">${itemNameH(o)}</b><small>${esc(K.SETS[o.set] ? K.SETS[o.set].name + ' · ' + K.SETS[o.set].desc : '')} · item level ${o.il}</small>${itemStatsHtml(o)}
+    const detail = o ? `<section class="vt-detail rar-${o.rar}">${gearIcon(o)}<div class="vt-dmain"><b class="rartxt">${itemNameH(o)}</b><small>${esc(K.SETS[o.set] ? K.SETS[o.set].name + ' · ' + K.SETS[o.set].desc : '')}</small>${itemStatsHtml(o)}
         <small>${o.owner && C[o.owner] ? `Worn by ${esc(C[o.owner].name)}` : 'Not worn'}</small></div>
         <div class="vt-dacts">${o.lvl >= K.MAX_GEAR_LVL ? `<div class="vt-asc">${ascHtml(o)}${ascBtn(o)}</div>` : ''}<button type="button" class="btn small" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn small" data-act="sell" data-item="${o.id}">Sell · ${ic('coin')} ${K.sellValue(o).toLocaleString('en-US')}</button>` : `<small class="empty-note">${o.lock ? 'Locked gear cannot be sold.' : 'Take it off its hero to sell it.'}</small>`}</div></section>` : '';
     return `<div class="section-head"><div><h2>Gear</h2><p class="lede">All your gear: filter, sort, lock what you want to keep and sell the rest for Sigils.</p></div>
@@ -2185,13 +2192,16 @@
         row('Team', 'Up to 4 heroes fight together. Pick them in Heroes & Gear → Team.'),
       ]),
       sec('gear', 'Gear', [
-        row('Slots', `${K.SLOTS.map(s => K.SLOT_NAMES[s]).join(', ')}. One piece per slot per hero.`),
-        row('Gear rarity', `${[0, 1, 2, 3, 4, 5].map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' → ')}. Rarer gear has stronger stats and more substats. Mythical only drops in Nightmare.`),
-        row('Level (item level)', 'How strong a piece is at its base; higher stages drop higher-level gear.'),
-        row(`+1 … +${K.MAX_GEAR_LVL}`, `Upgrade level. Each upgrade costs Sigils and can fail (the item stays safe). Every 4 levels adds a substat or boosts one. Max +${K.MAX_GEAR_LVL}.`),
-        row('Main stat / substats', 'The first stat is the main stat; the others are substats.'),
+        row('Slots and main stat', `One piece per slot per hero; the slot decides the main stat it can have. <b>Weapon</b>: Attack. <b>Helmet</b>: HP. <b>Shield</b>: Defense. <b>Gloves</b>: Attack %, Defense %, HP %, Crit Rate or Crit Damage. <b>Chestplate</b>: Attack %, Defense %, HP %, Accuracy or Resistance. <b>Boots</b>: Attack %, Defense %, HP % or Speed.`),
+        row('Gear rarity', `${[0, 1, 2, 3, 4, 5].map(r => `<b class="rar-${r} rartxt">${K.RARITIES[r]}</b>`).join(' → ')}. Each step adds +20% to the main stat (a Legendary's is 1.8× a Common's). It also sets how many substats a piece starts with: Common 0, Uncommon 1, Rare 2, Epic 3, Legendary and Mythical 4; Mythical rolls its substats 25% higher. Each difficulty drops two rarities: ${Math.round((1 - K.LOOT_UP) * 100)}% the lower one, ${Math.round(K.LOOT_UP * 100)}% the higher (Easy Uncommon / Rare … Nightmare Legendary / Mythical).`),
+
+        row('Substats', 'Random extra stats (Crit Rate, Speed, Attack % and more), each rolled within a range, so two pieces that look alike can differ a lot: a great roll is worth farming for. A piece never has the same stat twice, nor its main stat as a substat.'),
+        row(`+1 … +${K.MAX_GEAR_LVL}`, `Upgrade level, paid with Sigils. Each level adds +4.5% to the main stat (+${K.MAX_GEAR_LVL} is +${Math.round(K.MAX_GEAR_LVL * 4.5)}%). At +4, +8, +12 and +16 the piece gains a substat (while it has fewer than four) or boosts one. The chance falls as you climb: 100% at +0, down to ${Math.round(K.upgradeChance({ lvl: K.MAX_GEAR_LVL - 1 }) * 100)}% for the last step. A failed try costs the Sigils, the piece keeps its level.`),
+        row(`<span class="asc-st">★</span> Ascension`, `Any +${K.MAX_GEAR_LVL} piece can ascend ${K.MAX_ASC} times with Ascension Stones and Sigils, always successfully. Each orange star adds +10% to all its stats, main stat and substats alike. Only heroes with ${K.ASC_STARS}★ or more can wear ascended gear, whatever their rarity.`),
+        row('Sell value', 'Selling gives Sigils; higher rarity, upgrade level and ascension raise the price. Lock a piece so it is never sold by accident.'),
+        row('In short', '<b>Rarity</b>: how many stats a piece has and how good its main stat is; harder stages also drop stronger pieces of the same rarity. <b>Substats</b>: the luck of the roll. <b>Upgrade level and ascension</b>: how much you have invested in it. <b>Set</b>: the extra effects it unlocks together with its siblings.'),
         row('Upgrade all', 'Upgrades the gear a hero wears as far as your Sigils go, the most important piece for its role first.'),
-        row('Sets', 'Wearing enough pieces of one set gives a bonus. Each set counts once: extra pieces do not stack.'),
+        row('Sets', 'Wearing enough pieces of one set gives a bonus; each set counts once, so extra pieces add nothing. <b>Campaign sets</b> (one per chapter) have one bonus at 2 or 4 pieces. <b>Boss sets</b> (one per Boss Hall boss) have bonuses at 2, 4 and 6 pieces: a stat, a mechanic and the boss\'s signature effect. With all six pieces at <span class="asc-st">★★★</span> the 6-piece bonus becomes a stronger <b>Ascended</b> version. Four or more boss set pieces of one essence, from at least two different sets, add a small <b>family bonus</b>.'),
         ...Object.values(K.SETS).map(s => row(esc(s.name), esc(s.desc))),
       ]),
       sec('currency', 'Currencies and summoning', [
@@ -3682,9 +3692,10 @@
     if (!spendEnergy(stEn(i, diff))) { render(); return; }
     useTeam('campaign');
     S.chap = st.chapter;
-    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: st.foes, area: st.area, bg: chapterBg(st.chapter), rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
+    runBattle({ type: 'stage', i, diff, hard: diff > 0, lvl, stage: st, foes: K.stagePhases(st, diff)[2], area: st.area, bg: chapterBg(st.chapter), rep, title: `${stageName(i)}${diff ? ' · ' + D.name : ''}${st.boss ? ' · ' + st.boss : ''}` });
   }
   function startDungeon(id, n, rep) {
+    if (!bhLvlOpen(n)) { toast(`${bhLvlNeed(n)}.`, true); render(); return; }
     if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
     useBossTeam(bo.aff);
@@ -4005,13 +4016,13 @@
         if (first || Math.random() < 0.65) loot.push(K.genGear({ il: lvl, slot: cfg.stage.slot || K.pick(K.SLOTS), ...K.stageLoot(cfg.stage, cfg.diff), sets: [cfg.stage.set] }, S.nid++));
         if (first && cfg.stage.n === 6) delete S.chap;
         const u = K.stageUnlock(K.STAGES[cfg.i], S.starter);
-        const catchable = [...new Set(cfg.stage.phases.flat())].filter(f => !K.BOSSES[f]);
+        const catchable = [...new Set(K.stagePhases(cfg.stage, cfg.diff).flat())].filter(f => !K.BOSSES[f]);
         if (catchable.length && Math.random() < K.CAPTURE_CHANCE) {
           const cid = K.pick(catchable);
           if (!S.roster[cid]) { S.roster[cid] = newHero(cid); captured = { id: cid, isNew: true }; }
           else { S.fodder[cid] = (S.fodder[cid] || 0) + 1; captured = { id: cid, isNew: false }; }
         }
-        if (Math.random() < K.ELIXIR.camp) { const foes = cfg.stage.phases.flat(); elixir = unitAff(K.pick(foes)); }
+        if (Math.random() < K.ELIXIR.camp) { const foes = K.stagePhases(cfg.stage, cfg.diff).flat(); elixir = unitAff(K.pick(foes)); }
         if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
       } else if (cfg.type === 'tower') {
         // a floor pays once, on its first clear (the tower climbs one floor at a time)
