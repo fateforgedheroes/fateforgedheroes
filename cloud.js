@@ -117,11 +117,19 @@
   // each other. When both sides changed, the player chooses which save to keep.
   const BASE_KEY = 'ffh-cloud-base';
   const isFresh = s => !s || ((s.cleared ?? -1) < 0 && Object.keys(s.bh || {}).length === 0);
-  const content = s => JSON.stringify(Object.assign({}, s, { savedAt: 0 }));
+  // What counts as progress when comparing saves: not the fields the game changes by itself (energy refilling over time,
+  // daily quest and Market counters starting a new day, the Discord popup's day, the save time) nor settings (sound,
+  // speed, auto, the chapter or difficulty looked at). Otherwise a device that was only opened again, without playing,
+  // counted as "changed" and asked the player to pick between two saves after playing on another device.
+  const VOLATILE = ['savedAt', 'energy', 'enAt', 'disc', 'q', 'mk', 'sound', 'music', 'vol', 'audioWas', 'speed', 'auto', 'chap', 'diff'];
+  const content = s => { const o = Object.assign({}, s); for (const k of VOLATILE) delete o[k]; return JSON.stringify(o); };
+  const oldContent = s => JSON.stringify(Object.assign({}, s, { savedAt: 0 })); // how bases saved before this compared (hash)
   const hash = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0; return str.length + ':' + h; };
   let conflictOpen = false;
   function getBase() { const b = store.get(BASE_KEY); return b && session && session.user && b.uid === session.user.id ? b : null; }
-  function setBase(at, s) { store.set(BASE_KEY, { uid: session.user.id, at, hash: hash(content(s)) }); lastPushed = JSON.stringify(s); }
+  function setBase(at, s) { store.set(BASE_KEY, { uid: session.user.id, at, hash: hash(oldContent(s)), h2: hash(content(s)) }); lastPushed = JSON.stringify(s); }
+  // this device has not played since its last sync (a base from an older game version only has the old hash)
+  const unchanged = (base, s) => base.h2 ? base.h2 === hash(content(s)) : base.hash === hash(oldContent(s));
   async function pull() {
     const rows = await req('/rest/v1/saves?select=data,updated_at&user_id=eq.' + encodeURIComponent(session.user.id));
     return rows && rows[0] ? rows[0] : null;
@@ -159,7 +167,7 @@
       else if (base && base.at === row.updated_at) {
         // nobody else saved since our last sync: our local changes win
         busy = false; await push(true); return;
-      } else if (base && base.hash === hash(content(local))) takeCloud(row, 'Loaded your newer progress from another device.');
+      } else if (base && unchanged(base, local)) takeCloud(row, 'Loaded your newer progress from another device.');
       else { busy = false; setStatus('saved'); chooseSave(row, local); return; }
     } catch (e) { setStatus('error', e.message); }
     busy = false;

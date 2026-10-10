@@ -868,42 +868,56 @@
 
   // ----- boss hall -----
   const bossOpen = i => i === 0 ? unlocked('kerkers') : (S.bh[K.BOSS_ORDER[i - 1]] || 0) >= 1;
+  // Boss Hall: the boss list, and the chosen boss as one tall card: its picture large over the painted background of its
+  // chapter (later its own lair), name and progress, essence and phases, passive, who is strong against it, its trait
+  // (from level 5), the sets it drops, the team for its essence, the ten levels and Auto ×10 / Challenge.
+  const BH_GLYPH = { // small gold icons for the rows
+    passive: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 9.8 6.2 15.2 8 9.8 9.8 8 15.2 6.2 9.8.8 8l5.4-1.8z" fill="currentColor"/></svg>',
+    set: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 14 8 8 15 2 8z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 4.5 11 8 8 11.5 5 8z" fill="currentColor"/></svg>',
+  };
+  // the boss at its finest: the first idle frame of its animated sheet, else its manga picture, else the battle art
+  const bossBig = id => (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id] && HERO_SHEET[id].idle[0]) || (typeof MANGA_ART !== 'undefined' && MANGA_ART[id] && MANGA_ART[id].body) || SPR.url(id, 2);
   function dungeonsHtml() {
     if (!unlocked('kerkers')) return lockedHtml('kerkers', 'Twenty-five bosses, each with phases, a passive and a Break Meter. Each boss has ten levels and drops gear from its own sets.');
     const cur = S.bhCur && K.BOSSES[S.bhCur] ? S.bhCur : K.BOSS_ORDER[0];
     const ci = K.BOSS_ORDER.indexOf(cur), B0 = K.BOSSES[cur];
     const list = K.BOSS_ORDER.map((id, i) => {
       const bo = K.BOSSES[id], open = bossOpen(i), best = S.bh[id] || 0;
-      return `<button type="button" class="bh-row ${id === cur ? 'sel' : ''} ${open ? '' : 'locked'}" data-act="bhsel" data-id="${id}">
+      return `<button type="button" class="bh-row ${id === cur ? 'sel' : ''} ${open ? '' : 'locked'}" data-act="bhsel" data-id="${id}" title="${open ? esc(bo.name) : 'Locked'}">
         <img class="spr" src="${SPR.url(id, 1)}" alt=""><span class="bh-nm">${open ? esc(bo.name) : '???'}</span>${affChip(bo.aff)}<span class="bh-prog">${best}/${K.BOSS_LEVELS}</span></button>`;
     }).join('');
     const open = bossOpen(ci), best = S.bh[cur] || 0;
     const sel = Math.min(S.bhSel[cur] || best + 1, K.BOSS_LEVELS, best + 1);
-    const lv = K.bossLvl(ci, sel);
-    const lvls = Array.from({ length: K.BOSS_LEVELS }, (_, i) => `<button type="button" class="${i < best ? 'done' : ''} ${i + 1 === sel ? 'sel' : ''}" data-act="bhlvl" data-id="${cur}" data-n="${i + 1}" ${!open || i > best ? 'disabled' : ''} aria-label="Level ${i + 1}">${i + 1}</button>`).join('');
-    const sets = K.bossSets(ci).map(k => `<div><b>${K.SETS[k].name}</b> <span>${K.SETS[k].desc}</span></div>`).join('');
-    const beaten = Object.keys(K.ESSENCES.reduce((o, e) => (K.BEATS[e] === B0.aff ? (o[e] = 1) : 0, o), {}));
-    const detail = open ? `<div class="dg">
-        <div class="dg-art bh-art"><canvas data-bg="${AREA_OF[B0.aff]}" width="480" height="270"></canvas><img class="spr" src="${SPR.url(cur, 2)}" alt="${esc(B0.name)}"></div>
-        <div class="dg-body"><div class="section-head" style="margin:0"><h3 style="margin:0">${esc(B0.name)}</h3><span class="tag">${best}/${K.BOSS_LEVELS} cleared</span></div>
-          <div class="tags">${affChip(B0.aff)} ${B0.aff} · ${esc(B0.arch)} · ${B0.nPhases} boss phases · Break ${B0.breakMax}</div>
-          <p>${K.PHASES - 1} phases of ${K.bossPhases(cur, 1)[0].length} minions first, then the boss.</p>
-          <p><b>${esc(B0.passiveName)}</b>: ${esc(B0.passiveDesc)}</p>
-          <p>${B0.aff === 'Aether' ? 'No essence has the advantage here.' : `Strong against it: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
-          <div class="setlist">${sets}</div>
-          ${(() => { // the team for bosses of this essence (or the Boss Hall team), its heroes and power
-            const own = S.bossTeam && S.bossTeam[B0.aff] != null && S.bossTeam[B0.aff] < S.teams.length, ti = bossTeamIdx(B0.aff), ids = S.teams[ti].ids;
-            const opts = `<option value="" ${own ? '' : 'selected'}>Boss Hall team (${esc(S.teams[S.modeTeam.boss || 0].name)})</option>` + S.teams.map((t, i) => `<option value="${i}" ${own && i === ti ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
-            return `<div class="bh-team"><label class="bh-team-pick">${affChip(B0.aff)} Team against ${B0.aff} bosses <select id="bh-team" data-aff="${B0.aff}">${opts}</select></label>
-              <div class="teamstrip">${ids.map(id => `<div class="mini rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span>Lv ${S.roster[id].lvl}</span></div>`).join('')}<div class="power"><span class="tag">Team power</span><b>${teamPower(ids).toLocaleString('en-US')}</b></div><button class="btn small" data-act="editbteam" data-aff="${B0.aff}">Edit</button></div></div>`;
-          })()}
-          ${sel >= K.BTRAIT.from ? (() => { const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.teams[bossTeamIdx(B0.aff)].ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr])); return `<p class="bh-trait">${fxBadge(tr)} <span><b>${ef.n}</b> (level ${K.BTRAIT.from} and up): ${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</span></p>`; })() : ''}
-          <div class="lvls" role="group" aria-label="Level">${lvls}</div>
-          <div class="section-head" style="margin:0"><span class="empty-note">Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</span><span class="bh-btns"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">Challenge${enCost(K.bossEnergy(sel))}</button></span></div>
-        </div></div>`
-      : `<div class="dg locked"><div class="dg-body"><h3 style="margin:0">Locked</h3><p class="empty-note">${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></div></div>`;
+    const lv = K.bossLvl(ci, sel), col = AFF_COL[B0.aff];
+    const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length))]] : '';
+    const hero = `<div class="bhv-hero" style="--art:url(${art});--c:${col}"><img class="bhv-boss" src="${bossBig(cur)}" alt="${esc(B0.name)}"></div>`;
+    if (!open) return `<div class="section-head"><div><h2>Boss Hall</h2></div></div><div class="bh"><div class="bh-list">${list}</div>
+      <div class="bhv locked">${hero}<section class="bhv-panel"><div class="bhv-title"><h3>${esc(B0.name)}</h3></div><p class="empty-note">${LOCK_SVG} ${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></section></div></div>`;
+    const beaten = K.ESSENCES.filter(e => K.BEATS[e] === B0.aff);
+    const icon = (svg, c) => `<span class="bhv-ic" style="--c:${c}">${svg}</span>`;
+    const sets = K.bossSets(ci).map(k => { const [need, bonus] = K.SETS[k].desc.split(': '); return `<li>${icon(BH_GLYPH.set, '#e3c06a')}<b>${esc(K.SETS[k].name)}</b><span>${esc(need)}: ${esc(bonus || '')}</span></li>`; }).join('');
+    const trait = sel >= K.BTRAIT.from ? (() => {
+      const tr = K.bossTrait(ci), ef = K.EFFECTS[tr], ok = S.teams[bossTeamIdx(B0.aff)].ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]));
+      return `<div class="bhv-row trait">${fxBadge(tr)}<div><b>${ef.n}</b> <small class="tag">level ${K.BTRAIT.from} and up</small><small>${esc(ef.d)}. ${ok ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</small></div></div>`;
+    })() : '';
+    const info = `<section class="bhv-panel">
+        <div class="bhv-title"><h3>${esc(B0.name)}</h3><div class="bhv-prog"><small>${best}/${K.BOSS_LEVELS} cleared</small><span class="bhv-bar">${Array.from({ length: K.BOSS_LEVELS }, (_, i) => `<i class="${i < best ? 'on' : ''}"></i>`).join('')}</span></div></div>
+        <div class="bhv-row">${icon(essIcon(B0.aff), col)}<div><b><span style="color:${col}">${B0.aff}</span> · ${esc(B0.arch)} · ${B0.nPhases} boss phases · Break ${B0.breakMax}</b><small>${K.PHASES - 1} phases of ${K.bossPhases(cur, 1)[0].length} minions first, then the boss.</small></div></div>
+        <div class="bhv-row">${icon(BH_GLYPH.passive, col)}<div><b>${esc(B0.passiveName)}</b><small>${esc(B0.passiveDesc)}</small></div></div>
+        <div class="bhv-row">${beaten.length ? icon(essIcon(beaten[0]), AFF_COL[beaten[0]]) : icon(essIcon('Aether'), AFF_COL.Aether)}<div><b>${beaten.length ? `Strong against it: ${beaten.map(e => `<span style="color:${AFF_COL[e]}">${e}</span>`).join(', ')}` : 'No essence has the advantage here'}</b></div></div>
+        ${trait}
+        <ul class="bhv-sets">${sets}</ul></section>`;
+    // the team for bosses of this essence (or the Boss Hall team)
+    const own = S.bossTeam && S.bossTeam[B0.aff] != null && S.bossTeam[B0.aff] < S.teams.length, ti = bossTeamIdx(B0.aff), ids = S.teams[ti].ids;
+    const opts = `<option value="" ${own ? '' : 'selected'}>Boss Hall team (${esc(S.teams[S.modeTeam.boss || 0].name)})</option>` + S.teams.map((t, i) => `<option value="${i}" ${own && i === ti ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    const team = `<section class="bhv-panel bhv-team"><div class="bhv-team-h"><span class="bhv-team-t">${icon(essIcon(B0.aff), col)}Team against ${B0.aff} bosses</span><select id="bh-team" data-aff="${B0.aff}" aria-label="Team against ${B0.aff} bosses">${opts}</select></div>
+        <div class="bhv-team-b"><div class="bhv-heroes">${ids.map(id => { const h = S.roster[id]; return `<span class="bhv-hc rar-${C[id].rar}" title="${esc(C[id].name)}">${por(id)}<span class="bhv-hc-e" style="--c:${AFF_COL[C[id].aff]}">${essIcon(C[id].aff)}</span><span class="bhv-hc-f"><i>${'★'.repeat(h.stars || 1)}</i><b>Lv ${h.lvl}</b></span></span>`; }).join('')}</div>
+          <div class="bhv-pw"><small>Team power</small><b>${teamPower(ids).toLocaleString('en-US')}</b><button class="btn" data-act="editbteam" data-aff="${B0.aff}">Edit</button></div></div></section>`;
+    const lvls = Array.from({ length: K.BOSS_LEVELS }, (_, i) => `<button type="button" class="${i < best ? 'done' : ''} ${i + 1 === sel ? 'sel' : ''}" data-act="bhlvl" data-id="${cur}" data-n="${i + 1}" ${i > best ? 'disabled' : ''} aria-label="Level ${i + 1}">${i + 1}</button>`).join('');
+    const level = `<section class="bhv-panel bhv-lv"><div class="lvls" role="group" aria-label="Level">${lvls}</div><p>Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</p></section>`;
+    const go = `<div class="bhv-go"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}">⚔ Challenge${enCost(K.bossEnergy(sel))}</button></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
-      <div class="bh"><div class="bh-list">${list}</div><div>${detail}</div></div>`;
+      <div class="bh"><div class="bh-list">${list}</div><div class="bhv">${hero}${info}${team}${level}${go}</div></div>`;
   }
   function paintDungeonArt() {
     document.querySelectorAll('canvas[data-bg]').forEach(c => { const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(SPR.bg(+c.dataset.bg), 0, 0); });
@@ -3137,12 +3151,22 @@
     c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const cg = c.getContext('2d'); cg.drawImage(img, 0, 0);
     cg.globalCompositeOperation = 'source-atop'; cg.fillStyle = kind === 'white' ? '#fff6e0' : 'rgba(8,6,12,0.55)'; cg.fillRect(0, 0, c.width, c.height); TINT[kind].set(img, c); return c;
   }
-  const MCV = new WeakMap();
+  let MCV = new WeakMap();
   function mangaPre(img, ak, kx, ky) {
     const e = MCV.get(img); if (e && e.rs === RS) return e.c;
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width / ak * kx * RS)); c.height = Math.max(1, Math.round(img.height / ak * ky * RS));
     const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); MCV.set(img, { rs: RS, c }); return c;
   }
+  // back from another app (phones): pictures the phone wiped while the game was hidden are drawn again (SPR.heal), the
+  // copies made from them are made anew, and a screen with painted canvases is drawn again; once more a moment later,
+  // in case the phone hands the canvases back only after the page shows
+  function healArt() {
+    if (document.hidden) return;
+    SPR.heal(); MCV = new WeakMap(); TINT.white = new WeakMap(); TINT.dark = new WeakMap();
+    if (!B && S && !noHero() && document.querySelector('#screen canvas')) render();
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { healArt(); setTimeout(healArt, 1200); } });
+  addEventListener('pageshow', e => { if (e.persisted) healArt(); });
   function drawManga(u, P, now, a, flip, dir, fr, sh, shy) {
     const rs = u._rs, m = rs.m, ak = SPR.k(u.id), [kx, ky] = stretch(u.id), ess = AFF_COL[u.aff] || '#ffffff', t = now / 1000 + rs.phase;
     const PZ = SPR.poses(u.id), mir = PZ && flip ? -1 : 1;
@@ -3200,7 +3224,7 @@
     R.shake *= 0.86;
     // hit flashes fade by time, not by drawn frames (a slow screen would keep them white for long)
     FADE = Math.pow(0.8, Math.min(6, Math.max(0.5, (now - (R.lastNow || now - 16.7)) / 16.7))); R.lastNow = now;
-    g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0);
+    g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0); g.imageSmoothingEnabled = false; // set every frame: a context the phone restored starts from defaults
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     g.drawImage(SPR.bg(R.bg || R.area), sh, shy);
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
@@ -3463,7 +3487,7 @@
   }
   function skillBtn(u, s, i, sel) {
     const ok = B && B.b.usable(u, s);
-    const sub = s.cdLeft > 0 ? `${s.cdLeft} more ${s.cdLeft === 1 ? 'turn' : 'turns'}` : (!ok ? 'Nobody has fallen' : TARGET_LABEL[s.target]);
+    const sub = s.cdLeft > 0 ? `${s.cdLeft} more ${s.cdLeft === 1 ? 'turn' : 'turns'}` : (!ok ? (u.oneRevive && u.flags.revUsed && s.fx.some(f => f.t === 'revive') ? 'Used: once per arena fight' : 'Nobody has fallen') : TARGET_LABEL[s.target]);
     return `<button class="sk ${sel ? 'sel' : ''} ${ok ? 'ready' : ''} ${s.cd >= 3 ? 'big' : ''}" type="button" data-i="${i}" ${ok && pending ? '' : 'disabled'} title="${esc(s.desc)}"><span class="k">${i + 1} · ${SKILL_TAG[i] || ''}${s.cd ? ' · cd ' + s.cd : ''}${s.lv ? ' · lv ' + s.lv : ''}</span><b>${esc(s.name)}</b><small>${sub}</small></button>`;
   }
   // ----- coach: explains the game step by step in the very first battle (Chapter I · Stage 1, first time) -----

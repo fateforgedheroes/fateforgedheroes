@@ -1150,7 +1150,7 @@ const K = (function () {
   const FATE_SHARDS = [
     { id: 'fate', name: 'Fate Shard', drop: 0.15, rates: [0, 75, 25, 0, 0], desc: 'Normal summon: Uncommon, with a chance of Rare.' },
     { id: 'greater', name: 'Greater Fate Shard', drop: 0.03, rates: [0, 55, 40, 5, 0], desc: 'Better pool: Uncommon, a bigger chance of Rare and a small chance of Epic.' },
-    { id: 'ancient', name: 'Ancient Fate Shard', drop: 0.01, rates: [0, 0, 80, 20, 0], desc: 'Guaranteed Rare, with a chance of Epic.' },
+    { id: 'ancient', name: 'Ancient Fate Shard', drop: 0.01, rates: [0, 0, 79, 20, 1], desc: 'Guaranteed Rare, with a chance of Epic and a 1% chance of Legendary.' },
     { id: 'mythic', name: 'Mythic Fate Shard', drop: 0.0015, rates: [0, 0, 0, 95, 5], desc: 'Guaranteed Epic, with a small chance of Legendary.' },
     { id: 'legendary', name: 'Legendary Fate Shard', drop: 0.00025, rates: [0, 0, 0, 35, 65], desc: 'Guaranteed Epic or better, with a big chance of Legendary.' },
   ];
@@ -1424,6 +1424,7 @@ const K = (function () {
     usable(u, skill) {
       if (skill.cdLeft > 0) return false;
       if (this.has(u, 'silence') && skill.cd > 0) return false;
+      if (u.oneRevive && u.flags.revUsed && skill.fx.some(f => f.t === 'revive')) return false; // arena: one revive per champion
       if (skill.target === 'deadAlly') return this.validTargets(u, skill).length > 0;
       return true;
     }
@@ -1518,6 +1519,7 @@ const K = (function () {
           }
         } else if (fx.t === 'revive') {
           const t = targets[0];
+          if (u.oneRevive) u.flags.revUsed = true;
           if (t && !t.alive) { t.alive = true; t.hp = Math.round(t.maxHp * fx.pct * lvMult); t.effects = []; t.tm = 0; this.h.revive(t); this.h.log(`${t.name} returns to the fight.`, u.side); }
         } else if (fx.t === 'tmFill') {
           for (const t of targets.filter(t => t.alive && t.side === u.side)) if (t !== u) { t.tm = Math.min(100, t.tm + fx.pct * 100); this.h.float(t, 'Turn Meter +', 'buff'); }
@@ -1821,7 +1823,14 @@ const K = (function () {
   // units for an arena fight; side 'hero' attacks, side 'enemy' defends
   const arenaUnits = (team, side) => team.map(h => makeUnit({ ...CHAMPS[h.id], id: h.id }, side, heroStats(h.id, h, h.items), h.sk));
   // Sets the seeded dice and builds both teams; the caller runs the Battle (auto for both sides) and then calls setRng(null).
-  function arenaSetup(att, def, seed) { setRng(seeded(seed)); return { heroes: arenaUnits(att, 'hero'), enemies: arenaUnits(def, 'enemy') }; }
+  // In the arena a champion may revive an ally only once per fight (oneRevive: usable() refuses the revive skill after
+  // that); the browser and the server set the same flag here, so their fights stay in step.
+  function arenaSetup(att, def, seed) {
+    setRng(seeded(seed));
+    const heroes = arenaUnits(att, 'hero'), enemies = arenaUnits(def, 'enemy');
+    for (const u of [...heroes, ...enemies]) u.oneRevive = true;
+    return { heroes, enemies };
+  }
   async function arenaFight(att, def, seed) {
     try { const { heroes, enemies } = arenaSetup(att, def, seed); const b = new Battle(heroes, enemies); b.auto = true; const res = await b.run(); return { win: res === 'win', turns: b.turns }; }
     finally { setRng(null); }

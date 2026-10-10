@@ -210,6 +210,35 @@ const SPR = (function () {
   const cache = {};
   const heroCv = {};
   const isHero = id => !!ART[id];
+  // Phones may wipe canvases kept in memory while the game is in the background (another app opened: the GPU drops
+  // them), which left battles without background or figures. Every picture drawn from an image keeps how to draw itself
+  // (keep) and a pixel that must be solid; heal() (app.js, when the page shows again) redraws the wiped ones and empties
+  // the caches built from them, which fill again on the next frame. A canvas whose context comes back also redraws itself.
+  const ROOTS = [];
+  function keep(c, redraw) {
+    redraw();
+    const r = { c, redraw, p: null };
+    try { // the probe: a solid pixel on the middle row, else on the middle column (reading two lines is cheap)
+      const g = c.getContext('2d'), y = c.height >> 1, x = c.width >> 1, row = g.getImageData(0, y, c.width, 1).data;
+      for (let i = 0; i < c.width && !r.p; i++) if (row[i * 4 + 3] >= 250) r.p = [i, y];
+      if (!r.p) { const col = g.getImageData(x, 0, 1, c.height).data; for (let i = 0; i < c.height && !r.p; i++) if (col[i * 4 + 3] >= 250) r.p = [x, i]; }
+    } catch (e) { /* not readable: no probe, redrawn on contextrestored only */ }
+    c.addEventListener('contextrestored', redraw);
+    ROOTS.push(r);
+    return c;
+  }
+  function heal() {
+    let lost = 0;
+    for (const r of ROOTS) {
+      if (!r.p) continue;
+      let a = 255; try { a = r.c.getContext('2d').getImageData(r.p[0], r.p[1], 1, 1).data[3]; } catch (e) { /* keep */ }
+      if (a < 200) { r.redraw(); lost++; }
+    }
+    for (const k in cache) delete cache[k];
+    for (const k in bgs) delete bgs[k];
+    if (typeof SPR_BG !== 'undefined' && SPR_BG.reset) SPR_BG.reset();
+    return lost;
+  }
   function up2(s) { const c = canvas(s.width * 2, s.height * 2), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return c; }
   // The battle art comes from different sources: some figures have much less local contrast than others and look
   // blurry next to them on the battlefield. sharpen() lifts a soft figure towards the common crispness (CRISP = mean
@@ -252,7 +281,7 @@ const SPR = (function () {
     return Promise.all(CHAPTER_BG.map((src, k) => new Promise(res => {
       const img = new Image();
       img.onload = () => { const c = canvas(480, 270), g = c.getContext('2d'), s = Math.max(480 / img.width, 270 / img.height), w = img.width * s, h = img.height * s;
-        g.imageSmoothingQuality = 'high'; g.drawImage(img, (480 - w) / 2, 270 - h, w, h); chBg[k] = c; res(); };
+        chBg[k] = keep(c, () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, 480, 270); g.imageSmoothingQuality = 'high'; g.drawImage(img, (480 - w) / 2, 270 - h, w, h); }); res(); };
       img.onerror = () => res();
       img.src = src;
     })));
@@ -297,7 +326,7 @@ const SPR = (function () {
       img.onload = () => {
         // a fine picture (k > 1: manga figures, animated heroes) stays fine and is not sharpened; app.js draws it k times smaller
         const k = SHEET_K(id), c = canvas(img.width, img.height), g = c.getContext('2d');
-        g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); if (k === 1) sharpen(c); heroCv[id] = c; res();
+        heroCv[id] = keep(c, () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height); if (k === 1) sharpen(c); }); res();
       };
       img.onerror = () => res();
       img.src = ART[id].body;
@@ -454,5 +483,5 @@ const SPR = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, preload, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || (loadPoses(id), null), BG_W: 480, BG_H: 270, LOOK };
+  return { frame, get, url, bg, iconUrl, preload, heal, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || (loadPoses(id), null), BG_W: 480, BG_H: 270, LOOK };
 })();

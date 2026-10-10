@@ -595,6 +595,7 @@ const SPR_BG = (function () {
   }
   const bgs = {};
   function bg(area) { return bgs[area] || (bgs[area] = background(area)); }
+  const reset = () => { for (const k in bgs) delete bgs[k]; for (const k in cache) delete cache[k]; }; // sprites.js heal(): drawn again after a phone wiped them
 
   // icons
   function icon(W, H, fn) { const c = canvas(W, H), g = c.getContext('2d'); fn((x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); }); return c; }
@@ -607,5 +608,5 @@ const SPR_BG = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, BG_W, BG_H, GROUND, FRAMES, LOOK };
+  return { frame, get, url, bg, iconUrl, reset, BG_W, BG_H, GROUND, FRAMES, LOOK };
 })();
