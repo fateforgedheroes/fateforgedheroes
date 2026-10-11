@@ -2741,7 +2741,7 @@
     else if (act === 'fghero' && S.roster[id]) { selChamp = id; champTab = 'stats'; setTab('team'); window.scrollTo({ top: 0 }); }
     else if (act === 'fgsel' && S.roster[id]) { selChamp = id; FG.pick = null; render(); }
     else if (act === 'fgstep') { const ids = fgHeroes(), i = ids.indexOf(selChamp); selChamp = ids[(i + +a.dataset.d + ids.length) % ids.length]; FG.pick = null; render(); const on = document.querySelector('.fg-hc.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
-    else if (act === 'fgslot') { FG.slot = a.dataset.slot || null; FG.pick = null; FG.tab = 'bag'; FG.scroll = true; render(); }
+    else if (act === 'fgslot') { FG.slot = a.dataset.slot || null; FG.pick = null; FG.tab = 'bag'; render(); }
     else if (act === 'fgpick' && item) { FG.pick = FG.pick === item.id ? null : item.id; FG.scrollD = !!FG.pick; render(); }
     else if (act === 'fgtab') { FG.tab = a.dataset.t; render(); }
     else if (act === 'fgreset') { Object.assign(FG, { rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power' }); render(); }
