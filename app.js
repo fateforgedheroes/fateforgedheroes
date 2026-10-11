@@ -706,7 +706,7 @@
       const act = tut && !main ? 'data-act="tutlock"' : `data-act="go" data-go="${z.go}"`;
       const st = start ? 'Start here: your adventure begins in the Campaign' : tut ? 'Opens after your first battle' : locked ? `${LOCK_SVG} Opens after ${needTxt(z.go)}` : homeStatus(z.go);
       return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
-        <img class="hb-bg" src="${MENU_ART[z.go]}" alt="">${z.go === 'market' ? `<img class="hb-ic" src="${CRYSTAL_ART}" alt="">` : ''}<span class="hb-txt"><b class="hb-name">${esc(z.label)}</b><span class="hb-st">${st}</span></span>${dot ? '<i class="hb-dot" aria-hidden="true"></i>' : ''}</button>`;
+        <img class="hb-bg" src="${MENU_ART[z.go]}" alt=""><span class="hb-txt"><b class="hb-name">${esc(z.label)}</b><span class="hb-st">${st}</span></span>${dot ? '<i class="hb-dot" aria-hidden="true"></i>' : ''}</button>`;
     };
     return `<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
   }
@@ -717,9 +717,8 @@
     const cur = tab === 'social' && SO.tab === 'guild' ? 'guild' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
-      const icon = z.go === 'market' ? `<img src="${CRYSTAL_ART}" alt="">` : '';
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
-        <span class="sn-ic ${z.go}" ${icon ? '' : `style="background-image:url(${MENU_ART[z.go]})"`}>${icon}</span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
+        <span class="sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</nav>`;
   }
   // every screen but Home gets a way back; Heroes and Team share a switch (there is no Team building)
