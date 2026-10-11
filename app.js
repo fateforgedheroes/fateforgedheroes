@@ -537,6 +537,14 @@
   const gearIcon = (it, cls) => it.asc ? `<span class="gear-asc"><img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">${ascStars(it)}</span>` : `<img class="gear-ic ${cls || ''}" src="${gearArt(it.slot, it.rar, it.id)}" alt="">`;
   // ascended gear is worn only by heroes of K.ASC_STARS stars or more, whatever their rarity
   const wearOk = (id, it) => !it.asc || ((S.roster[id] && S.roster[id].stars) || 0) >= K.ASC_STARS;
+  // Lock (it.lock): a spare piece cannot be sold; a worn piece is locked to its hero: no other hero takes it, Equip best
+  // does not replace it, Remove all leaves it and Remove asks to unlock first (worn gear cannot be sold anyway)
+  const lockedTo = it => (it && it.lock && it.owner && C[it.owner] ? it.owner : null);
+  function equipBlock(id, it) {
+    const by = lockedTo(it); if (by && by !== id) return `This ${K.SLOT_NAMES[it.slot].toLowerCase()} is locked to ${C[by].short}. Unlock it there first.`;
+    const cur = S.inv.find(x => x.owner === id && x.slot === it.slot && x !== it);
+    return cur && cur.lock ? `${C[id].short}'s ${K.SLOT_NAMES[it.slot].toLowerCase()} is locked to ${C[id].short}. Unlock it first.` : '';
+  }
   // one upgrade try on a piece of gear, with a burst where its button was (upgFx): gold rays and the new level on a
   // success, a red crack and "Failed" on a failure
   function tryUpgrade(item, btn) {
@@ -1622,7 +1630,7 @@
         <button type="button" class="btn small fg-wide" data-act="fghero" data-id="${id}">Hero details ›</button></div></aside>`;
     const carousel = `<div class="fg-car"><button type="button" class="fg-arr" data-act="fgstep" data-d="-1" aria-label="Previous hero">‹</button><div class="fg-hlist">${ids.map(x => `<button type="button" class="fg-hc rar-${C[x].rar} ${x === id ? 'on' : ''}" data-act="fgsel" data-id="${x}" title="${esc(C[x].name)}">${por(x)}${essBadge(C[x].aff)}<b>${esc(C[x].short)}</b><small>Lv ${S.roster[x].lvl}</small></button>`).join('')}</div><button type="button" class="fg-arr" data-act="fgstep" data-d="1" aria-label="Next hero">›</button></div>`;
     const tiles = K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl); return it
-      ? `<button type="button" class="fg-tile rar-${it.rar} ${FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
+      ? `<button type="button" class="fg-tile rar-${it.rar} ${FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
       : `<button type="button" class="fg-tile empty ${FG.slot === sl ? 'on' : ''}" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
     const setRows = Object.keys(counts).filter(k => K.SETS[k]).map(k => { const SS = K.SETS[k], n = counts[k], tiers = setTiersOf(k), max = tiers[tiers.length - 1][0], on = tiers.filter(([t]) => n >= t), nx = tiers.find(([t]) => t > n), asc = active.some(t => t.k === k && t.asc);
       return `<div class="fg-srow">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
@@ -1653,7 +1661,8 @@
     const rows = Object.keys(b).map(k => { const d = mine ? 0 : (b[k] || 0) - (a[k] || 0); return `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, b[k])}</b><i class="${d > 0 ? 'u' : d < 0 ? 'd' : ''}">${mine || !d ? '' : (d > 0 ? '▲ ' : '▼ ') + fmtDelta(k, d).replace(/^[+−]/, '')}</i>`; }).join('');
     const lost = !mine && cur ? Object.keys(a).filter(k => !(k in b)).map(k => `<span>${K.STAT_NAMES[k]}</span><b class="off">—</b><i class="d">▼ ${fmtDelta(k, a[k]).replace(/^[+−]/, '')}</i>`).join('') : '';
     const acts = mine
-      ? `<button type="button" class="btn primary" data-act="fgforge" data-item="${it.id}">Upgrade</button><button type="button" class="btn" data-act="fgchange">Change</button><button type="button" class="btn" data-act="fgforge" data-item="${it.id}">Forge</button><button type="button" class="btn danger" data-act="unequip" data-item="${it.id}">Remove</button>`
+      ? `<button type="button" class="btn primary" data-act="fgforge" data-item="${it.id}">Upgrade</button><button type="button" class="btn" data-act="fgchange" ${it.lock ? 'disabled title="Locked to this hero: unlock it first"' : ''}>Change</button><button type="button" class="btn ${it.lock ? 'on' : ''}" data-act="vlock" data-item="${it.id}" title="${it.lock ? 'Unlock' : `Lock to ${esc(C[id].short)}: no other hero can take it`}">${it.lock ? `${LOCK_SVG} Locked` : `Lock to ${esc(C[id].short)}`}</button><button type="button" class="btn danger" data-act="unequip" data-item="${it.id}" ${it.lock ? 'disabled title="Locked to this hero: unlock it first"' : ''}>Remove</button>`
+      : equipBlock(id, it) ? `<button type="button" class="btn" disabled title="${esc(equipBlock(id, it))}">${LOCK_SVG} ${lockedTo(it) && lockedTo(it) !== id ? `Locked to ${esc(C[it.owner].short)}` : 'Slot locked'}</button>`
       : `<button type="button" class="btn primary" data-act="equip" data-item="${it.id}" ${wearOk(id, it) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, it) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button><button type="button" class="btn" data-act="fgforge" data-item="${it.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${it.id}">${it.lock ? 'Unlock' : 'Lock'}</button>${it.owner ? '' : `<button type="button" class="btn danger" data-act="sell" data-item="${it.id}" ${it.lock ? 'disabled' : ''}>Sell · ${K.sellValue(it).toLocaleString('en-US')}</button>`}`;
     return `<div class="fg-detail rar-${it.rar}" style="--rc:var(--r${it.rar})"><div class="fg-big">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${essBadge(setEss(it.set))}</div>
       <div class="fg-dmain"><h3 class="rartxt">${itemNameH(it)}</h3><div class="fg-dsub">${esc(SS.name)} · ${K.SLOT_NAMES[it.slot]}${it.owner && !mine && C[it.owner] ? ` · worn by ${esc(C[it.owner].short)}` : ''}</div>
@@ -1719,7 +1728,7 @@
     const o = VT.open && !VT.sell ? S.inv.find(it => it.id === VT.open) : null, mo = !o && FG.mat ? mats.find(m => m.k + m.id === FG.mat) : null;
     const detail = o ? `<div class="fg-detail rar-${o.rar}" style="--rc:var(--r${o.rar})"><div class="fg-big">${gearIcon(o, 'fg-ic')}<span class="fg-plv">+${o.lvl}</span>${essBadge(setEss(o.set))}</div>
         <div class="fg-dmain"><h3 class="rartxt">${itemNameH(o)}</h3><div class="fg-dsub">${esc(K.SETS[o.set].name)} · ${o.owner && C[o.owner] ? `worn by <b>${esc(C[o.owner].short)}</b>` : 'not worn'}</div><div class="fg-dstats">${K.gearStats(o).map(([k, v]) => `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, v)}</b><i></i>`).join('')}</div></div>
-        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn" data-act="fgforge" data-item="${o.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div></div>`
+        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn" data-act="fgforge" data-item="${o.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div></div>`
       : mo ? `<div class="fg-detail mat"><div class="fg-big">${mo.ic}</div><div class="fg-dmain"><h3>${esc(mo.name)} ×${mo.n.toLocaleString('en-US')}</h3><p class="empty-note">${esc(mo.tip)}</p></div><div class="fg-acts"><button type="button" class="btn primary" data-act="go" data-go="${mo.go}">${mo.go === 'altaar' ? 'Fate Altar ›' : 'Heroes ›'}</button></div></div>` : '';
     const selItems = S.inv.filter(it => VT.sel.has(it.id)), selValue = selItems.reduce((t, it) => t + K.sellValue(it), 0);
     const tools = VT.sell
@@ -2733,11 +2742,14 @@
 
     else if (act === 'vreset') { Object.assign(VT, { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar' }); render(); }
     else if (act === 'equip' && item && !wearOk(selChamp, item)) toast(`Ascended gear needs a ${K.ASC_STARS}★ hero.`, true);
+    else if (act === 'equip' && item && equipBlock(selChamp, item)) toast(equipBlock(selChamp, item), true);
     else if (act === 'equip' && item) {
       S.inv.filter(x => x.owner === selChamp && x.slot === item.slot).forEach(x => (x.owner = null));
       item.owner = selChamp; FG.pick = null; save(); render(); toast(`${itemName(item)} equipped.`);
-    } else if (act === 'unequip' && item) { $('#modal').hidden = true; item.owner = null; save(); render(); }
+    } else if (act === 'unequip' && item && item.lock) toast(`This ${K.SLOT_NAMES[item.slot].toLowerCase()} is locked to ${C[item.owner] ? C[item.owner].short : 'its hero'}. Unlock it first.`, true);
+    else if (act === 'unequip' && item) { $('#modal').hidden = true; item.owner = null; save(); render(); }
     else if (act === 'repequip' && item && S.roster[a.dataset.id] && !wearOk(a.dataset.id, item)) toast(`Ascended gear needs a ${K.ASC_STARS}★ hero.`, true);
+    else if (act === 'repequip' && item && S.roster[a.dataset.id] && equipBlock(a.dataset.id, item)) toast(equipBlock(a.dataset.id, item), true);
     else if (act === 'repequip' && item && S.roster[a.dataset.id]) {
       // from the Auto ×10 summary: on the hero it suits best, in place of what that hero wore in that slot
       const id = a.dataset.id;
@@ -2796,7 +2808,7 @@
       render();
     }
     else if (act === 'vquick') { const r = +a.dataset.r; VT.sel.clear(); if (r >= 0) vaultItems().filter(it => sellable(it) && it.rar <= r).forEach(it => VT.sel.add(it.id)); render(); }
-    else if (act === 'vlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; save(); render(); toast(item.lock ? 'Locked: this gear cannot be sold.' : 'Unlocked.'); }
+    else if (act === 'vlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; save(); render(); const w = item.owner && C[item.owner] ? C[item.owner].short : null; toast(item.lock ? (w ? `Locked to ${w}: it stays on ${w} until you unlock it.` : 'Locked: this gear cannot be sold.') : 'Unlocked.'); }
     else if (act === 'vsell') {
       const list = S.inv.filter(it => VT.sel.has(it.id) && sellable(it)); if (!list.length) return;
       const v = list.reduce((t, it) => t + K.sellValue(it), 0), rare = list.filter(it => it.rar >= 3 || it.asc).length;
@@ -2816,6 +2828,7 @@
         for (const slot of K.SLOTS) {
           const cur = S.inv.find(x => x.owner === selChamp && x.slot === slot);
           const others = itemsOf(selChamp).filter(x => x.slot !== slot);
+          if (cur && cur.lock) continue; // a piece locked to this hero stays
           const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === selChamp) && wearOk(selChamp, x));
           let best = cur, bestP = power(K.heroStats(selChamp, h, cur ? [...others, cur] : others));
           for (const c of cands) { const pw = power(K.heroStats(selChamp, h, [...others, c])); if (pw > bestP + 1e-9) { best = c; bestP = pw; } }
@@ -2825,9 +2838,9 @@
       const changed = itemsOf(selChamp).filter(x => !was.has(x)).length;
       save(); render(); toast(changed ? `Swapped ${changed} ${changed === 1 ? 'piece' : 'pieces'} of gear.` : 'Already wearing the best available gear.');
     } else if (act === 'unequipall') {
-      const worn = itemsOf(selChamp);
+      const all = itemsOf(selChamp), worn = all.filter(x => !x.lock), kept = all.length - worn.length;
       worn.forEach(x => (x.owner = null));
-      save(); render(); toast(`Removed ${worn.length} ${worn.length === 1 ? 'piece' : 'pieces'} of gear.`);
+      save(); render(); toast(`Removed ${worn.length} ${worn.length === 1 ? 'piece' : 'pieces'} of gear.${kept ? ` ${kept} locked ${kept === 1 ? 'piece stays' : 'pieces stay'}.` : ''}`);
     } else if (act === 'elixir') {
       // drink elixirs one by one (each at the hero's current level) until the count, the stock or the level cap runs out
       const e = a.dataset.e, h = S.roster[selChamp], to = selChamp;
