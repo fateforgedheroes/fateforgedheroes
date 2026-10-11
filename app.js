@@ -98,6 +98,8 @@
   function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
     if (!s.elx || typeof s.elx !== 'object') s.elx = {}; // Essence Elixirs per essence
+    // energy above the bar is capped at K.ENERGY.over times it (older saves could pile up thousands)
+    if (s.p) { const ceil = K.energyMax(effLvl(s)) * K.ENERGY.over; if (s.energy > ceil) s.energy = ceil; }
     // the Support class was dropped before release: a test save's Support hero becomes a Healer (same id everywhere)
     if (s.hero && s.hero.cls === 'support') {
       const o = `"pc_support_${s.hero.g}"`, n = `"pc_healer_${s.hero.g}"`, t = JSON.parse(JSON.stringify(s).split(o).join(n));
@@ -2136,7 +2138,7 @@
   const LEVEL_GEMS = 10;
   const GEM_SVG = typeof CRYSTAL_ART !== 'undefined' ? `<img class="gem-ic" src="${CRYSTAL_ART}" alt="">` : '';
   const MARKET = [
-    { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar. Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
+    { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar (you can hold up to twice your bar). Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
     { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
     { id: 'greater', group: 'Fate Shards', name: K.SHARD.greater.name, desc: 'Better odds on Rare and Epic heroes.', r: { fs: { greater: 1 } }, price: 90, limit: 3, per: 'day' },
     { id: 'ancient', group: 'Fate Shards', name: K.SHARD.ancient.name, desc: 'Epic and Legendary heroes; counts for the Epic pity.', r: { fs: { ancient: 1 } }, price: 300, limit: 1, per: 'week' },
@@ -2159,6 +2161,7 @@
     const n = mkBought(it), price = mkPrice(it);
     if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
     if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
+    if (it.r.energy) { energyTick(); if (S.energy + it.r.energy > enCeil()) { toast(`Your energy is nearly full: you can hold at most ${enCeil()} (twice your bar). Spend some first.`, true, 4000); return; } }
     const go = () => {
       if (S.gems < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
       const m = mkState(), book = it.per === 'week' ? m.w : m.d;
@@ -2370,7 +2373,7 @@
     if (+r.silver > 0) S.silver += Math.floor(+r.silver);
     if (r.elx) for (const e of K.ESSENCES) if (+r.elx[e] > 0) S.elx[e] = (S.elx[e] || 0) + Math.floor(+r.elx[e]);
     if (+r.gems > 0) S.gems += Math.floor(+r.gems);
-    if (+r.energy > 0) { energyTick(); S.energy += Math.floor(+r.energy); paintEnergy(); } // may go above the cap; regen waits until it drops below
+    if (+r.energy > 0) { addEnergy(+r.energy); paintEnergy(); } // may go above the bar (up to its ceiling); regen waits until it drops below
     addStones(rewardStones(r));
     for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
   }
@@ -4027,6 +4030,9 @@
   // ---------- Energy (K.ENERGY): S.energy, refilled by time from S.enAt (ms) ----------
   const EN_MS = K.ENERGY.regenMin * 60000;
   const enMax = () => K.energyMax(effLvl(S));
+  // energy from rewards may go above the bar, up to K.ENERGY.over times it; the rest is lost. Returns what was added.
+  const enCeil = () => enMax() * K.ENERGY.over;
+  function addEnergy(n) { energyTick(); const got = Math.min(Math.max(0, enCeil() - S.energy), Math.max(0, Math.floor(n))); S.energy += got; return got; }
   function energyTick() {
     const now = Date.now(), max = enMax();
     if (S.energy == null || !S.enAt) { S.energy = S.energy ?? max; S.enAt = now; }
@@ -4061,7 +4067,7 @@
     while (p.lvl < PLAYER_MAX && p.xp >= pxNeed(p.lvl)) {
       p.xp -= pxNeed(p.lvl); p.lvl++;
       const silver = levelSilver(p.lvl), shard = p.lvl % 5 === 0 ? 'greater' : null;
-      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; energyTick(); const en = levelEnergy(p.lvl); S.energy += en; S.gems += LEVEL_GEMS;
+      S.silver += silver; if (shard) S.fs[shard] = (S.fs[shard] || 0) + 1; const en = addEnergy(levelEnergy(p.lvl)); S.gems += LEVEL_GEMS;
       ups.push([p.lvl, silver, shard, (!p.prestige && Object.keys(PLAYER_UNLOCK).find(t => PLAYER_UNLOCK[t] === p.lvl)) || null, en]);
     }
     if (p.lvl >= PLAYER_MAX) p.xp = 0; // the bar stops at the top: time to prestige
@@ -4138,6 +4144,9 @@
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
     } else if (cfg.type === 'tower') { xp = 0; silver = 0; } // tower tries are free, so a defeat pays nothing
     else { xp = Math.round(K.winXp(lvl) * 0.25); silver = Math.round(K.winSilver(lvl) * 0.3); }
+    // a lost campaign stage or Boss Hall level gives half its energy back (also when given up)
+    const refund = !win && (cfg.type === 'stage' || cfg.type === 'boss') ? addEnergy(Math.ceil((cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n)) / 2)) : 0;
+    if (refund) paintEnergy();
     if (win && cfg.type !== 'tower') gotShards.push(...K.rollShards());
     // an elixir drop: now and then an Aether Elixir (fits any hero) instead (the tower's own reward stays as it is)
     if (elixir && cfg.type !== 'tower' && Math.random() < K.ELIXIR.aether) elixir = 'Aether';
@@ -4155,7 +4164,7 @@
     // Auto ×10: everything this battle paid is added to the run's totals (shown when the run ends, repSummary)
     if (cfg.rep) {
       const s = cfg.rep.sum || (cfg.rep.sum = { battles: 0, energy: 0, silver: 0, xp: 0, pxp: 0, fs: {}, st: {}, items: [], caps: [], ups: {} });
-      s.battles++; s.energy += cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n);
+      s.battles++; s.energy += (cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n)) - refund;
       s.silver += silver; s.xp += xp; s.pxp += pxp;
       for (const t of gotShards) s.fs[t] = (s.fs[t] || 0) + 1;
       for (const [t, n] of Object.entries(stones)) if (n > 0) s.st[t] = (s.st[t] || 0) + n;
@@ -4168,6 +4177,7 @@
     save();
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
     items.push(`<li ${d()}>${ic('coin')}+${silver.toLocaleString('en-US')} Sigils</li>`);
+    if (refund) items.push(`<li ${d()}>${enIc()}+${refund} energy back: a defeat costs only half</li>`);
     items.push(`<li ${d()}><span class="aff" style="--c:var(--info)">XP</span>+${xp} XP for every champion in your team</li>`);
     if (pxp) items.push(`<li ${d()}><span class="aff" style="--c:var(--gold)">P</span>+${pxp} player XP${pups.length ? '' : S.p.lvl >= PLAYER_MAX ? ' · max level: prestige in the Town Hall' : ` · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`}</li>`);
     pups.forEach(([l, sv, sh, t, en]) => items.push(`<li class="loot lvup" ${d()}><span class="lvbadge">${l}</span><span><b>Player level ${l}!</b> +${en} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Crystals${sh ? ` · +1 ${esc(K.SHARD[sh].name)}` : ''}${t ? ` · <b>The ${UNLOCK_NAME[t]} is now open.</b>` : ''}</span></li>`));
@@ -4356,10 +4366,16 @@
       if (v && v.build && v.build !== window.FFH_BUILD) { newBuild = v.build; paintVersion(); }
     } catch (e) { /* no network: try again later */ }
   }
-  function paintVersion() { const el = $('#newver'); if (el) el.hidden = !newBuild || !!B; }
+  // a newer build: a popup over the whole game (only "Reload now"), shown as soon as no battle is running
+  function paintVersion() {
+    const el = $('#newver'); if (!el) return;
+    const show = !!newBuild && !B, was = !el.hidden;
+    el.hidden = !show;
+    if (show && !was) { setMenu(false); requestAnimationFrame(() => { const b = $('#newver-go'); if (b) b.focus(); }); }
+  }
   async function reloadForVersion() {
-    const el = $('#newver'); if (B || el.disabled) return;
-    el.disabled = true; el.querySelector('span').textContent = 'Saving and reloading…';
+    const b = $('#newver-go'); if (B || !b || b.disabled) return;
+    b.disabled = true; b.textContent = 'Saving and reloading…';
     save();
     const cl = window.FFH_CLOUD;
     if (cl && cl.upload) await Promise.race([cl.upload().catch(() => {}), new Promise(r => setTimeout(r, 4000))]);
@@ -4389,7 +4405,9 @@
     // new mail (gifts, friend requests, arena rewards) is checked every 2 minutes while the game is open
     paintMail(); setInterval(() => { if (!B && document.visibilityState === 'visible') socialLoad(); }, 120000);
     // a newer build on the server: checked every 5 minutes and whenever the tab is shown again
-    $('#newver').addEventListener('click', reloadForVersion);
+    $('#newver-go').addEventListener('click', reloadForVersion);
+    // the popup blocks the game: keys go nowhere else while it is open (Tab stays on its button)
+    document.addEventListener('keydown', e => { const el = $('#newver'); if (el && !el.hidden && e.target !== $('#newver-go')) { e.preventDefault(); e.stopPropagation(); $('#newver-go').focus(); } }, true);
     setInterval(() => { if (document.visibilityState === 'visible') checkVersion(); }, 300000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     if (announceReset()) return;

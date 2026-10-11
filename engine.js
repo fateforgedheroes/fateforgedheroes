@@ -1004,13 +1004,14 @@ const K = (function () {
   const elixirFits = (ess, id) => ess === 'Aether' || (CHAMPS[id] && CHAMPS[id].aff === ess);
 
   // ---------- Energy (like RAID) ----------
-  // Every campaign stage and Boss Hall level costs energy when it starts (won or lost); energy refills by 1 every
-  // regenMin minutes up to energyMax (base + player level), and a player level-up adds energy on top (app.js levelEnergy:
-  // a full bar up to level 15, then 60; it may go over
-  // the max; it then stops refilling until it is below the max again). Easy Chapter I is free: the tutorial chapter.
+  // Every campaign stage and Boss Hall level costs energy when it starts; a defeat gives half of it back (app.js).
+  // Energy refills by 1 every regenMin minutes up to energyMax (base + player level: 200 + level, so a night's sleep
+  // fits in it), and level-ups, quest chests, Market refills and gifts add energy on top of the bar (app.js levelEnergy:
+  // a full bar up to level 15, then 60), but never past `over` × the max (the rest is lost), so no one hoards thousands.
+  // Above the max the bar stops refilling until it is below again. Easy Chapter I is free: the tutorial chapter.
   // Arena and guild boss have their own tokens and keys. Pace (campaign-sim battles × cost against ~480 a day plus
   // level-ups): Easy about a week and a half, all five difficulties a few months, as in RAID.
-  const ENERGY = { base: 100, regenMin: 3, stage: [3, 4, 6, 8, 10], boss: 6 };
+  const ENERGY = { base: 200, regenMin: 3, stage: [3, 4, 6, 8, 10], boss: 6, over: 2 };
   const energyMax = plvl => ENERGY.base + (plvl || 1);
   // Easy Chapter I is free the first time through (new players never wait); a replay costs like the rest of Easy
   const stageEnergy = (st, d, first) => (!d && st.chapter === 0 && first ? 0 : ENERGY.stage[d || 0]);
