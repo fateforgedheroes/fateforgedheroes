@@ -1195,11 +1195,15 @@
     m.hidden = false; const i = m.querySelector('input'); i.focus(); i.select();
   }
   // "Are you sure?" before feeding away a Rare or better hero
-  let confirmYes = null;
-  function confirmBox(title, text, yes, onYes) {
-    confirmYes = onYes;
+  // skip: a key for questions the player may silence until the game is opened again (a tick box, kept in memory only)
+  let confirmYes = null, confirmSkip = null;
+  const skipAsk = {};
+  function confirmBox(title, text, yes, onYes, skip) {
+    if (skip && skipAsk[skip]) { onYes(); return; }
+    confirmYes = onYes; confirmSkip = skip || null;
     const m = $('#modal');
     m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="cf-q"><h2 id="cf-q">${title}</h2><p class="lede">${text}</p>
+      ${skip ? '<label class="cf-skip"><input type="checkbox" id="cf-skip"> Don\'t ask again until next login</label>' : ''}
       <div class="modal-actions"><button class="btn primary" data-act="cfyes">${yes}</button><button class="btn" data-act="cfno">Cancel</button></div></div>`;
     m.hidden = false; m.querySelector('.btn').focus();
   }
@@ -2866,7 +2870,7 @@
         const gain = K.feedXp(f, h.lvl); S.fodder[f]--; const up = giveXp(gain); track('feed');
         SFX.up(); save(); render(); toast(`${C[to].short} was fed a copy of ${C[f].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.`);
       };
-      if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go); else go();
+      if (C[f].rar >= 2) confirmBox('Are you sure?', `Feed a ${K.RARITIES[C[f].rar]} copy of <b>${esc(C[f].name)}</b> to ${esc(C[to].short)}? The copy is used up.`, 'Yes, feed it', go, 'feedcopy'); else go();
     } else if (act === 'feedhero') {
       const x = id, h = S.roster[selChamp], to = selChamp;
       if (!S.roster[x] || S.roster[x].lock || x === to || inAnyTeam(x) || onExp(x) || h.lvl >= K.maxLvl(h.stars, to)) return;
@@ -2878,7 +2882,7 @@
         const up = giveXp(gain);
         SFX.up(); save(); render(); toast(`${C[to].short} absorbed ${C[x].name}: +${gain.toLocaleString('en-US')} XP${up ? `, now level ${h.lvl}` : ''}.${worn.length ? ' Their gear went back to your inventory.' : ''}`);
       };
-      if (C[x].rar >= 2) confirmBox('Are you sure?', `Feed <b>${esc(C[x].name)}</b> (${K.RARITIES[C[x].rar]}, level ${S.roster[x].lvl}) to ${esc(C[to].short)}? ${esc(C[x].short)} is gone for good; their gear goes back to your inventory.`, `Yes, feed ${esc(C[x].short)}`, go); else go();
+      if (C[x].rar >= 2) confirmBox('Are you sure?', `Feed <b>${esc(C[x].name)}</b> (${K.RARITIES[C[x].rar]}, level ${S.roster[x].lvl}) to ${esc(C[to].short)}? ${esc(C[x].short)} is gone for good; their gear goes back to your inventory.`, `Yes, feed ${esc(C[x].short)}`, go, 'feedhero'); else go();
     } else if (act === 'skillup') {
       const f = a.dataset.f, h = S.roster[selChamp];
       if (f !== selChamp || !(S.fodder[f] > 0)) return;
@@ -2886,7 +2890,7 @@
       track('feed');
       S.fodder[f]--; SFX.summon(3); save(); render();
       toast(`${C[f].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}: ${skillLvTxt(C[f].skills[i], h.sk[i]).replace(/^Skill level \d+: /, '')}${h.sk[i] >= K.SKILL_MAX && C[f].skills[i].cd ? ', cooldown −1' : ''}.`);
-    } else if (act === 'cfyes') { $('#modal').hidden = true; const f = confirmYes; confirmYes = null; if (f) f(); }
+    } else if (act === 'cfyes') { const tick = $('#cf-skip'); if (confirmSkip && tick && tick.checked) skipAsk[confirmSkip] = true; $('#modal').hidden = true; const f = confirmYes; confirmYes = null; confirmSkip = null; if (f) f(); }
     else if (act === 'cfno') { $('#modal').hidden = true; confirmYes = null; }
     else if (act === 'breakdown') {
       const f = a.dataset.f; if (!(S.fodder[f] > 0)) return;
