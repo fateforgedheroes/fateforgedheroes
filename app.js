@@ -769,6 +769,8 @@
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
+    if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
     // a picked piece is compared above the list: bring that window into view when it is scrolled away
     if (tab === 'forge' && FG.scrollD) { FG.scrollD = false; const d = el.querySelector('.fg-cmp'); if (d) requestAnimationFrame(() => { const t = d.getBoundingClientRect().top; if (t < 60 || t > innerHeight * 0.5) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
     if (tab === 'forge' && FG.scroll) { FG.scroll = false; const l = el.querySelector('.fg-bagp'); if (l) requestAnimationFrame(() => { const r = l.getBoundingClientRect(); if (r.top < 0 || r.top > innerHeight * 0.35) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
@@ -1087,7 +1089,8 @@
     const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
     const skills = skillsHtml(id, r);
     let rank = '', canRank = false;
-    if (C[id].pc) rank = `<div class="rank"><span class="empty-note">Your hero gains stars by itself: 5★ at level 40, 6★ at level 50. Its skills grow every 12 levels.</span></div>`;
+    if (C[id].pc) rank = `<div class="rank"><span class="empty-note">Your hero gains stars by itself: 5★ at level 40, 6★ at level 50. Its skills grow every 12 levels.</span></div>
+      <div class="rank fcs-rank"><button class="btn small" data-act="fcopen">${FCS_SVG} Change class</button><span class="empty-note">With a Fate Changing Stone (Market): level, gear and team places move along.</span></div>`;
     else if (r.stars < mxs) {
       const rc = K.rankCost(r.stars), ok = atCap && stoneN(rc.tier) >= rc.stones && S.silver >= rc.silver;
       canRank = ok;
@@ -1104,7 +1107,7 @@
           <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
           <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
           <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button><button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${C[id].pc ? 'disabled title="Your hero always fights with you"' : ''}>${C[id].pc ? 'Always in your team' : inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
+          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${C[id].pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen" title="Turn your hero into another Fateborn with a Fate Changing Stone">${FCS_SVG} Change class</button>` : ''}<button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${C[id].pc ? 'disabled title="Your hero always fights with you"' : ''}>${C[id].pc ? 'Always in your team' : inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
         </div></div>
         <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['ascend', 'Ascend' + (canRank ? '<span class="dot"></span>' : '')], ['level', 'Level up']].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
         <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl><p class="empty-note">Green: what gear and sets add.</p>${gearRow}</div>
@@ -1271,7 +1274,7 @@
     const signin = cl && cl.enabled && !cl.email && !Object.keys(S.roster).length ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
     const g = (k, label) => `<button type="button" class="btn ${pcSel.g === k ? 'primary' : ''}" data-act="pcgender" data-g="${k}" aria-pressed="${pcSel.g === k}">${label}</button>`;
     return `<h2 class="st-title">Create your hero</h2>
-      <p class="lede pc-lede">Your hero is forged by fate: <b>Aether</b>, never strong or weak against anyone, and always at your side in every fight. Choose well: the class can't be changed later.</p>
+      <p class="lede pc-lede">Your hero is forged by fate: <b>Aether</b>, never strong or weak against anyone, and always at your side in every fight. Later you can change its class with a Fate Changing Stone from the Market.</p>
       <div class="pc-row"><span class="tag">1 · Choose a class</span></div>
       <div class="pc-cards">${cards}</div>
       <div class="pc-row"><span class="tag">2 · Your hero is</span><div class="seg pc-g">${g('m', 'Male')}${g('f', 'Female')}</div></div>
@@ -1289,7 +1292,7 @@
   function confirmHero() {
     const p = K.PC_CLASSES[pcSel.cls], m = $('#modal');
     m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pc-q"><h2 id="pc-q">Are you sure?</h2>
-      <p class="lede">Create <b>${esc(pcName())}</b>, a ${pcSel.g === 'f' ? 'female' : 'male'} <b>${esc(p.name)}</b>? Your hero's class can't be changed later.</p>
+      <p class="lede">Create <b>${esc(pcName())}</b>, a ${pcSel.g === 'f' ? 'female' : 'male'} <b>${esc(p.name)}</b>? You can change it later with a Fate Changing Stone from the Market.</p>
       <div class="modal-actions"><button class="btn primary" data-act="pcok">Yes, create ${esc(pcName())}</button><button class="btn" data-act="pccancel">Cancel</button></div></div>`;
     m.hidden = false; m.querySelector('.btn').focus();
   }
@@ -1606,7 +1609,7 @@
   // in power) and equip it; upgrades and ascension happen in the Forge tab. Browsing tools (Bag/Forge, filters) sit
   // under the hero. Items: every piece of gear plus stones, shards and elixirs, with all filters and
   // selling (the old Vault, state VT). The hero being geared is selChamp (shared with the Heroes screen).
-  const FG = { view: 'gear', slot: 'wapen', pick: null, tab: 'bag', rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', cat: 'all' };
+  const FG = { view: 'gear', slot: 'wapen', pick: null, tab: 'bag', rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', worn: true, free: true, cat: 'all' };
   const ESS_BG = { Ember: 2, Frost: 5, Radiant: 4, Aether: 0, Verdant: 3, Umbral: 8, Storm: 1 };
   const essBadge = (e, cls) => e ? `<span class="fg-ess ${cls || ''}" style="--ec:${AFF_COL[e]}">${essIcon(e)}</span>` : '';
   const setEss = k => (K.SETS[k] && K.SETS[k].ess) || null;
@@ -1625,6 +1628,8 @@
   const fgHeroes = () => Object.keys(S.roster).filter(id => C[id] && !C[id].captured).sort((a, b) => (S.team.includes(b) - S.team.includes(a)) || power(statsOf(b)) - power(statsOf(a)));
   function fgList(id) {
     let l = S.inv.filter(x => x.owner !== id && (!FG.slot || x.slot === FG.slot));
+    if (!FG.worn) l = l.filter(x => !x.owner); // the tick boxes: pieces other heroes wear, spare pieces
+    if (!FG.free) l = l.filter(x => !!x.owner);
     if (FG.rar !== 'all') l = l.filter(x => x.rar === +FG.rar);
     if (FG.set !== 'all') l = l.filter(x => x.set === FG.set);
     if (FG.main !== 'all') l = l.filter(x => x.main === FG.main);
@@ -1653,8 +1658,8 @@
       ? `<button type="button" class="fg-tile rar-${it.rar} ${FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
       : `<button type="button" class="fg-tile empty ${FG.slot === sl ? 'on' : ''}" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
     const setRows = Object.keys(counts).filter(k => K.SETS[k]).map(k => { const SS = K.SETS[k], n = counts[k], tiers = setTiersOf(k), max = tiers[tiers.length - 1][0], on = tiers.filter(([t]) => n >= t), nx = tiers.find(([t]) => t > n), asc = active.some(t => t.k === k && t.asc);
-      return `<div class="fg-srow">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
-      + active.filter(t => t.fam).map(t => `<div class="fg-srow"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
+      return `<div class="fg-srow ${on.length ? 'live' : ''}">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
+      + active.filter(t => t.fam).map(t => `<div class="fg-srow live"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
     const pick = S.inv.find(x => x.id === FG.pick) || items.find(x => x.slot === FG.slot);
     return `<div class="fg-stage"><div class="fg-left">${splash}<section class="fg-panel fg-ctrlp">${fgCtrl()}</section></div><div class="fg-right">
       <section class="fg-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Gearing</h1><p>Pick a hero, tap a slot, compare and equip. Upgrades happen in the Forge.</p></div>${carousel}</section>
@@ -1719,7 +1724,8 @@
     const stats = Object.keys(K.STAT_NAMES).filter(k => k !== 'hpP' || true);
     const sets = [...new Set(S.inv.map(x => x.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
     return `<div class="fg-ctrl"><div class="fg-tabs">${[['bag', 'Bag'], ['forge', 'Forge']].map(([k, l]) => `<button type="button" class="${FG.tab === k ? 'on' : ''}" data-act="fgtab" data-t="${k}">${l}</button>`).join('')}</div>
-      ${FG.tab === 'bag' ? `<div class="fg-filters"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Sort: Power', FG.sort)}${opt('rarity', 'Sort: Rarity', FG.sort)}${opt('level', 'Sort: Level', FG.sort)}</select><button type="button" class="btn small" data-act="fgreset" title="Clear filters">✕</button></div>` : ''}</div>`;
+      ${FG.tab === 'bag' ? `<div class="fg-filters"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Sort: Power', FG.sort)}${opt('rarity', 'Sort: Rarity', FG.sort)}${opt('level', 'Sort: Level', FG.sort)}</select><button type="button" class="btn small" data-act="fgreset" title="Clear filters">✕</button>
+        <div class="fg-checks"><label><input type="checkbox" data-gf="worn" ${FG.worn ? 'checked' : ''}> Worn by others</label><label><input type="checkbox" data-gf="free" ${FG.free ? 'checked' : ''}> Not worn</label></div></div>` : ''}</div>`;
   }
   // ----- Items: every piece of gear plus stones, shards and elixirs -----
   function itemsHtml() {
@@ -1727,6 +1733,7 @@
     for (const i of [...VT.sel]) if (!S.inv.some(it => it.id === i && sellable(it))) VT.sel.delete(i);
     const mats = [
       ...['lesser', 'greater', 'ancient'].map(t => ({ k: 'stone', id: t, n: stoneN(t), name: stoneName(t, 2), ic: stoneIc(t), rar: { lesser: 1, greater: 3, ancient: 4 }[t], tip: 'Ascend heroes (stars) and, Greater and Ancient, gear (orange stars).', go: 'team' })),
+      ...(fcs().n ? [{ k: 'stone', id: 'fcs', n: fcs().n, name: 'Fate Changing Stone', ic: FCS_SVG, rar: 4, tip: 'Turn your Fateborn into another class or gender; level, XP, stars, skills and gear move along. One change every 72 hours.', go: 'fcs' }] : []),
       ...K.FATE_SHARDS.map((f, i) => ({ k: 'shard', id: f.id, n: S.fs[f.id] || 0, name: K.SHARD[f.id].name, ic: shardIc(f.id), rar: Math.min(5, i + 1), tip: 'Summon heroes at the Fate Altar.', go: 'altaar' })),
       ...K.ESSENCES.map(e => ({ k: 'elixir', id: e, n: S.elx[e] || 0, name: elxName(e, 2), ic: elxIc(e), rar: e === 'Aether' ? 4 : 3, tip: `Drink in Heroes → Level up: XP for ${e === 'Aether' ? 'any hero' : e + ' heroes'}.`, go: 'team' })),
     ].filter(m => m.n > 0);
@@ -1759,7 +1766,7 @@
     const detail = o ? `<div class="fg-detail rar-${o.rar}" style="--rc:var(--r${o.rar})"><div class="fg-big">${gearIcon(o, 'fg-ic')}<span class="fg-plv">+${o.lvl}</span>${essBadge(setEss(o.set))}</div>
         <div class="fg-dmain"><h3 class="rartxt">${itemNameH(o)}</h3><div class="fg-dsub">${esc(K.SETS[o.set].name)} · ${o.owner && C[o.owner] ? `worn by <b>${esc(C[o.owner].short)}</b>` : 'not worn'}</div><div class="fg-dstats">${K.gearStats(o).map(([k, v]) => `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, v)}</b><i></i>`).join('')}</div></div>
         <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn" data-act="fgforge" data-item="${o.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div></div>`
-      : mo ? `<div class="fg-detail mat"><div class="fg-big">${mo.ic}</div><div class="fg-dmain"><h3>${esc(mo.name)} ×${mo.n.toLocaleString('en-US')}</h3><p class="empty-note">${esc(mo.tip)}</p></div><div class="fg-acts"><button type="button" class="btn primary" data-act="go" data-go="${mo.go}">${mo.go === 'altaar' ? 'Fate Altar ›' : 'Heroes ›'}</button></div></div>` : '';
+      : mo ? `<div class="fg-detail mat"><div class="fg-big">${mo.ic}</div><div class="fg-dmain"><h3>${esc(mo.name)} ×${mo.n.toLocaleString('en-US')}</h3><p class="empty-note">${esc(mo.tip)}</p></div><div class="fg-acts"><button type="button" class="btn primary" ${mo.go === 'fcs' ? 'data-act="fcopen">Use on your hero ›' : `data-act="go" data-go="${mo.go}">${mo.go === 'altaar' ? 'Fate Altar ›' : 'Heroes ›'}`}</button></div></div>` : '';
     const selItems = S.inv.filter(it => VT.sel.has(it.id)), selValue = selItems.reduce((t, it) => t + K.sellValue(it), 0);
     const tools = VT.sell
       ? `<span class="it-shown">${selItems.length} selected</span><button type="button" class="btn small" data-act="vquick" data-r="2">Spare up to Rare</button><button type="button" class="btn small" data-act="vquick" data-r="-1">None</button><button type="button" class="btn small" data-act="vsellmode">Done</button>`
@@ -2159,6 +2166,58 @@
     return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : TH.tab === 'leaders' ? leadersHtml() : TH.tab === 'settings' ? settingsHtml() : profileHtml());
   }
 
+  // ----- Fate Changing Stone: turn your Fateborn into another one (another class and/or gender) -----
+  // A stone comes from the Market (the first one free, then FCS_PRICE Crystals; at most one held). Using it moves
+  // everything to the new hero: level, XP, stars and skills (they follow the level), all its gear (locks too), its
+  // places in every team and Tower team, the avatar; the name stays. One change every FCS_CD. S.fcs = { n, got, at }:
+  // stones held, stones ever bought (the first is free), when the last change was made.
+  const FCS_PRICE = 50, FCS_CD = 72 * 3600e3;
+  const fcs = () => S.fcs || (S.fcs = { n: 0, got: 0, at: 0 });
+  const fcsPrice = () => (fcs().got ? FCS_PRICE : 0);
+  const fcsWait = () => Math.max(0, (fcs().at || 0) + FCS_CD - Date.now());
+  const FCS_SVG = '<svg class="fcs-ic" viewBox="0 0 24 24" aria-hidden="true"><path class="fcs-g" d="M12 2.5l6.5 5.5-2.3 12.5H7.8L5.5 8z"/><path d="M8.6 11.2a3.8 3.8 0 0 1 6.6-1.6M15.4 13.2a3.8 3.8 0 0 1-6.6 1.6"/><path d="M15.4 7.6v2.1h-2.1M8.6 16.6v-2.1h2.1"/></svg>';
+  let fcSel = null;
+  function fcsHtml() {
+    const cur = heroId(), sel = fcSel || (fcSel = { cls: C[cur].pcClass, g: C[cur].pcGender }), nid = `pc_${sel.cls}_${sel.g}`, p = K.PC_CLASSES[sel.cls], r = S.roster[cur];
+    const st = fcs(), wait = fcsWait(), same = nid === cur;
+    const cards = Object.keys(K.PC_CLASSES).map(k => { const id = `pc_${k}_${sel.g}`; return `<button type="button" class="pc-card ${k === sel.cls ? 'sel' : ''}" data-act="fccls" data-k="${k}" aria-pressed="${k === sel.cls}"><span class="pc-por">${por(id)}</span><b>${K.PC_CLASSES[k].name}</b>${k === C[cur].pcClass ? '<small>Now</small>' : ''}</button>`; }).join('');
+    const g = (k, label) => `<button type="button" class="btn small ${sel.g === k ? 'primary' : ''}" data-act="fcg" data-g="${k}" aria-pressed="${sel.g === k}">${label}</button>`;
+    const now = K.heroStats(cur, r, itemsOf(cur)), next = K.heroStats(nid, r, itemsOf(cur));
+    const cmp = ['hp', 'atk', 'def', 'spd'].map(k => { const d = next[k] - now[k]; return `<span>${K.STAT_NAMES[k]}</span><b>${next[k].toLocaleString('en-US')}</b><i class="${d > 0 ? 'u' : d < 0 ? 'd' : ''}">${d ? (d > 0 ? '▲ ' : '▼ ') + Math.abs(d).toLocaleString('en-US') : ''}</i>`; }).join('');
+    const why = same ? 'This is your hero now: pick another class or gender.' : !st.n ? 'You need a Fate Changing Stone from the Market.' : wait ? `You changed your hero recently: the next change is possible in ${fmtLeft(wait)}.` : '';
+    return `<div class="modal-box fcs-box" role="dialog" aria-modal="true" aria-labelledby="fcs-q"><button class="btn small pf-close" data-act="fcclose" aria-label="Close">✕</button>
+      <h2 id="fcs-q">${FCS_SVG} Change your Fateborn</h2>
+      <p class="lede">Turn <b>${esc(S.hero.name)}</b> into another Fateborn. Level, XP, stars, skill levels and all gear move to the new hero; the name stays. One change every 72 hours.</p>
+      <div class="pc-row"><span class="tag">Choose your new hero</span><div class="seg pc-g">${g('m', 'Male')}${g('f', 'Female')}</div></div>
+      <div class="pc-cards fcs-cards">${cards}</div>
+      <div class="fcs-info">${por(nid)}<div><h3>${esc(S.hero.name)} · ${esc(p.name)}</h3><div class="tags">${affChip('Aether')} Aether · ${roleStr(C[nid])} · Level ${r.lvl}</div>
+        <div class="skill passive"><b>Passive · ${esc(p.passiveName)}</b><p>${esc(p.passiveDesc)}</p></div>
+        <ul class="starter-sk">${p.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)} <span>${esc(s.desc)}</span></li>`).join('')}</ul>
+        ${same ? '' : `<div class="fg-dstats fcs-stats">${cmp}</div><small class="empty-note">Stats with your current gear, ▲/▼ against now.</small>`}</div></div>
+      <div class="fcs-foot"><span class="fcs-have">${FCS_SVG} ${st.n} Fate Changing ${st.n === 1 ? 'Stone' : 'Stones'}</span>${why ? `<small class="empty-note">${why}</small>` : ''}
+        <div class="modal-actions">${!st.n && !same ? `<button class="btn primary" data-act="fcmarket">${fcsPrice() ? `Get one in the Market (${fcsPrice()} Crystals)` : 'Get your free stone in the Market'}</button>` : `<button class="btn primary" data-act="fcgo" ${why ? 'disabled' : ''}>Change to ${esc(p.name)}</button>`}<button class="btn" data-act="fcclose">Cancel</button></div></div></div>`;
+  }
+  function fcsOpen() { if (!heroId()) return; fcSel = null; const m = $('#modal'); m.innerHTML = fcsHtml(); m.hidden = false; }
+  const fcsPaint = () => { const m = $('#modal'); if (!m.hidden && m.querySelector('.fcs-box')) m.innerHTML = fcsHtml(); };
+  function changeHero(nid) {
+    const old = heroId(), st = fcs();
+    if (!old || nid === old || !C[nid] || !C[nid].pc || st.n < 1 || fcsWait()) return;
+    S.roster[nid] = { ...S.roster[old] }; delete S.roster[old];
+    for (const it of S.inv) if (it.owner === old) it.owner = nid;
+    const swap = ids => { if (Array.isArray(ids)) ids.forEach((x, i) => { if (x === old) ids[i] = nid; }); };
+    S.teams.forEach(t => swap(t.ids));
+    if (S.tw && S.tw.team) Object.values(S.tw.team).forEach(swap);
+    if (S.p.avatar === old) S.p.avatar = nid;
+    if (S.starter === old) S.starter = nid;
+    if (selChamp === old) selChamp = nid;
+    C[old].name = C[old].short = 'Fateborn ' + K.PC_CLASSES[C[old].pcClass].name;
+    S.hero.id = nid; S.hero.cls = C[nid].pcClass; S.hero.g = C[nid].pcGender;
+    st.n--; st.at = Date.now();
+    linkTeams(S); syncHero(S); SPR.loadSheet && SPR.loadSheet(nid);
+    save(); $('#modal').hidden = true; render(); SFX.up();
+    toast(`${S.hero.name} is now a Fateborn ${K.PC_CLASSES[S.hero.cls].name}. Level, gear and team places came along.`, false, 4500);
+  }
+
   // ================= GEMS AND THE MARKET =================
   // Crystals (S.gems) are the premium currency: earned from level-ups (LEVEL_GEMS), the daily and weekly quest chests,
   // missions, achievements, collection, login day 7 and mail gifts ({ "gems": n }); spent in the Market (the tree
@@ -2174,6 +2233,7 @@
     { id: 'sil50', group: 'Sigils', name: '50,000 Sigils', desc: 'A big pouch: a little cheaper per Sigil.', r: { silver: 50000 }, price: 110, limit: 2, per: 'day' },
     { id: 'stl', group: 'Ascension Stones', name: '10 Lesser Ascension Stones', desc: 'Ascend heroes to 2-4★.', r: { stones: 10 }, price: 30, limit: 3, per: 'day' },
     { id: 'stg', group: 'Ascension Stones', name: '2 Greater Ascension Stones', desc: 'Ascend heroes to 5★.', r: { st: { greater: 2 } }, price: 80, limit: 2, per: 'week' },
+    { id: 'fcs', group: 'Fateborn', name: 'Fate Changing Stone', desc: 'Turn your Fateborn into another class or gender. Level, XP, stars, skills and gear all move to the new hero. One change every 72 hours.', fcs: true },
   ];
   function mkState() {
     const m = S.mk || (S.mk = {}), d = today(), w = weekNo();
@@ -2186,6 +2246,14 @@
   const mkPrice = it => (Array.isArray(it.price) ? it.price[Math.min(mkBought(it), it.price.length - 1)] : it.price);
   function mkBuy(id) {
     const it = MARKET.find(x => x.id === id); if (!it) return;
+    if (it.fcs) { // the Fate Changing Stone: the first one free, then FCS_PRICE; at most one held
+      const price = fcsPrice();
+      if (fcs().n >= 1) { fcsOpen(); return; }
+      if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
+      S.gems -= price; fcs().n++; fcs().got++; save(); hud(); SFX.up(); render();
+      toast(price ? 'Bought: a Fate Changing Stone. Use it on your Fateborn.' : 'Your free Fate Changing Stone is ready. Use it on your Fateborn.', false, 3500);
+      return;
+    }
     const n = mkBought(it), price = mkPrice(it);
     if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
     if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
@@ -2200,8 +2268,13 @@
     if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Crystals</b>. You have ${S.gems}.`, `Buy for ${price} Crystals`, go); else go();
   }
   function marketHtml() {
-    const icon = it => it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
+    const icon = it => it.fcs ? `<span class="mk-ic fcs">${FCS_SVG}</span>` : it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
     const card = it => {
+      if (it.fcs) {
+        const have = fcs().n >= 1, price = fcsPrice(), wait = fcsWait();
+        return `<li class="mk-card">${icon(it)}<div class="mk-main"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small><span class="mk-left">${have ? 'You have one: use it on your hero' : price ? 'Hold one at a time' : 'Your first one is free!'}${wait ? ` · next change in ${fmtLeft(wait)}` : ''}</span></div>
+          ${have ? `<button type="button" class="btn primary mk-buy" data-act="fcopen">Use</button>` : `<button type="button" class="btn primary mk-buy" data-act="mkbuy" data-id="${it.id}" ${S.gems < price ? 'disabled' : ''}>${price ? GEM_SVG + price : 'Free'}</button>`}</li>`;
+      }
       const n = mkBought(it), lim = mkLimit(it), left = lim - n, price = mkPrice(it), out = left <= 0;
       return `<li class="mk-card ${out ? 'out' : ''}">${icon(it)}<div class="mk-main"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small><span class="mk-left">${out ? `Sold out ${it.per === 'week' ? 'this week' : 'today'}` : `${left} of ${lim} left ${it.per === 'week' ? 'this week' : 'today'}`}</span></div>
         <button type="button" class="btn ${out ? '' : 'primary'} mk-buy" data-act="mkbuy" data-id="${it.id}" ${out || S.gems < price ? 'disabled' : ''}>${GEM_SVG}${price}</button></li>`;
@@ -2448,11 +2521,13 @@
     }
     const b = $('#chatbtn');
     b.hidden = !chatOn();
-    const n = CH.unread.world + CH.unread.guild, g = CH.unread.guild;
-    b.querySelector('.chat-n').textContent = n > 99 ? '99+' : n;
-    b.querySelector('.chat-n').hidden = !n || CH.open;
-    b.classList.toggle('guild', !!g);
-    b.setAttribute('aria-label', n ? `Chat: ${n} new` : 'Chat');
+    // something new: a "!" on the button (green when the guild wrote) and a soft pulse, the count in its label
+    const n = CH.unread.world + CH.unread.guild, g = CH.unread.guild, nw = !!n && !CH.open;
+    b.querySelector('.chat-n').textContent = '!';
+    b.querySelector('.chat-n').hidden = !nw;
+    b.classList.toggle('guild', !!g); b.classList.toggle('new', nw);
+    b.setAttribute('aria-label', n ? `Chat: ${n > 99 ? '99+' : n} new ${n === 1 ? 'message' : 'messages'}` : 'Chat');
+    b.title = n ? `${n > 99 ? '99+' : n} new in the ${g && CH.unread.world ? 'World and Guild chats' : g ? 'Guild chat' : 'World chat'}` : 'Chat';
   }
   function chatMsg(m, role) {
     const blocked = (S.cblock || []).includes(m.user_id);
@@ -2472,7 +2547,7 @@
     return `<form class="ch-form" data-chform="1"><input id="ch-in" maxlength="200" autocomplete="off" enterkeyhint="send" placeholder="${CH.tab === 'world' ? 'Message everyone…' : 'Message your guild…'}" aria-label="Message"><button type="submit" class="btn primary small" ${CH.busy ? 'disabled' : ''}>Send</button></form>${CH.err ? `<p class="ch-err">${esc(CH.err)}</p>` : ''}`;
   }
   // the whole panel (tabs, list, the writing line) or, while polling, only the tabs and the list, so typing is never disturbed
-  const chTabs = () => ['world', 'guild'].map(k => `<button type="button" role="tab" data-ch="tab" data-t="${k}" aria-selected="${CH.tab === k}">${k === 'world' ? 'World' : 'Guild'}${CH.unread[k] && CH.tab !== k ? `<b class="ch-dot">${CH.unread[k] > 99 ? '99+' : CH.unread[k]}</b>` : ''}</button>`).join('');
+  const chTabs = () => ['world', 'guild'].map(k => `<button type="button" role="tab" data-ch="tab" data-t="${k}" aria-selected="${CH.tab === k}">${k === 'world' ? 'World' : 'Guild'}${CH.unread[k] && CH.tab !== k ? `<b class="ch-dot" title="${CH.unread[k] > 99 ? '99+' : CH.unread[k]} new">!</b>` : ''}</button>`).join('');
   function chatList(box) {
     const inf = CH.info[CH.tab], old = box.querySelector('.ch-list'), atEnd = !old || old.scrollHeight - old.scrollTop - old.clientHeight < 40, top = old ? old.scrollTop : 0;
     const list = CH.msgs[CH.tab].map(m => chatMsg(m, inf && inf.role)).join('');
@@ -2510,7 +2585,9 @@
         chSetSeen(k === 'world' ? 'w' : 'g', CH.last[k]); CH.unread[k] = 0;
         if (CH.open && CH.tab === k) chatPaint(same);
       } catch (e) {}
-    } else if (force || Date.now() - CH.at > 24000) {
+    }
+    // the unread counts: while closed for the badge, while open for the other tab's "!"
+    if (force || Date.now() - CH.at > 24000) {
       CH.at = Date.now();
       const s = chSeen();
       try {
@@ -2519,7 +2596,8 @@
         // the first time on this device: what is there already does not count as new
         if (s.w == null && r.wl) { chSetSeen('w', r.wl); r.w = 0; }
         if (s.g == null && r.gl) { chSetSeen('g', r.gl); r.g = 0; }
-        CH.unread.world = r.w || 0; CH.unread.guild = r.g || 0; chatPaintBtn();
+        CH.unread.world = CH.open && CH.tab === 'world' ? 0 : r.w || 0; CH.unread.guild = CH.open && CH.tab === 'guild' ? 0 : r.g || 0;
+        if (CH.open) chatPaint(true); else chatPaintBtn();
       } catch (e) {}
     }
   }
@@ -2702,7 +2780,7 @@
     if (e.target.id === 'lb-sub') { const t = e.target; lbLoad(t.value ? `${t.dataset.base}:${t.value}` : t.dataset.all); return; }
     if (e.target.id === 'bh-team') { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
-    const gf = e.target.closest('[data-gf]'); if (gf) { FG[gf.dataset.gf] = gf.value; FG.pick = null; render(); return; }
+    const gf = e.target.closest('[data-gf]'); if (gf) { FG[gf.dataset.gf] = gf.type === 'checkbox' ? gf.checked : gf.value; FG.pick = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
   });
@@ -2795,6 +2873,12 @@
     else if (act === 'lbkind') lbLoad(a.dataset.kind);
     else if (act === 'thclaim') thClaim(a);
     else if (act === 'mkbuy') mkBuy(a.dataset.id);
+    else if (act === 'fcopen') fcsOpen();
+    else if (act === 'fcclose') $('#modal').hidden = true;
+    else if (act === 'fccls') { fcSel.cls = a.dataset.k; fcsPaint(); }
+    else if (act === 'fcg') { fcSel.g = a.dataset.g; fcsPaint(); }
+    else if (act === 'fcmarket') { $('#modal').hidden = true; setTab('market'); window.scrollTo({ top: 0 }); }
+    else if (act === 'fcgo') { const nid = `pc_${fcSel.cls}_${fcSel.g}`, name = K.PC_CLASSES[fcSel.cls].name; confirmBox('Change your hero?', `<b>${esc(S.hero.name)}</b> becomes a ${fcSel.g === 'f' ? 'female' : 'male'} Fateborn <b>${esc(name)}</b>. This uses your Fate Changing Stone, and the next change is possible in 72 hours.`, `Yes, become a ${esc(name)}`, () => changeHero(nid)); }
     else if (act === 'soctab') { SO.tab = a.dataset.t; if (SO.tab === 'guild') { GD.view = 'home'; guildLoad(); } render(); }
     else if (act === 'gjoin') guildAct('guild_join', { gid: +id }, { ok: 'Welcome to the guild!', full: 'That guild is full.', closed: 'That guild is closed.', in_guild: 'You are already in a guild.', locked: 'Guilds open after clearing Chapter II.', not_found: 'That guild no longer exists.' });
     else if (act === 'gleave') confirmBox('Leave guild?', `Leave <b>${esc(GD.mine ? GD.mine.name : '')}</b>? ${GD.mine && GD.mine.role === 'leader' ? 'The lead passes to the longest-serving officer or member. ' : ''}Your guild boss points of this week still count for your own chest.`, 'Leave', () => guildAct('guild_leave', {}, { ok: 'You left the guild.' }, () => { GD.view = 'home'; }));
@@ -2911,7 +2995,7 @@
     else if (act === 'fgslot') { FG.slot = a.dataset.slot || null; FG.pick = null; FG.tab = 'bag'; render(); }
     else if (act === 'fgpick' && item) { FG.pick = FG.pick === item.id ? null : item.id; FG.scrollD = !!FG.pick; render(); }
     else if (act === 'fgtab') { FG.tab = a.dataset.t; render(); }
-    else if (act === 'fgreset') { Object.assign(FG, { rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power' }); render(); }
+    else if (act === 'fgreset') { Object.assign(FG, { rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', worn: true, free: true }); render(); }
     else if (act === 'fgchange') { FG.pick = null; FG.tab = 'bag'; FG.scroll = true; render(); }
     else if (act === 'fgforge' && item) {
       // the Forge tab of Gearing; a piece worn by someone else (or from Items) opens with its wearer, or the current hero
@@ -3800,7 +3884,7 @@
         if (info.hit === 'strong') popup(t, 'STRONG HIT', 'strong'); else if (info.hit === 'weak') popup(t, 'WEAK HIT', 'weak');
         popup(t, String(amt), info.crit ? 'crit' : 'dmg');
         setPose(t, 'hit', 340);
-        if (info.crit) { SFX.crit(); flash(); R.shake = Math.max(R.shake, 5); } else SFX.hit();
+        if (info.crit) { SFX.crit(); R.shake = Math.max(R.shake, 5); } else SFX.hit(); // no white screen flash on a crit (it was too much)
       }
       if (info.armored === true) popup(t, 'Armor', 'resist');
       if (info.armored === 'pop') popup(t, 'Protected', 'resist');
