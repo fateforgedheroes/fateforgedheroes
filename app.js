@@ -2346,7 +2346,7 @@
     if (open) m.innerHTML = menuHtml();
   }
   document.addEventListener('click', e => {
-    if (e.target.closest('#menubtn')) { if (B) return; SFX.click(); setMenu($('#mmenu').hidden); return; }
+    if (e.target.closest('#menubtn')) { SFX.click(); setMenu($('#mmenu').hidden); return; }
     const it = e.target.closest('[data-mm]');
     if (it) {
       const a = it.dataset.mm; setMenu(false);
@@ -2570,8 +2570,13 @@
     const tb = e.target.closest('#tabs button');
     if (tb) { SFX.click(); setTab(tb.dataset.tab); return; }
     if (e.target.closest('#sound')) { toggleAudio(); return; }
-    if (e.target.closest('.brand') && !B && !noHero()) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
-    if (e.target.closest('#guide')) { if (B) return; SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
+    // during a battle (also an Auto ×10 run) the header cannot leave the battle screen: the buttons are dimmed
+    // (body.in-battle) and say why; the Guide opens as the in-battle popup instead
+    const busy = () => { toast('Not during a battle. Finish it, or stop the Auto ×10 run, first.', true); };
+    if (e.target.closest('.brand') && B) { busy(); return; }
+    if (e.target.closest('.brand') && !noHero()) { SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); return; }
+    if (e.target.closest('#guide')) { if (B) { $('#b-help').click(); return; } SFX.click(); setTab('guide'); window.scrollTo({ top: 0 }); return; }
+    if (B && e.target.closest('.res-plus, #mail, #account, #homebtn')) { busy(); return; }
     // the + next to a header counter: get more in the Market
     if (e.target.closest('.res-plus')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('market'); window.scrollTo({ top: 0 }); return; }
     if (e.target.closest('#mail')) { if (B) return; if (firstSteps()) { toast('Fight your first campaign battle to open the rest of your homebase.'); return; } SFX.click(); setTab('mail'); window.scrollTo({ top: 0 }); return; }
@@ -3825,7 +3830,7 @@
     if (gb) ({ heroes, enemies } = K.gbossSetup(cfg.team, cfg.d, cfg.ess, cfg.seed));
     else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
     else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
-    $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false;
+    $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false; document.body.classList.add('in-battle');
     $('#toast').hidden = true;
     $('#b-title').textContent = cfg.title; $('#b-round').textContent = (nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
@@ -4244,7 +4249,7 @@
     return `<details class="meter"><summary>Damage meter <small>tap a hero for details · damage over time in red</small></summary>${body}</details>`;
   }
   function endBattleView() {
-    R.running = false; pending = null;
+    R.running = false; pending = null; document.body.classList.remove('in-battle');
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
   }
