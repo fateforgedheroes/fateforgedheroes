@@ -235,21 +235,35 @@
   function save() { syncHero(S); S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); }
 
   // ---------- sound ----------
-  // volume (S.vol, 0-1; a slider in the Town Hall settings and the ☰ menu) scales the sound effects and the music
-  const VOL = () => (S && S.vol != null ? S.vol : 0.7), MUS_GAIN = 0.5;
+  // two volumes, 0-1: sound effects S.vol and music S.mvol (older saves: the old shared S.vol), a slider each in
+  // Town Hall → Settings and the ☰ menu. A slider at 0 switches that sound off (S.sound / S.music) and keeps the
+  // volume, so the header button still mutes both and turns back on what was on, at the same volume.
+  const VOL = () => (S && S.vol != null ? S.vol : 0.7), MVOL = () => (S && S.mvol != null ? S.mvol : VOL()), MUS_GAIN = 0.5;
   // the header button mutes everything (sound effects and music) and turns back on what was on (S.audioWas)
   function toggleAudio() {
     if (S.sound || S.music) { S.audioWas = { s: S.sound, m: S.music }; S.sound = S.music = false; }
     else { const w = S.audioWas || {}; S.sound = w.s !== false; S.music = w.m !== false; if (!w.s && !w.m) S.sound = S.music = true; }
-    save(); hud(); MUSIC.refresh(); if (S.sound) SFX.click(); if (tab === 'profiel') render();
+    save(); hud(); MUSIC.refresh(); if (S.sound) SFX.click(); volSync();
   }
-  const volSlider = () => `<label class="vol-ctl"><span>Volume</span><input type="range" class="vol-range" min="0" max="100" step="5" value="${Math.round(VOL() * 100)}" aria-label="Volume"><output>${Math.round(VOL() * 100)}%</output></label>`;
+  const volVal = k => Math.round((k === 'music' ? (S.music ? MVOL() : 0) : (S.sound ? VOL() : 0)) * 100);
+  // the speaker behind each slider mutes that sound (or turns it back on at its volume), drawn like the header's
+  const muteIc = on => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6h3l4-3v10l-4-3h-3z"/><path d="${on ? 'M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.5a6.3 6.3 0 0 1 0 9' : 'M11 6l4 4M15 6l-4 4'}"/></svg>`;
+  const muteBtn = (k, v) => `<button type="button" class="vol-mute ${v ? 'on' : ''}" data-vk="${k}" aria-pressed="${!v}" title="${v ? 'Mute' : 'Turn back on'}">${muteIc(v)}</button>`;
+  const volSlider = k => { const m = k === 'music', v = volVal(k); return `<div class="vol-ctl"><span>${m ? 'Music' : 'Sound effects'}</span><input type="range" class="vol-range" data-vk="${k}" min="0" max="100" step="5" value="${v}" aria-label="${m ? 'Music volume' : 'Sound effects volume'}"><output>${v ? v + '%' : 'Off'}</output>${muteBtn(k, v)}</div>`; };
+  // after the header mute button or a slider's own: the sliders show 0 / Off for what is muted
+  const volSync = () => document.querySelectorAll('.vol-range').forEach(r => { const v = volVal(r.dataset.vk), o = r.nextElementSibling; r.value = v; if (o) { o.textContent = v ? v + '%' : 'Off'; const b = o.nextElementSibling; if (b) { b.classList.toggle('on', !!v); b.setAttribute('aria-pressed', String(!v)); b.title = v ? 'Mute' : 'Turn back on'; b.innerHTML = muteIc(v); } } });
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.vol-mute'); if (!b) return;
+    if (b.dataset.vk === 'music') { S.music = !S.music; MUSIC.refresh(); } else { S.sound = !S.sound; SFX.vol(); if (S.sound) SFX.click(); }
+    save(); hud(); setTimeout(volSync); // after this click has reached every listener (the ☰ menu checks where it landed)
+  });
   document.addEventListener('input', e => {
     if (!e.target.classList || !e.target.classList.contains('vol-range')) return;
-    S.vol = +e.target.value / 100; SFX.vol(); MUSIC.refresh();
-    document.querySelectorAll('.vol-range').forEach(r => { r.value = e.target.value; if (r.nextElementSibling) r.nextElementSibling.textContent = e.target.value + '%'; });
+    const k = e.target.dataset.vk, v = +e.target.value;
+    if (k === 'music') { S.music = v > 0; if (v) S.mvol = v / 100; MUSIC.refresh(); } else { S.sound = v > 0; if (v) S.vol = v / 100; SFX.vol(); }
+    hud(); volSync();
   });
-  document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('vol-range')) { save(); SFX.click(); } });
+  document.addEventListener('change', e => { if (e.target.classList && e.target.classList.contains('vol-range')) { save(); if (e.target.dataset.vk !== 'music' && S.sound) SFX.click(); } });
   const SFX = (() => {
     let ctx = null, master = null, volK = 1;
     function ac() {
@@ -499,10 +513,10 @@
       const now = ctx.currentTime;
       out.gain.cancelScheduledValues(now); out.gain.setValueAtTime(out.gain.value, now);
       if (!on) { out.gain.linearRampToValueAtTime(0, now + 0.6); cur = null; return; }
-      if (cur && cur.name === want) { out.gain.linearRampToValueAtTime(MUS_GAIN * VOL(), now + 0.4); return; }
+      if (cur && cur.name === want) { out.gain.linearRampToValueAtTime(MUS_GAIN * MVOL(), now + 0.4); return; }
       cur = Object.assign(built[want] || (built[want] = build(TRACKS[want])), { name: want });
       startAt = now + 0.1; next = 0;
-      out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(MUS_GAIN * VOL(), now + 1.5);
+      out.gain.setValueAtTime(0, now); out.gain.linearRampToValueAtTime(MUS_GAIN * MVOL(), now + 1.5);
     }
     return {
       // play a track ('home', 'battle', 'boss') or null for silence; starts for real after the first click (browser rule)
@@ -615,7 +629,7 @@
     const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
     b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
     b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
-    if (tab === 'profiel' && TH.tab === 'profile' && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${townHallHtml()}</div></div>`;
+    if (tab === 'profiel' && (TH.tab === 'profile' || TH.tab === 'settings') && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${townHallHtml()}</div></div>`;
   }
   function lockedHtml(t, lede) {
     const u = UNLOCKS[t], prog = u.lvl ? levelProgress(u.lvl) : Math.min(1, (S.cleared + 1) / (u.ch * 7));
@@ -637,7 +651,7 @@
   // ----- Home: the main menu, every building as a banner under the other (menu.js MENU_ART: frame, icon and scene
   // per building) with its name and how it stands (the next stage, rewards to claim, the ship is back, or what opens it).
   const HOME_LIST = [
-    { go: 'profiel', label: 'Town Hall' }, { go: 'guild', label: 'Guild Hall' }, { go: 'campagne', label: 'Campaign' },
+    { go: 'profiel', label: 'Town Hall' }, { go: 'campagne', label: 'Campaign' },
     { go: 'kerkers', label: 'Boss Hall' }, { go: 'tower', label: 'Tower of Essence' }, { go: 'arena', label: 'Arena' },
     { go: 'team', label: 'Heroes' }, { go: 'forge', label: 'Forge' }, { go: 'altaar', label: 'Fate Altar' }, { go: 'social', label: 'Social' },
     { go: 'market', label: 'Market' }, { go: 'expedition', label: 'Expeditions' },
@@ -655,8 +669,7 @@
     { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
     { go: 'profiel', title: 'Town Hall', text: 'Daily quests, missions, your collection and achievements, full of Energy and Fate Shards. Also your profile: name, avatar, settings, account and save backups. The Guide (the ? in the top bar, or the ☰ menu on a phone) explains every term.' },
-    { go: 'social', title: 'Social', text: 'Add friends with their friend code. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
-    { go: 'guild', title: 'Guild Hall', text: 'Create or join a guild. Fight the guild boss every day and earn a Guild Chest every week.' },
+    { go: 'social', title: 'Social', text: 'Friends and your guild. Add friends with their friend code; on the Guild tab create or join a guild (after Chapter II), fight the guild boss every day and earn a Guild Chest every week. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
     { go: 'market', title: 'Market', text: 'Spend Crystals on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Crystals from level-ups, quest chests, missions and achievements.' },
@@ -686,8 +699,7 @@
     if (go === 'forge') { const spare = S.inv.filter(x => !x.owner).length; return `${S.inv.length} pieces of gear · ${spare} spare`; }
     if (go === 'altaar') { const n = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0); return n ? `${n} Fate ${n === 1 ? 'Shard' : 'Shards'} to summon with` : 'No Fate Shards yet'; }
     if (go === 'arena') return signedIn() ? 'Attack and climb the ranking' : 'Needs a free account';
-    if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : 'Friends and mail'; }
-    if (go === 'guild') return signedIn() ? 'Guild boss and Guild Chest' : 'Needs a free account';
+    if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : 'Friends, guild and mail'; }
     if (go === 'profiel') { const n = thClaimN(); return n ? `${n} ${n === 1 ? 'reward' : 'rewards'} to claim` : `Player level ${S.p.lvl}`; }
     if (go === 'market') return `${(S.gems || 0).toLocaleString('en-US')} Crystals`;
     return '';
@@ -708,7 +720,7 @@
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
   const NAV_OF = { champions: 'team', vault: 'forge' };
   function sideNav() {
-    const cur = tab === 'social' && SO.tab === 'guild' ? 'guild' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const cur = NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
@@ -734,7 +746,7 @@
   }
   // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
-    document.body.dataset.tab = tab; paintVersion();
+    document.body.dataset.tab = tab; paintVersion(); chatPaintBtn();
     try { renderScreen(); }
     catch (e) {
       console.error(e);
@@ -2142,9 +2154,9 @@
   }
   function townHallHtml() {
     const c = thClaims(), dot = n => (n ? `<span class="dot" aria-label="${n} to claim"></span>` : '');
-    const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements], ['leaders', 'Leaderboards', 0]];
+    const tabs = [['profile', 'Profile', 0], ['quests', 'Quests', c.quests], ['missions', 'Missions', c.missions], ['collection', 'Collection', c.collection], ['achievements', 'Achievements', c.achievements], ['leaders', 'Leaderboards', 0], ['settings', `${svgIcon('gear')}Settings`, 0]];
     const bar = `<div class="dtabs th-tabs" role="tablist" aria-label="Town Hall">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-act="thtab" data-t="${k}" aria-selected="${TH.tab === k}">${l}${dot(n)}</button>`).join('')}</div>`;
-    return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : TH.tab === 'leaders' ? leadersHtml() : profileHtml());
+    return bar + (TH.tab === 'quests' ? questsHtml() : TH.tab === 'missions' ? missionsHtml() : TH.tab === 'collection' ? collectionHtml() : TH.tab === 'achievements' ? achievementsHtml() : TH.tab === 'leaders' ? leadersHtml() : TH.tab === 'settings' ? settingsHtml() : profileHtml());
   }
 
   // ================= GEMS AND THE MARKET =================
@@ -2350,8 +2362,8 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile &amp; settings')}
-      ${item('sound', S.sound ? '🔊' : '🔇', S.sound ? 'Sound on' : 'Sound off')}${item('music', S.music ? '♫' : '♪', S.music ? 'Music on' : 'Music off')}<div class="mm-it mm-vol">${volSlider()}</div>
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
         <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
@@ -2366,8 +2378,6 @@
     const it = e.target.closest('[data-mm]');
     if (it) {
       const a = it.dataset.mm; setMenu(false);
-      if (a === 'sound') { S.sound = !S.sound; save(); hud(); if (S.sound) SFX.click(); return; }
-      if (a === 'music') { S.music = !S.music; save(); hud(); MUSIC.refresh(); if (tab === 'profiel') render(); return; }
       ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
       return;
     }
@@ -2404,7 +2414,9 @@
   function socialHtml() {
     const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
     const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">Guild</button></div>`;
-    const head = `<div class="section-head"><div><h2>Social</h2><p class="lede">Add friends with their friend code and see how far they are.</p></div></div>${tabs}`;
+    // the Discord invite, big, between the title and the Friends / Guild tabs (also when not signed in)
+    const dc = `<a class="dc-banner" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}<span class="dc-bt"><b>Join our Discord</b><small>Chat with other heroes, find a guild, share your pulls, report bugs and hear about updates first.</small></span><span class="btn dc-btn">Join</span></a>`;
+    const head = `<div class="section-head"><div><h2>Social</h2><p class="lede">Add friends with their friend code and see how far they are.</p></div></div>${dc}${tabs}`;
     if (SO.tab === 'guild') return head + guildHtml();
     if (!signedIn()) return head + needAccount('Friends');
     if (!SO.friends) return head + (SO.err ? `<p class="ar-err">${esc(SO.err)}</p><button class="btn" data-act="socreload">Try again</button>` : '<p class="empty-note">Loading your friends…</p>');
@@ -2417,6 +2429,155 @@
       <section class="fr-sec"><h3>Friends <small class="empty-note">${friends.length}</small></h3>${friends.length ? `<ul class="fr-list">${friends.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="${esc(f.name)}">Remove</button>`)).join('')}</ul>` : '<p class="empty-note">No friends yet. Send your friend code to someone, or add theirs above.</p>'}</section>
       ${out.length ? `<section class="fr-sec"><h3>Sent requests</h3><ul class="fr-list">${out.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="">Cancel</button>`)).join('')}</ul></section>` : ''}`;
   }
+  // ---------- chat (0011_chat.sql): World (write from player level 10) and one chat per guild ----------
+  // A floating button (#chatbtn, bottom right, also during battles) opens a panel (#chatbox) with the tabs World and
+  // Guild. While open the shown channel is fetched every 4 s (chat_list after the last id); while closed one call
+  // every 25 s counts what is new (chat_unread) for the badge. The server takes name, portrait, level and guild
+  // tag from the save, cleans the text and keeps the pace; here: tap a name for Profile, Block (S.cblock, hidden
+  // here), Report and Delete (own messages; Guildmaster and officers in their guild chat).
+  const CH = { open: false, tab: 'world', msgs: { world: [], guild: [] }, last: { world: 0, guild: 0 }, info: { world: null, guild: null }, unread: { world: 0, guild: 0 }, menu: null, busy: false, err: '', at: 0 };
+  const CH_SEEN = 'ffh-chat-seen';
+  const chSeen = () => { try { return JSON.parse(localStorage.getItem(CH_SEEN)) || {}; } catch (e) { return {}; } };
+  const chSetSeen = (k, id) => { try { const s = chSeen(); if (id > (s[k] || 0)) { s[k] = id; localStorage.setItem(CH_SEEN, JSON.stringify(s)); } } catch (e) {} };
+  const CHAT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/></svg>';
+  const chatOn = () => { const cl = cloud(); return !!(cl && cl.enabled) && !noHero() && !firstSteps() && !!S.seen.home; };
+  const chTime = iso => { const d = new Date(iso), n = new Date(); return d.toDateString() === n.toDateString() ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }); };
+  function chatPaintBtn() {
+    if (!$('#chatbtn')) { // made once, outside #screen so a redraw never takes them away
+      document.body.insertAdjacentHTML('beforeend', `<button type="button" id="chatbtn" class="chat-fab" aria-label="Chat" hidden>${CHAT_SVG}<b class="chat-n" hidden></b></button><div id="chatbox" class="chat-box" role="dialog" aria-label="Chat" hidden></div>`);
+    }
+    const b = $('#chatbtn');
+    b.hidden = !chatOn();
+    const n = CH.unread.world + CH.unread.guild, g = CH.unread.guild;
+    b.querySelector('.chat-n').textContent = n > 99 ? '99+' : n;
+    b.querySelector('.chat-n').hidden = !n || CH.open;
+    b.classList.toggle('guild', !!g);
+    b.setAttribute('aria-label', n ? `Chat: ${n} new` : 'Chat');
+  }
+  function chatMsg(m, role) {
+    const blocked = (S.cblock || []).includes(m.user_id);
+    if (blocked) return '';
+    const canDel = m.mine || (CH.tab === 'guild' && (role === 'leader' || role === 'officer'));
+    const menu = CH.menu === m.id ? `<div class="cm-menu">${m.mine ? '' : `<button type="button" data-ch="prof" data-uid="${m.user_id}">Profile</button><button type="button" data-ch="block" data-uid="${m.user_id}" data-name="${esc(m.name)}">Block</button><button type="button" data-ch="report" data-id="${m.id}">Report</button>`}${canDel ? `<button type="button" class="bad" data-ch="del" data-id="${m.id}">Delete</button>` : ''}</div>` : '';
+    return `<div class="cm ${m.mine ? 'mine' : ''}" data-mid="${m.id}"><button type="button" class="cm-av" data-ch="menu" data-id="${m.id}" aria-label="${esc(m.name)}">${m.avatar && C[m.avatar] ? por(m.avatar) : ''}</button>
+      <div class="cm-b"><div class="cm-h"><button type="button" class="cm-name" data-ch="menu" data-id="${m.id}">${esc(m.name)}</button>${CH.tab === 'world' && m.tag ? `<span class="cm-tag">[${esc(m.tag)}]</span>` : ''}<small>${m.lvl ? `Lv ${m.lvl} · ` : ''}${chTime(m.created_at)}</small></div><p>${esc(m.body)}</p>${menu}</div></div>`;
+  }
+  function chatFoot() {
+    const inf = CH.info[CH.tab];
+    if (!signedIn()) return `<div class="ch-note">Sign in to chat with other players. <button type="button" class="btn small primary" data-ch="signin">Sign in</button></div>`;
+    if (!inf) return '';
+    if (inf.banned) return `<div class="ch-note">You are muted in the chat${inf.banned === 'forever' ? '' : ` until ${new Date(inf.banned).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`}.</div>`;
+    if (CH.tab === 'guild' && !inf.channel) return `<div class="ch-note">Join a guild to chat with your guild mates. <button type="button" class="btn small" data-ch="guild">Find a guild</button></div>`;
+    if (!inf.can) return `<div class="ch-note">You can read along; writing in World opens at player level ${inf.need || 10} (you are level ${S.p.lvl}).</div>`;
+    return `<form class="ch-form" data-chform="1"><input id="ch-in" maxlength="200" autocomplete="off" enterkeyhint="send" placeholder="${CH.tab === 'world' ? 'Message everyone…' : 'Message your guild…'}" aria-label="Message"><button type="submit" class="btn primary small" ${CH.busy ? 'disabled' : ''}>Send</button></form>${CH.err ? `<p class="ch-err">${esc(CH.err)}</p>` : ''}`;
+  }
+  // the whole panel (tabs, list, the writing line) or, while polling, only the tabs and the list, so typing is never disturbed
+  const chTabs = () => ['world', 'guild'].map(k => `<button type="button" role="tab" data-ch="tab" data-t="${k}" aria-selected="${CH.tab === k}">${k === 'world' ? 'World' : 'Guild'}${CH.unread[k] && CH.tab !== k ? `<b class="ch-dot">${CH.unread[k] > 99 ? '99+' : CH.unread[k]}</b>` : ''}</button>`).join('');
+  function chatList(box) {
+    const inf = CH.info[CH.tab], old = box.querySelector('.ch-list'), atEnd = !old || old.scrollHeight - old.scrollTop - old.clientHeight < 40, top = old ? old.scrollTop : 0;
+    const list = CH.msgs[CH.tab].map(m => chatMsg(m, inf && inf.role)).join('');
+    box.querySelector('.ch-tabs').innerHTML = chTabs();
+    const nl = box.querySelector('.ch-list');
+    nl.innerHTML = !signedIn() ? '' : !inf ? '<p class="empty-note ch-empty">Loading…</p>' : list || `<p class="empty-note ch-empty">${CH.tab === 'world' ? 'No messages yet. Say hello!' : inf.channel ? 'No messages in your guild chat yet.' : ''}</p>`;
+    nl.scrollTop = atEnd ? nl.scrollHeight : top;
+  }
+  function chatPaint(onlyList) {
+    const box = $('#chatbox'); if (!box) return;
+    box.hidden = !CH.open; chatPaintBtn(); if (!CH.open) return;
+    if (onlyList && box.querySelector('.ch-list')) { chatList(box); return; }
+    const inp = box.querySelector('#ch-in'), val = inp ? inp.value : '', focus = inp && document.activeElement === inp;
+    const old = box.querySelector('.ch-list'), top = old && old.scrollTop;
+    box.innerHTML = `<div class="ch-head"><div class="ch-tabs" role="tablist" aria-label="Chat"></div><button type="button" class="ch-x" data-ch="close" aria-label="Close the chat">✕</button></div><div class="ch-list" aria-live="polite"></div>${chatFoot()}`;
+    if (old) box.querySelector('.ch-list').scrollTop = top;
+    chatList(box);
+    const ni = box.querySelector('#ch-in'); if (ni) { ni.value = val; if (focus) ni.focus(); }
+  }
+  // fetch the shown channel (open) or the unread counts (closed)
+  async function chatPoll(force) {
+    if (!chatOn() || !signedIn() || document.hidden) return;
+    const cl = cloud();
+    if (CH.open) {
+      const k = CH.tab;
+      try {
+        const r = await cl.rpc('chat_list', { ch: k, after: CH.last[k] });
+        if (!r || r.error) return;
+        const had = CH.info[k], same = had && had.channel === r.channel && had.can === r.can && had.banned === r.banned && had.role === r.role;
+        CH.info[k] = r;
+        if (had && had.channel !== r.channel) { CH.msgs[k] = []; CH.last[k] = 0; } // joined or left a guild
+        const del = new Set(r.del || []);
+        CH.msgs[k] = CH.msgs[k].filter(m => !del.has(m.id)).concat((r.msgs || []).filter(m => !del.has(m.id) && !CH.msgs[k].some(x => x.id === m.id))).slice(-150);
+        if (r.msgs && r.msgs.length) CH.last[k] = Math.max(CH.last[k], ...r.msgs.map(m => m.id));
+        chSetSeen(k === 'world' ? 'w' : 'g', CH.last[k]); CH.unread[k] = 0;
+        if (CH.open && CH.tab === k) chatPaint(same);
+      } catch (e) {}
+    } else if (force || Date.now() - CH.at > 24000) {
+      CH.at = Date.now();
+      const s = chSeen();
+      try {
+        const r = await cl.rpc('chat_unread', { w_after: s.w || 0, g_after: s.g || 0 });
+        if (!r) return;
+        // the first time on this device: what is there already does not count as new
+        if (s.w == null && r.wl) { chSetSeen('w', r.wl); r.w = 0; }
+        if (s.g == null && r.gl) { chSetSeen('g', r.gl); r.g = 0; }
+        CH.unread.world = r.w || 0; CH.unread.guild = r.g || 0; chatPaintBtn();
+      } catch (e) {}
+    }
+  }
+  function chatOpen(open) {
+    CH.open = open; CH.menu = null; CH.err = '';
+    if (open && !CH.info.world && CH.unread.guild && !CH.unread.world) CH.tab = 'guild';
+    chatPaint(); if (open) { chatPoll(true); const i = $('#ch-in'); if (i && innerWidth > 760) i.focus(); }
+  }
+  async function chatSend(text) {
+    const t = text.trim(); if (!t || CH.busy) return;
+    CH.busy = true; CH.err = '';
+    let r; try { r = await cloud().rpc('chat_send', { ch: CH.tab, msg: t }); } catch (e) { r = { error: 'net' }; }
+    CH.busy = false;
+    const why = { slow: 'Slow down a little: one message every few seconds.', repeat: 'You just said that.', level: 'Writing in World opens at player level 10.', noguild: 'You are not in a guild.', banned: 'You are muted in the chat.', empty: '', net: 'Not sent: no connection. Try again.' };
+    if (!r || r.error) { CH.err = why[r && r.error] ?? 'Not sent. Try again in a moment.'; chatPaint(); return; }
+    const i = $('#ch-in'); if (i) i.value = '';
+    await chatPoll(true); chatPaint();
+  }
+  document.addEventListener('submit', e => { if (!e.target.matches('[data-chform]')) return; e.preventDefault(); const i = $('#ch-in'); if (i) chatSend(i.value); });
+  document.addEventListener('click', async e => {
+    if (e.target.closest('#chatbtn')) { SFX.click(); chatOpen(!CH.open); return; }
+    const a = e.target.closest('[data-ch]'); if (!a) return;
+    const k = a.dataset.ch, id = +a.dataset.id;
+    if (k === 'close') chatOpen(false);
+    else if (k === 'tab') { CH.tab = a.dataset.t; CH.menu = null; CH.err = ''; const i = $('#ch-in'); if (i) i.value = ''; chatPaint(); chatPoll(true); }
+    else if (k === 'menu') { CH.menu = CH.menu === id ? null : id; chatPaint(true); }
+    else if (k === 'signin') { if (B) { toast('Sign in after the battle.', true); return; } chatOpen(false); cloud().openAccount(); }
+    else if (k === 'guild') { if (B) { toast('Not during a battle.', true); return; } chatOpen(false); SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); }
+    else if (k === 'prof') { CH.menu = null; chatPaint(true); openProfile(a.dataset.uid); chatTopModal(); }
+    else if (k === 'block') {
+      const uid = a.dataset.uid, name = a.dataset.name;
+      confirmBox(`Block ${name}?`, `You will no longer see ${name}'s messages in the chat. You can unblock players in Town Hall → Settings.`, 'Block', () => {
+        S.cblock = [...new Set([...(S.cblock || []), uid])]; S.cbname = { ...(S.cbname || {}), [uid]: name }; save(); CH.menu = null; chatPaint(); toast(`${name} is blocked.`);
+      });
+      chatTopModal();
+    }
+    else if (k === 'report') {
+      CH.menu = null; let r; try { r = await cloud().rpc('chat_report', { mid: id, why: null }); } catch (e) { r = null; }
+      toast(r === 'ok' ? 'Thank you. The message was reported to the moderators.' : 'Could not report it. Try again.', r !== 'ok'); chatPaint();
+    }
+    else if (k === 'del') {
+      let r; try { r = await cloud().rpc('chat_delete', { mid: id }); } catch (e) { r = null; }
+      if (r === 'ok') { const t = CH.tab; CH.msgs[t] = CH.msgs[t].filter(m => m.id !== id); CH.menu = null; chatPaint(); } else toast('You cannot delete that message.', true);
+    }
+    else if (k === 'unblock') { S.cblock = (S.cblock || []).filter(x => x !== a.dataset.uid); save(); render(); chatPaint(); }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && CH.open && $('#modal').hidden) chatOpen(false); });
+  // the open chat sits above the game's popups (a battle result never covers it); a popup opened from the chat
+  // (a profile, Block?) goes above the chat until it closes
+  function chatTopModal() {
+    const m = $('#modal'); m.classList.add('over-chat');
+    const ob = new MutationObserver(() => { if (m.hidden) { m.classList.remove('over-chat'); ob.disconnect(); } });
+    ob.observe(m, { attributes: true, attributeFilter: ['hidden'] });
+  }
+  setInterval(() => chatPoll(), 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) chatPoll(true); });
+  // blocked players, in Town Hall → Settings
+  const blockedHtml = () => { const l = S.cblock || []; return `<section class="prof-acc"><h3>Chat</h3><p class="empty-note">${l.length ? 'Players you blocked: their messages are hidden from you.' : 'Tap a name in the chat to view a profile, block a player or report a message.'}</p>${l.length ? `<ul class="ch-blocked">${l.map(u => `<li><span>${esc((S.cbname || {})[u] || 'Player')}</span><button type="button" class="btn small" data-ch="unblock" data-uid="${u}">Unblock</button></li>`).join('')}</ul>` : ''}</section>`; };
   function mailHtml() {
     const head = `<div class="section-head"><div><h2>Mail</h2><p class="lede">Gifts, rewards and friend requests.</p></div>${signedIn() ? '<button class="btn small" data-act="socreload">Refresh</button>' : ''}</div>`;
     if (!signedIn()) return head + needAccount('Mail');
@@ -2438,6 +2599,7 @@
     gift: '<rect x="2" y="6" width="12" height="3"/><path d="M3 9v5.5h10V9M8 6v8.5M8 6c-1-2.5-4-3-4-1.2C4 6 8 6 8 6zm0 0c1-2.5 4-3 4-1.2C12 6 8 6 8 6z"/>',
     swords: '<path d="M2 2l7 7M2 2h2.5L11 8.5 8.5 11 2 4.5zM14 2l-7 7M14 2h-2.5L5 8.5 7.5 11 14 4.5zM4 12l2-2M12 12l-2-2"/>',
     banner: '<path d="M3 1.5h10V13l-5-3-5 3z"/>',
+    gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/><circle cx="8" cy="8" r="4.6"/>',
   };
   const svgIcon = k => `<svg viewBox="0 0 16 16" aria-hidden="true">${SVG_IC[k]}</svg>`;
   async function friendAct(fn, body, okMsg) {
@@ -2490,7 +2652,7 @@
     toast('Backup restored.');
   }
   function profileHtml() {
-    const p = S.p, need = pxNeed(p.lvl), av = avatarId(), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
+    const p = S.p, need = pxNeed(p.lvl), av = avatarId();
     const bossesBeaten = Object.values(S.bh).filter(n => n > 0).length;
     const heroes = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
     const cost = renameCost(), costTxt = cost ? `${ic('coin')} ${cost.toLocaleString('en-US')}` : 'free once';
@@ -2503,11 +2665,6 @@
     }).join('');
     const avatars = Object.keys(S.roster).filter(id => C[id]).sort((a, b) => C[b].rar - C[a].rar).map(id => `<button type="button" class="av-pick rar-${C[id].rar} ${id === av ? 'sel' : ''}" data-act="avatar" data-id="${id}" title="${esc(C[id].name)}" aria-label="${esc(C[id].name)}" aria-pressed="${id === av}">${por(id)}</button>`).join('');
     const stat = (k, v) => `<dt>${k}</dt><dd>${typeof v === 'number' ? v.toLocaleString('en-US') : v}</dd>`;
-    const account = !cl || !cl.enabled
-      ? '<p class="empty-note">Offline mode: your progress is saved in this browser only.</p>'
-      : cl.email
-        ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
-        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
     return `<div class="profile">
       <div class="prof-head rar-${C[av].rar}"><div class="prof-av">${por(av)}</div>
         <div class="prof-main">${nameRow}
@@ -2520,8 +2677,19 @@
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
       </div>
       <section><h3>Avatar</h3><div class="av-grid">${avatars}</div></section>
-      <section class="prof-acc"><h3>Settings</h3><div class="row"><button class="btn small" data-act="soundtoggle" aria-pressed="${S.sound}">Sound: ${S.sound ? "on" : "off"}</button><button class="btn small" data-act="musictoggle" aria-pressed="${S.music}">Music: ${S.music ? "on" : "off"}</button>${volSlider()}</div></section>
-      <section class="prof-acc"><h3>Community</h3><p class="empty-note">Chat with other players, find a guild and hear about updates first.</p><div class="row"><a class="btn small dc-btn" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Join the Discord</a></div></section>
+    </div>`;
+  }
+  // Town Hall → Settings: sound and music, the cloud account, start over and the save backups on this device
+  function settingsHtml() {
+    const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
+    const account = !cl || !cl.enabled
+      ? '<p class="empty-note">Offline mode: your progress is saved in this browser only.</p>'
+      : cl.email
+        ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
+        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
+    return `<div class="profile">
+      <section class="prof-acc"><h3>Sound</h3><div class="vol-rows">${volSlider('music')}${volSlider('sfx')}</div><p class="empty-note">Tap a speaker (or slide to 0) to switch that sound off. The speaker in the top bar mutes both.</p></section>
+      ${blockedHtml()}
       <section class="prof-acc"><h3>Account</h3>${account}</section>
       ${startOverHtml()}
       ${backupsHtml()}
@@ -2647,8 +2815,7 @@
     else if (act === 'ginvdec') answerInvite(+id, false);
     else if (act === 'pfhero') { PF.sel = id; renderProfile(); }
     else if (act === 'pfclose') { PF.id = null; $('#modal').hidden = true; }
-    else if (act === 'soundtoggle') { S.sound = !S.sound; save(); hud(); render(); if (S.sound) SFX.click(); }
-    else if (act === 'musictoggle') { S.music = !S.music; save(); hud(); render(); MUSIC.refresh(); }
+
     else if (act === 'glnav') { e.preventDefault(); const s = document.getElementById('gl-' + a.dataset.id); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
     else if (act === 'socreload') socialLoad();
     else if (act === 'copycode') { const c = SO.code; navigator.clipboard.writeText(c).then(() => toast('Friend code copied.'), () => toast('Your friend code: ' + c, false, 5000)); }
@@ -4106,7 +4273,7 @@
     }
     for (const k in UNLOCKS) if (!S.seen[k] && unlocked(k)) {
       S.seen[k] = true;
-      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Create or join a guild in the Guild Hall, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Create or join a guild in Social → Guild, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
     }
     // the homebase message comes last: its button leads there
     return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));

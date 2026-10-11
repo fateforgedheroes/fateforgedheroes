@@ -121,7 +121,7 @@
   // daily quest and Market counters starting a new day, the Discord popup's day, the save time) nor settings (sound,
   // speed, auto, the chapter or difficulty looked at). Otherwise a device that was only opened again, without playing,
   // counted as "changed" and asked the player to pick between two saves after playing on another device.
-  const VOLATILE = ['savedAt', 'energy', 'enAt', 'disc', 'q', 'mk', 'sound', 'music', 'vol', 'audioWas', 'speed', 'auto', 'chap', 'diff'];
+  const VOLATILE = ['savedAt', 'energy', 'enAt', 'disc', 'q', 'mk', 'sound', 'music', 'vol', 'mvol', 'cblock', 'cbname', 'audioWas', 'speed', 'auto', 'chap', 'diff'];
   const content = s => { const o = Object.assign({}, s); for (const k of VOLATILE) delete o[k]; return JSON.stringify(o); };
   const oldContent = s => JSON.stringify(Object.assign({}, s, { savedAt: 0 })); // how bases saved before this compared (hash)
   const hash = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0; return str.length + ':' + h; };
