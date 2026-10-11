@@ -2572,6 +2572,18 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .fg-dstats i { font-style: normal; text-align: right; font-size: .85rem; } .fg-dstats i.u { color: var(--good); } .fg-dstats i.d { color: var(--bad); }
 .fg-dpow { margin-top: 6px; font-family: var(--font-display); } .fg-dpow.u { color: var(--good); } .fg-dpow.d { color: var(--bad); }
 .fg-acts { display: grid; gap: 6px; }
+/* comparing a picked piece with what the hero wears */
+.fg-detail.fg-cmp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; scroll-margin-top: 70px; }
+.fg-csides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: stretch; }
+.fg-carr { align-self: center; color: var(--gold); font-size: 1.3rem; }
+.fg-cs { display: grid; align-content: start; gap: 6px; padding: 8px; border: 1px solid color-mix(in srgb, var(--rc, #9c7c37) 60%, transparent); border-radius: 4px; background: rgba(0,0,0,.25); min-width: 0; }
+.fg-cs.empty { border-style: dashed; border-color: #5a4523; }
+.fg-ctag { font-family: var(--font-tag); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); } .fg-ctag svg { width: 11px; height: 11px; vertical-align: -1px; }
+.fg-cmini { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 8px; align-items: center; }
+.fg-cmini h3 { font-size: .95rem; } .fg-cmini .fg-dsub { font-size: .8rem; margin: 2px 0 0; }
+.fg-cs .fg-dstats { font-size: .88rem; gap: 1px 8px; }
+.fg-cfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; } .fg-cfoot .fg-dpow { margin: 0; }
+.fg-acts.row { display: flex; flex-wrap: wrap; gap: 6px; } .fg-acts.row .btn { padding: 6px 12px; }
 /* Forge tab: upgrade track and ascension */
 .fg-forge { display: grid; gap: 10px; padding: 4px; }
 .fg-track { display: grid; grid-template-columns: repeat(16, 1fr); gap: 3px; }
@@ -2633,6 +2645,10 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 }
 @media (max-width: 560px) {
   .fg-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fg-csides { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .fg-carr { display: none; }
+  .fg-cmini { grid-template-columns: minmax(0, 1fr); } .fg-cmini .fg-big { width: 56px; }
+  .fg-cs { padding: 6px; } .fg-cs .fg-dstats { font-size: .8rem; gap: 1px 5px; } .fg-cs .fg-dstats i { font-size: .74rem; }
+  .fg-acts.row .btn { flex: 1 1 auto; }
   .fg-splash { grid-template-columns: 130px minmax(0, 1fr); } .fg-art { min-height: 0; height: 140px; } .fg-art img { max-height: 104px; bottom: 16px; } .fg-ring { bottom: 6px; height: 24px; } .fg-floor { bottom: 10px; }
   .fg-info { padding: 8px 10px; } .fg-stats { display: none; } .fg-name h2 { font-size: 1.1rem; } .fg-ess.big { width: 28px; height: 28px; } .fg-pow { font-size: .95rem; padding: 3px 0; }
   .fg-head { padding: 10px 12px; } .fg-head h1 { font-size: 1.6rem; } .fg-head p { font-size: .9rem; }
