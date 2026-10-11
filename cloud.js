@@ -352,5 +352,7 @@
     async rpc(name, body) { if (!(await valid())) throw new Error('Please sign in first.'); return req('/rest/v1/rpc/' + name, { method: 'POST', body: body || {} }); },
     // called on every local save; uploads a few seconds later
     queue() { if (!enabled || !session) return; clearTimeout(pushT); pushT = setTimeout(() => push(), 3000); },
+    // uploads a queued save right away (before reloading for a new version)
+    async upload() { if (!enabled || !session) return; clearTimeout(pushT); await push(); },
   };
 })();

@@ -6,6 +6,7 @@
 //   SUPABASE_ANON_KEY  the public anon or publishable key (safe in browsers; data is protected by Row Level Security)
 // Without them the game builds in offline mode (browser saves only).
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const DIRS = ['./src/', './src/assets/', './assets/', './public/', './'];
 const missing = [];
@@ -28,7 +29,7 @@ const shell = shellSrc
   .replace('/*ASSETS*/', () => assets)
   .replace('/*ENGINE*/', () => engine)
   .replace('/*SPRITES*/', () => bgs + '\n' + sprites)
-  .replace('/*APP*/', () => `window.FFH_CONFIG = ${JSON.stringify(config)};\n` + cloud + '\n' + app);
+  .replace('/*APP*/', () => `window.FFH_CONFIG = ${JSON.stringify(config)};\nwindow.FFH_BUILD = '@@BUILD@@';\n` + cloud + '\n' + app);
 
 const head = `<!doctype html>
 <html lang="en" style="background:#110e13">
@@ -45,7 +46,12 @@ const head = `<!doctype html>
 `;
 const out = new URL('./dist/', import.meta.url);
 mkdirSync(out, { recursive: true });
-writeFileSync(new URL('index.html', out), head + shell + '\n</body>\n</html>\n');
+// Build id: a hash of the page (or FFH_BUILD from the environment), stamped into it as window.FFH_BUILD and written to
+// version.json; an open game tab polls that file and offers a reload when a newer build is live (app.js checkVersion)
+const page = head + shell + '\n</body>\n</html>\n';
+const build = (process.env.FFH_BUILD || createHash('sha256').update(page).digest('hex').slice(0, 12)).replace(/[^\w.-]/g, '');
+writeFileSync(new URL('index.html', out), page.replace("window.FFH_BUILD = '@@BUILD@@'", () => `window.FFH_BUILD = '${build}'`));
+writeFileSync(new URL('version.json', out), JSON.stringify({ build }) + '\n');
 // Static extras (optional)
 for (const f of ['privacy.html', 'favicon.png', 'email-logo.png']) {
   const dir = DIRS.find(d => existsSync(new URL(d + f, import.meta.url)));
@@ -60,4 +66,4 @@ for (const dirName of ['sheets', 'poses']) {
   mkdirSync(new URL(dirName + '/', out), { recursive: true });
   for (const f of readdirSync(new URL(dir + dirName + '/', import.meta.url))) if (f.endsWith('.js')) copyFileSync(new URL(dir + dirName + '/' + f, import.meta.url), new URL(dirName + '/' + f, out));
 }
-console.log(`Built dist/index.html (${config.supabaseUrl ? 'online: ' + config.supabaseUrl : 'offline mode, no SUPABASE_URL set'})`);
+console.log(`Built dist/index.html, build ${build} (${config.supabaseUrl ? 'online: ' + config.supabaseUrl : 'offline mode, no SUPABASE_URL set'})`);

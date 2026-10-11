@@ -739,7 +739,7 @@
   }
   // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
-    document.body.dataset.tab = tab;
+    document.body.dataset.tab = tab; paintVersion();
     try { renderScreen(); }
     catch (e) {
       console.error(e);
@@ -3751,7 +3751,7 @@
     const manualArena = cfg.type === 'arena' && cfg.fight && cfg.fight.manual;
     b.auto = manualArena ? false : arena || !!cfg.rep || (S.auto && autoOk());
     if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
-    B = { b, cfg, ph: 0, nPh, moves: [] };
+    B = { b, cfg, ph: 0, nPh, moves: [] }; paintVersion();
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -4250,6 +4250,27 @@
     toast('A new season has begun: everyone starts fresh. Choose your hero!', false, 7000);
     return true;
   }
+  // ---- new version notice: build.mjs stamps window.FFH_BUILD into the page and writes the same id to /version.json.
+  // A tab left open for days finds a newer build there and shows a banner (never during a battle: render() and the
+  // battle start repaint it); tapping it saves, uploads the save and reloads. Offline or opened from a file: silent.
+  let newBuild = '';
+  async function checkVersion() {
+    if (!window.FFH_BUILD || newBuild || location.protocol === 'file:') return;
+    try {
+      const r = await fetch('/version.json?t=' + Date.now(), { cache: 'no-store' }); if (!r.ok) return;
+      const v = await r.json();
+      if (v && v.build && v.build !== window.FFH_BUILD) { newBuild = v.build; paintVersion(); }
+    } catch (e) { /* no network: try again later */ }
+  }
+  function paintVersion() { const el = $('#newver'); if (el) el.hidden = !newBuild || !!B; }
+  async function reloadForVersion() {
+    const el = $('#newver'); if (B || el.disabled) return;
+    el.disabled = true; el.querySelector('span').textContent = 'Saving and reloading…';
+    save();
+    const cl = window.FFH_CLOUD;
+    if (cl && cl.upload) await Promise.race([cl.upload().catch(() => {}), new Promise(r => setTimeout(r, 4000))]);
+    location.reload();
+  }
   function start(data) {
     S = load(data && data.S);
     fixup(S);
@@ -4273,6 +4294,10 @@
     render();
     // new mail (gifts, friend requests, arena rewards) is checked every 2 minutes while the game is open
     paintMail(); setInterval(() => { if (!B && document.visibilityState === 'visible') socialLoad(); }, 120000);
+    // a newer build on the server: checked every 5 minutes and whenever the tab is shown again
+    $('#newver').addEventListener('click', reloadForVersion);
+    setInterval(() => { if (document.visibilityState === 'visible') checkVersion(); }, 300000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;
     if (S.migrated) { delete S.migrated; delete S.migrated4; delete S.migrated5; delete S.migrated6; save(); toast('Your progress was carried over. Your champions were replaced by the new heroes.'); }
