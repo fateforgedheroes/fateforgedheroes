@@ -1589,8 +1589,8 @@
   // ================= FORGE: Gearing (one hero's gear) and Items (everything owned) =================
   // Gearing: pick a hero (carousel), tap a slot: its pieces are listed per set (the sets the hero wears first, with
   // "Wearing 3/6" and what the next bonus needs), tap a piece to compare it with what the hero wears (stat by stat and
-  // in power) and equip it; upgrades and ascension happen in the Forge tab. Browsing tools (Bag/Forge, slot chips,
-  // filters) sit at the bottom. Items: every piece of gear plus stones, shards and elixirs, with all filters and
+  // in power) and equip it; upgrades and ascension happen in the Forge tab. Browsing tools (Bag/Forge, filters) sit
+  // under the hero. Items: every piece of gear plus stones, shards and elixirs, with all filters and
   // selling (the old Vault, state VT). The hero being geared is selChamp (shared with the Heroes screen).
   const FG = { view: 'gear', slot: 'wapen', pick: null, tab: 'bag', rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', cat: 'all' };
   const ESS_BG = { Ember: 2, Frost: 5, Radiant: 4, Aether: 0, Verdant: 3, Umbral: 8, Storm: 1 };
@@ -1642,13 +1642,13 @@
       return `<div class="fg-srow">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
       + active.filter(t => t.fam).map(t => `<div class="fg-srow"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
     const pick = S.inv.find(x => x.id === FG.pick) || items.find(x => x.slot === FG.slot);
-    return `<div class="fg-stage">${splash}<div class="fg-right">
+    return `<div class="fg-stage"><div class="fg-left">${splash}<section class="fg-panel fg-ctrlp">${fgCtrl()}</section></div><div class="fg-right">
       <section class="fg-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Gearing</h1><p>Pick a hero, tap a slot, compare and equip. Upgrades happen in the Forge.</p></div>${carousel}</section>
       <div class="fg-work">
         <section class="fg-panel fg-slots"><div class="fg-sgrid">${tiles}</div>
           <div class="fg-sets"><h3>Active set bonuses</h3>${setRows || '<p class="empty-note">No set bonus yet.</p>'}</div>
           <div class="fg-row"><button type="button" class="btn small primary" data-act="bestgear">Equip best</button><button type="button" class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div></section>
-        <section class="fg-panel fg-bagp">${FG.tab === 'forge' ? fgForge(pick) : fgBag(id)}${fgDetail(pick, id)}${fgCtrl()}</section>
+        <section class="fg-panel fg-bagp">${FG.tab === 'forge' ? fgForge(pick) : fgBag(id)}${fgDetail(pick, id)}</section>
       </div></div></div>`;
   }
   // the bag: the chosen slot's pieces, one block per set
@@ -1688,14 +1688,13 @@
     }
     return `<div class="fg-forge"><div class="fg-ascs">${Array.from({ length: K.MAX_ASC }, (_, i) => `<span class="${i < (it.asc || 0) ? 'on' : ''}">★</span>`).join('')}</div>${ascHtml(it)}<div class="fg-go">${ascBtn(it) || ''}</div></div>`;
   }
-  // tabs, slot chips and filters: at the bottom, the list comes first
+  // Bag/Forge tabs and the filters: in their own panel under the hero (the slot tiles pick the slot)
   function fgCtrl() {
     const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
     const stats = Object.keys(K.STAT_NAMES).filter(k => k !== 'hpP' || true);
     const sets = [...new Set(S.inv.map(x => x.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
     return `<div class="fg-ctrl"><div class="fg-tabs">${[['bag', 'Bag'], ['forge', 'Forge']].map(([k, l]) => `<button type="button" class="${FG.tab === k ? 'on' : ''}" data-act="fgtab" data-t="${k}">${l}</button>`).join('')}</div>
-      ${FG.tab === 'bag' ? `<div class="fg-chips">${K.SLOTS.map(sl => `<button type="button" class="${FG.slot === sl ? 'on' : ''}" data-act="fgslot" data-slot="${sl}">${K.SLOT_NAMES[sl]}</button>`).join('')}<button type="button" class="${!FG.slot ? 'on' : ''}" data-act="fgslot" data-slot="">All slots</button></div>
-      <div class="fg-filters"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Sort: Power', FG.sort)}${opt('rarity', 'Sort: Rarity', FG.sort)}${opt('level', 'Sort: Level', FG.sort)}</select><button type="button" class="btn small" data-act="fgreset" title="Clear filters">✕</button></div>` : ''}</div>`;
+      ${FG.tab === 'bag' ? `<div class="fg-filters"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Sort: Power', FG.sort)}${opt('rarity', 'Sort: Rarity', FG.sort)}${opt('level', 'Sort: Level', FG.sort)}</select><button type="button" class="btn small" data-act="fgreset" title="Clear filters">✕</button></div>` : ''}</div>`;
   }
   // ----- Items: every piece of gear plus stones, shards and elixirs -----
   function itemsHtml() {
