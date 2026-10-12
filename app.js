@@ -718,7 +718,7 @@
   }
   // the icon bar on the left of every screen but Home (and the battle): the Home buildings with their banner icons
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
-  const NAV_OF = { champions: 'team', vault: 'forge' };
+  const NAV_OF = { champions: 'team', vault: 'forge', prep: 'campagne' };
   function sideNav() {
     const cur = NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
@@ -768,7 +768,7 @@
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
     // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
     if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
@@ -823,8 +823,8 @@
         <span class="cl-num">${ROMAN[c]}</span>
         <span class="cl-t"><small>Chapter ${ROMAN[c]}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${esc(ch.name)}</b><span class="cl-desc">${esc(ch.desc)}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${[0, 1, 2, 3, 4, 5, 6].map(k => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</span>${done}/7${chest ? ' · <b class="cl-chest">Reward ready</b>' : ''}` : `${LOCK_SVG} Clear Chapter ${ROMAN[c - 1]} first`}${boss ? `<span class="cl-boss">Boss: ${esc(boss)}</span>` : ''}</span></span>
-        <span class="cl-gear rar-${hi}"><span class="cl-set"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
-          <span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, hi)]}" alt="" title="${K.SLOT_NAMES[s]}">`).join('')}</span>
+        <span class="cl-gear"><span class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
+          ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
           <small>${own} ${own === 1 ? 'piece' : 'pieces'} owned</small></span></button>`;
     }).join('');
     return `<div class="campaign cv cl ${d ? 'hardmode diff-' + D.id : ''}">${head}
@@ -851,42 +851,10 @@
       return rw;
     };
     const auto = i => `<button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[chap]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>`;
-    const playBtn = i => stateOf(i) === 'cleared' ? `<button class="btn primary" data-act="play" data-stage="${i}">↻ Replay${enCost(stEn(i, d))}</button>`
-      : stateOf(i) === 'next' ? `<button class="btn primary" data-act="play" data-stage="${i}">⚔ Fight${enCost(stEn(i, d))}</button>` : `<button class="btn" disabled>${LOCK_SVG} Locked</button>`;
+    const playBtn = i => stateOf(i) === 'locked' ? `<button class="btn" disabled>${LOCK_SVG} Locked</button>` : `<button class="btn primary" data-act="play" data-stage="${i}">Fight${enCost(stEn(i, d))}</button>`;
     const spot = fightSpot() && sel === next;
-    // the chapter: its painted scene, story and the set it drops
+    // the chapter's set, the other drops, the team and the chest on the left; a row per stage on the right (RAID-style)
     const set = K.SETS[ch.set], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length, hi = D.rars[D.rars.length - 1];
-    const chapCard = `<section class="cv-chap" style="--art:url(${art})">
-      <div class="cv-chap-t"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3><p>${esc(ch.desc)}</p>
-        <span class="cv-set rar-${hi}"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><small>Drops <b>${esc(set.name)}</b> · ${own} owned</small><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span></div>
-      <button type="button" class="cv-arr prev" data-act="chap" data-n="${chap - 1}" ${chap ? '' : 'disabled'} aria-label="Previous chapter">‹</button>
-      <button type="button" class="cv-arr next" data-act="chap" data-n="${chap + 1}" ${chap < maxChap ? '' : 'disabled'} aria-label="Next chapter">›</button></section>`;
-    // the selected stage: its enemies per phase, what it drops and the button to play it
-    const ess = [...new Set(K.stagePhases(st, d).flat().map(f => E[f].aff))], fr = firsts(sel);
-    const stage = `<section class="cv-stage ${st.boss ? 'boss' : ''}">
-      <div class="cv-st-h"><b>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`}</b>${st.boss ? `<span class="st-boss">Boss: ${esc(st.boss)}</span>` : ''}<span class="cv-st-s ${state}">${state === 'cleared' ? '✓ Cleared' : state === 'next' ? 'Next battle' : `${LOCK_SVG} Locked`}</span></div>
-      <div class="cv-phases">${K.stagePhases(st, d).map((p, i) => `<div class="cv-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${i + 1}</small><span>${p.map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('<i class="cv-ph-arr" aria-hidden="true">›</i>')}</div>
-      <div class="cv-meta"><span class="rw"><small>Enemy level</small><b>${K.diffLvl(st, d)}</b></span><span class="rw"><small>Drops</small><span class="st-dic">${dropIc(st)}</span></span>${fr.length ? `<span class="rw"><small>First clear</small></span>${fr.join('')}` : ''}<span class="rw"><small>Enemies</small>${ess.map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</span></div>
-      <div class="cv-go">${state === 'cleared' ? auto(sel) : ''}${spot ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : playBtn(sel)}</div></section>`;
-    const tids = teamIds('campaign');
-    const team = `<section class="cv-team"><div class="cv-tm"><small class="cv-lbl">Your team</small><div class="cv-heroes">${tids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('')}</div></div>
-      <div class="cv-pw"><small>Team power</small><b>${teamPower(tids).toLocaleString('en-US')}</b><button class="btn" data-act="editteam" data-mode="campaign">Edit team</button></div></section>`;
-    const chapBtns = K.CHAPTERS.map((c2, c) => {
-      const done = K.STAGES.filter(s => s.chapter === c).filter(s => K.STAGES.indexOf(s) <= cleared).length;
-      return `<button type="button" class="${c === chap ? 'sel' : ''} ${done === 7 ? 'done' : ''}" data-act="chap" data-n="${c}" ${c > maxChap ? 'disabled' : ''} title="${esc(c2.name)} · ${done}/7">${ROMAN[c]}</button>`;
-    }).join('');
-    // a card per stage: tap it to see it above; cleared stages have Replay and Auto ×10, the next one Fight
-    const cards = idx.map((i, k) => {
-      const s = K.STAGES[i], ss = stateOf(i);
-      const acts = ss === 'cleared' ? `<button type="button" class="btn small" data-act="play" data-stage="${i}" title="Costs ${stEn(i, d)} energy">Replay</button>${auto(i)}`
-        : ss === 'next' ? `<button type="button" class="btn small primary" data-act="play" data-stage="${i}" title="Costs ${stEn(i, d)} energy">Fight</button>` : `<span class="cv-lock">${LOCK_SVG} Locked</span>`;
-      return `<div class="cv-card ${ss} ${s.boss ? 'boss' : ''} ${i === sel ? 'sel' : ''}" style="--art:url(${art});--pos:${k * 16}%">
-        <button type="button" class="cv-card-sel" data-act="csel" data-stage="${i}" aria-label="${s.n === 6 ? 'Boss stage' : `Stage ${s.n + 1}`}" aria-pressed="${i === sel}"></button>
-        <div class="cv-card-h"><b>${s.n === 6 ? 'Boss' : `Stage ${s.n + 1}`}</b>${ss === 'cleared' ? '<span class="cv-ok">✓</span>' : ''}</div>
-        <div class="cv-card-f">${K.stagePhases(s, d)[2].slice(0, 4).map(f => `<span class="cv-foe-s ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</div>
-        <div class="cv-card-m"><span class="st-dic">${dropIc(s)}</span><span class="pill">Lv ${K.diffLvl(s, d)}</span></div>
-        <div class="cv-card-a">${acts}</div></div>`;
-    }).join('');
     // the chapter's reward chest
     const claimed = chrClaimed(chap, d), canClaim = chapDone && !claimed;
     const reward = `<section class="cv-reward ${canClaim ? 'ready' : ''} ${claimed ? 'done' : ''}"><span class="cv-chest">${CHAP_CHEST}</span>
@@ -896,15 +864,38 @@
     const head = `      <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.campagne})" aria-hidden="true"></span><div class="cv-ht"><h2>Campaign</h2><p>Explore a shattered world and uncover the truth.</p></div>
         <label class="cv-diff"><span>Difficulty</span><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select><small>Drops ${rarsHtml(D.rars)}</small></label></div>
 `;
-    if (CV.view === "chapters" && !spot && !firstSteps()) return chapterListHtml(head);
-    return `<div class="campaign cv ${d ? 'hardmode diff-' + D.id : ''}">
+    if (CV.view === 'chapters' && !spot && !firstSteps()) return chapterListHtml(head);
+    const tids = teamIds('campaign');
+    const misc = [[shardIc('fate'), 'Fate Shard', 'first clear of a stage, and now and then'], [shardIc('greater'), 'Greater Shard', 'first clear of the boss'], [stoneIc('lesser'), 'Ascension Stones', 'Lesser on every stage, Greater from bosses'], [elxIc('Aether'), 'Elixirs', `${Math.round(K.ELIXIR.camp * 100)}% a win, of a foe's essence`], [`<span class="sv-coin">${ic('coin')}</span>`, 'Sigils & XP', 'every win']]
+      .map(([icon, name, tip]) => `<span class="sv-mi" title="${esc(name)}: ${esc(tip)}">${icon}<small>${esc(name)}</small></span>`).join('');
+    const side = `<aside class="sv-side">
+      <div class="sv-ch" style="--art:url(${art})"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3></div>
+      <section class="sv-box"><h4>Gear drops</h4>
+        <div class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(set.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></div>
+        ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
+        <small class="sv-note">${own} ${own === 1 ? 'piece' : 'pieces'} owned · one slot per stage, the boss drops a random one</small></section>
+      <section class="sv-box"><h4>Other drops</h4><div class="sv-misc">${misc}</div></section>
+      <section class="sv-box sv-team"><h4>Your team</h4><div class="cv-heroes">${tids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('')}</div>
+        <div class="sv-pw"><span>Power <b>${teamPower(tids).toLocaleString('en-US')}</b></span><button class="btn small" data-act="editteam" data-mode="campaign">Edit team</button></div></section>
+      ${reward}</aside>`;
+    // a row per stage: the slot it drops, its state and level, the last phase's foes, Battle (and Auto ×10 once the
+    // chapter is cleared); tap a row for every phase, the enemy essences and the first-clear reward
+    const rows = idx.map(i => {
+      const s = K.STAGES[i], ss = stateOf(i), open = i === campSel, ph = K.stagePhases(s, d), last = ph[ph.length - 1];
+      const go = spot && i === next ? `<span class="spot-wrap"><button class="btn primary cn-go spot-go" data-act="play" data-stage="${next}">Fight${enCost(stEn(next, d))}</button><span class="spot-call">Tap <b>Fight</b> to start</span></span>` : playBtn(i);
+      const essS = [...new Set(ph.flat().map(f => E[f].aff))], fr = firsts(i);
+      return `<div class="sv-row ${ss} ${s.boss ? 'boss' : ''} ${open ? 'open' : ''}">
+        <button type="button" class="sv-sel" data-act="csel" data-stage="${i}" aria-expanded="${open}" aria-label="${s.n === 6 ? 'Boss stage' : `Stage ${s.n + 1}`}: show every phase"></button>
+        <span class="sv-drop">${dropIc(s)}</span>
+        <span class="sv-t"><b>${s.n === 6 ? 'Boss stage' : `Stage ${s.n + 1}`}</b>${s.boss ? `<span class="sv-boss">${esc(s.boss)}</span>` : ''}<small>${ss === 'cleared' ? '<span class="sv-ok">✓ Cleared</span>' : ss === 'next' ? '<span class="sv-nx">Next battle</span>' : `${LOCK_SVG} Locked`} · Lv ${K.diffLvl(s, d)}</small></span>
+        <span class="sv-foes">${last.slice(0, 4).map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span>
+        <span class="sv-go">${ss === 'cleared' ? auto(i) : ''}${go}</span>
+        ${open ? `<div class="sv-more"><div class="cv-phases">${ph.map((p, k) => `<div class="cv-ph ${p.some(f => K.BOSSES[f]) ? 'boss' : ''}"><small>Phase ${k + 1}</small><span>${p.map(f => `<span class="cv-foe ${K.BOSSES[f] ? 'boss' : ''}" title="${esc(E[f].name)}">${por(f)}</span>`).join('')}</span></div>`).join('<i class="cv-ph-arr" aria-hidden="true">›</i>')}</div>
+          <div class="cv-meta"><span class="rw"><small>Enemies</small>${essS.map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</span>${fr.length ? `<span class="rw"><small>First clear</small></span>${fr.join('')}` : ''}</div></div>` : ''}</div>`;
+    }).join('');
+    return `<div class="campaign cv sv ${d ? 'hardmode diff-' + D.id : ''}">
       ${head.replace('<div class="cv-head">', '<div class="cv-head"><button type="button" class="btn small cl-back" data-act="chlist">‹ Chapters</button>')}
-      ${chapCard}
-      ${stage}
-      ${team}
-      <div class="chapters cv-chaps" role="group" aria-label="Chapter"><span class="tag">Chapter</span>${chapBtns}</div>
-      <div class="cv-stages">${cards}</div>
-      ${reward}
+      <div class="sv-wrap">${side}<div class="sv-list">${rows}</div></div>
       ${spot ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${playBtn(sel)}</div>`}
       <details class="camp-info"><summary>How the campaign works</summary>
         <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clearing all seven stages of a chapter opens its reward chest, once per difficulty. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
@@ -1053,7 +1044,7 @@
       ['Control', has(id => skillFx(id).some(t => ['stun', 'freeze', 'spdDown', 'defDown', 'atkDown', 'tmDrain'].includes(t))), 'Stuns, slows and debuffs blunt the enemy'],
     ];
   }
-  const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'} role-${k.toLowerCase()}" title="${esc(tip)}"><i aria-hidden="true">${{ Damage: '⚔', Healing: '✚', Protection: '⛨', Control: '✦' }[k]}</i>${k}${ok ? '' : ' <small>missing</small>'}</li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
+  const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'} role-${k.toLowerCase()}" title="${k}${ok ? '' : ' missing'}: ${esc(tip)}" aria-label="${k}${ok ? '' : ' missing'}"><i aria-hidden="true">${{ Damage: '⚔', Healing: '✚', Protection: '⛨', Control: '✦' }[k]}</i></li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
   // Heroes: one screen like a gacha hero screen. On the left the roster (its own scroll; Show, Sort and a Filter
   // panel), in the middle the chosen hero (art, level, power, team and lock), on the right its tabs (champTab): Gear
   // (the six slots, total stats with what gear adds, the active sets), Skills, Level up and Ascend. The Teams view
@@ -2684,10 +2675,20 @@
         // the first time on this device: what is there already does not count as new
         if (s.w == null && r.wl) { chSetSeen('w', r.wl); r.w = 0; }
         if (s.g == null && r.gl) { chSetSeen('g', r.gl); r.g = 0; }
+        // during a battle a new message runs along the top of the field for a moment (tap it to open the chat)
+        if (B && !CH.open && ((r.g || 0) > CH.unread.guild || (r.w || 0) > CH.unread.world)) chatTicker((r.g || 0) > CH.unread.guild ? 'guild' : 'world', (r.g || 0) > CH.unread.guild ? r.gl : r.wl);
         CH.unread.world = CH.open && CH.tab === 'world' ? 0 : r.w || 0; CH.unread.guild = CH.open && CH.tab === 'guild' ? 0 : r.g || 0;
         if (CH.open) chatPaint(true); else chatPaintBtn();
       } catch (e) {}
     }
+  }
+  let tickT = 0;
+  async function chatTicker(k, lastId) {
+    const el = $('#b-chat'); if (!el || !lastId) return;
+    let r; try { r = await cloud().rpc('chat_list', { ch: k, after: lastId - 1 }); } catch (e) { return; }
+    const m = r && r.msgs && r.msgs[r.msgs.length - 1]; if (!m || m.mine || (S.cblock || []).includes(m.user_id) || !B) return;
+    el.innerHTML = `${k === 'guild' ? '<b class="g">Guild</b>' : ''}<b>${esc(m.name)}</b> ${esc(m.body)}`; el.dataset.t = k; el.hidden = false;
+    clearTimeout(tickT); tickT = setTimeout(() => { el.hidden = true; }, 7000);
   }
   function chatOpen(open) {
     CH.open = open; CH.menu = null; CH.err = '';
@@ -2707,6 +2708,7 @@
   document.addEventListener('submit', e => { if (!e.target.matches('[data-chform]')) return; e.preventDefault(); const i = $('#ch-in'); if (i) chatSend(i.value); });
   document.addEventListener('click', async e => {
     if (e.target.closest('#chatbtn')) { SFX.click(); chatOpen(!CH.open); return; }
+    { const t = e.target.closest('#b-chat'); if (t) { t.hidden = true; CH.tab = t.dataset.t || 'world'; chatOpen(true); return; } }
     const a = e.target.closest('[data-ch]'); if (!a) return;
     const k = a.dataset.ch, id = +a.dataset.id;
     if (k === 'close') chatOpen(false);
@@ -2868,6 +2870,7 @@
     if (e.target.id === 'lb-sub') { const t = e.target; lbLoad(t.value ? `${t.dataset.base}:${t.value}` : t.dataset.all); return; }
     if (e.target.id === 'bh-team') { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
+    if (e.target.matches && e.target.matches('[data-pp="team"]')) { S.modeTeam.campaign = +e.target.value; useTeam('campaign'); save(); render(); return; } // the prep screen's team pick
     const gf = e.target.closest('[data-gf]'); if (gf) { FG[gf.dataset.gf] = gf.type === 'checkbox' ? gf.checked : gf.value; FG.pick = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
@@ -3001,9 +3004,12 @@
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
     else if (act === 'chopen') { S.chap = +a.dataset.n; CV.view = 'stages'; campSel = null; save(); render(); window.scrollTo({ top: 0 }); }
     else if (act === 'chlist') { CV.view = 'chapters'; render(); window.scrollTo({ top: 0 }); }
-    else if (act === 'csel') { campSel = +a.dataset.stage; render(); }
+    else if (act === 'csel') { campSel = campSel === +a.dataset.stage ? -1 : +a.dataset.stage; render(); } // a stage row opens and closes
     else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); toast(`Chapter ${ROMAN[c]} rewards claimed!`); } }
-    else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
+    else if (act === 'play') { if (fightSpot() || firstSteps()) { spotFight = false; startCampaign(+a.dataset.stage); } else openPrep(+a.dataset.stage); } // Fight opens the team screen first (prepHtml)
+    else if (act === 'ppgo') { spotFight = false; startCampaign(PREP.stage); }
+    else if (act === 'ppback') { CV.view = 'stages'; setTab('campagne'); window.scrollTo({ top: 0 }); }
+    else if (act === 'ppph') { PREP.ph = +a.dataset.n; render(); }
     else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
     else if (act === 'bhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
     else if (act === 'spotblock') toast('Tap the glowing Fight button to start.');
@@ -4026,10 +4032,24 @@
       $('#b-hint').textContent = B && B.b.auto ? 'Auto is playing this turn.' : ' ';
     }
   }
+  // the round skill buttons of the battle (bottom right): a glyph by the skill's effect, coloured by its kind
+  const SK_GLYPH = {
+    blade: '<path d="M5 19L17 7l2-3-3 2L4 18"/><path d="M8 14l2 2M4 20l2-2"/>',
+    arrow: '<path d="M4 20L19 5M19 5h-5M19 5v5"/><path d="M4 20l3-1-2-2z"/>',
+    fire: '<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-6 1 1 2 2 2 4 1-2 1-5 1-8z"/>',
+    drop: '<path d="M12 3c3 5 6 8 6 12a6 6 0 0 1-12 0c0-4 3-7 6-12z"/>',
+    dark: '<path d="M15 4a8 8 0 1 0 5 13A7 7 0 0 1 15 4z"/>',
+    star: '<path d="M12 3l2.4 6 6.6.4-5 4.2 1.6 6.4L12 16.5 6.4 20l1.6-6.4-5-4.2 6.6-.4z"/>',
+    heal: '<path d="M10 4h4v6h6v4h-6v6h-4v-6H4v-4h6z"/>',
+    shield: '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+    leaf: '<path d="M5 19C5 10 10 5 19 5c0 9-5 14-14 14z"/><path d="M5 19L13 11"/>',
+  };
+  const skGlyph = s => ({ arrow: 'arrow', arrowrain: 'arrow', fire: 'fire', sunfall: 'fire', meteor: 'fire', water: 'drop', poison: 'drop', blood: 'drop', dark: 'dark', curse: 'dark', smoke: 'dark', rune: 'star', holy: 'star', heal: 'heal', revive: 'heal', shield: 'shield', buff: 'shield', thorns: 'leaf' })[s.vfx] || 'blade';
+  const skKind = s => s.fx.some(f => f.t === 'heal' || f.t === 'revive') ? 'heal' : s.fx.some(f => f.t === 'shield') || s.anim === 'buff' ? 'guard' : s.anim === 'magic' ? 'magic' : 'hit';
   function skillBtn(u, s, i, sel) {
     const ok = B && B.b.usable(u, s);
     const sub = s.cdLeft > 0 ? `${s.cdLeft} more ${s.cdLeft === 1 ? 'turn' : 'turns'}` : (!ok ? (u.oneRevive && u.flags.revUsed && s.fx.some(f => f.t === 'revive') ? 'Used: once per arena fight' : 'Nobody has fallen') : TARGET_LABEL[s.target]);
-    return `<button class="sk ${sel ? 'sel' : ''} ${ok ? 'ready' : ''} ${s.cd >= 3 ? 'big' : ''}" type="button" data-i="${i}" ${ok && pending ? '' : 'disabled'} title="${esc(s.desc)}"><span class="k">${i + 1} · ${SKILL_TAG[i] || ''}${s.cd ? ' · cd ' + s.cd : ''}${s.lv ? ' · lv ' + s.lv : ''}</span><b>${esc(s.name)}</b><small>${sub}</small></button>`;
+    return `<button class="sk sk-${skKind(s)} ${sel ? 'sel' : ''} ${ok ? 'ready' : ''} ${s.cd >= 3 ? 'big' : ''}" type="button" data-i="${i}" ${ok && pending ? '' : 'disabled'} title="${esc(s.name)}: ${esc(s.desc)}"><span class="sk-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${SK_GLYPH[skGlyph(s)]}</svg></span>${s.cdLeft > 0 ? `<span class="sk-cd">${s.cdLeft}</span>` : ''}<span class="sk-n">${esc(s.name)}</span><span class="k">${i + 1} · ${SKILL_TAG[i] || ''}${s.cd ? ' · cd ' + s.cd : ''}${s.lv ? ' · lv ' + s.lv : ''}</span><b>${esc(s.name)}</b><small>${sub}</small></button>`;
   }
   // ----- coach: explains the game step by step in the very first battle (Chapter I · Stage 1, first time) -----
   const TUT = { on: false, turns: 0 };
@@ -4109,7 +4129,8 @@
   });
   // Auto battle opens after the first clear of Chapter I · Stage 1: the first battle is played by hand, with the coach
   const autoOk = () => S.cleared >= 0;
-  function setAutoBtn() { const b = $('#b-auto'), on = B && B.cfg.type === 'arena' ? B.b.auto : S.auto && autoOk(); b.classList.toggle('on', on); b.classList.toggle('locked', !autoOk()); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = autoOk() ? 'Auto battle: ' + (on ? 'on' : 'off') : 'Auto battle unlocks when you clear Chapter I · Stage 1'; }
+  // on auto the skill buttons give way (#battle.auto)
+  function setAutoBtn() { const b = $('#b-auto'), on = B && B.cfg.type === 'arena' ? B.b.auto : S.auto && autoOk(); b.classList.toggle('on', on); $('#battle').classList.toggle('auto', !!(on || (B && B.b.auto))); b.classList.toggle('locked', !autoOk()); b.setAttribute('aria-pressed', on ? 'true' : 'false'); b.title = autoOk() ? 'Auto battle: ' + (on ? 'on' : 'off') : 'Auto battle unlocks when you clear Chapter I · Stage 1'; }
   function setSpeedBtn() { const b = $('#b-speed'); b.innerHTML = `<b>${spd}×</b>`; b.classList.toggle('on', spd > 1); b.title = 'Battle speed ' + spd + '×' + (speedHint() ? '. ' + speedHint() : ''); b.setAttribute('aria-label', b.title); SFX.calm = calm(); }
   $('#b-auto').addEventListener('click', () => {
     if (B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)))) { toast(B.cfg.type === 'gboss' ? 'Guild boss fights always play on auto.' : 'Arena fights always play on auto.'); return; }
@@ -4149,6 +4170,40 @@
 
   // ----- start / intro / finish -----
   // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
+  // ----- before a campaign battle (RAID-style, tab 'prep'): your team on the left (pick a team, tap a hero to take it
+  // out), VS with the stage in the middle (enemy level, drops, how your essences hit theirs), the enemies of each
+  // phase on the right, every hero below (tap to put in or take out), Auto ×10 and Fight. The team edited is the one
+  // the Campaign uses (S.modeTeam.campaign). A new player's first battle skips it. PREP = { stage, ph }
+  const PREP = { stage: 0, ph: 0 };
+  function openPrep(i) { PREP.stage = i; PREP.ph = 0; useTeam('campaign'); setTab('prep'); window.scrollTo({ top: 0 }); }
+  function prepHtml() {
+    const i = PREP.stage, st = K.STAGES[i], d = S.diff || 0, D = K.DIFFS[d], ph = K.stagePhases(st, d), cleared = clearedOn(d);
+    useTeam('campaign');
+    const tids = S.team, chapDone = cleared >= st.chapter * 7 + 6, foes = ph[PREP.ph] || ph[0];
+    const card = (id, cls, act) => `<button type="button" class="pp-c ${cls || ''} rar-${C[id].rar}" style="--ec:${AFF_COL[C[id].aff]};--rc:var(--r${C[id].rar})" ${act || ''} title="${esc(C[id].name)}">${por(id)}${essBadge(C[id].aff)}<span class="hx-lv">${S.roster[id].lvl}</span><span class="hx-st">${'★'.repeat(S.roster[id].stars)}</span></button>`;
+    const slots = [0, 1, 2, 3].map(k => tids[k] ? card(tids[k], 'pp-slot', `data-act="toggle" data-id="${tids[k]}"`) : '<div class="pp-c pp-slot empty"><small>Empty</small></div>').join('');
+    const foeCard = f => { const u = E[f]; return `<span class="pp-c foe ${K.BOSSES[f] ? 'boss' : ''}" style="--ec:${AFF_COL[u.aff]}" title="${esc(u.name)}">${por(f)}${essBadge(u.aff)}<span class="hx-lv">${K.diffLvl(st, d)}</span></span>`; };
+    // how the team's essences meet these foes: Strong / Weak hits, counted per hero against the phase's foes
+    const edge = tids.map(id => { const hits = foes.map(f => K.hitType(C[id].aff, E[f].aff)); return [id, hits.filter(h => h === 'strong').length, hits.filter(h => h === 'weak').length]; });
+    const strong = edge.filter(e => e[1] > e[2]).length, weak = edge.filter(e => e[2] > e[1]).length;
+    const list = Object.keys(S.roster).filter(id => C[id] && !C[id].captured).sort((a, b) => (tids.includes(b) - tids.includes(a)) || power(statsOf(b)) - power(statsOf(a)));
+    const roster = list.map(id => card(id, `${tids.includes(id) ? 'in' : ''} ${onExp(id) ? 'away' : ''}`, `data-act="toggle" data-id="${id}"`)).join('');
+    return `<div class="pp">
+      <div class="pp-top"><button type="button" class="btn small" data-act="ppback">‹ ${esc(K.CHAPTERS[st.chapter].name)}</button><h2>${st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`} <small>Chapter ${ROMAN[st.chapter]} · ${esc(D.name)}</small></h2></div>
+      <div class="pp-field">
+        <section class="pp-side me"><div class="pp-h"><select data-pp="team" aria-label="Team for the campaign">${S.teams.map((t, k) => `<option value="${k}" ${k === S.modeTeam.campaign ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select><span class="pp-pw">Power <b>${teamPower(tids).toLocaleString('en-US')}</b></span></div>
+          <div class="pp-slots">${slots}</div>${rolesHtml(tids)}</section>
+        <section class="pp-vs"><b class="pp-vsb">VS</b>
+          <div class="pp-info"><span><small>Enemy level</small><b>${K.diffLvl(st, d)}</b></span><span><small>Drops</small><span class="st-dic">${D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[st.slot || 'random'][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${esc(dropName(st).toLowerCase())}">`).join('')}</span></span><span><small>Energy</small><b>${stEn(i, d)}</b></span></div>
+          <p class="pp-edge">${strong ? `<span class="good">${strong} ${strong === 1 ? 'hero hits' : 'heroes hit'} Strong</span>` : ''}${strong && weak ? ' · ' : ''}${weak ? `<span class="bad">${weak} ${weak === 1 ? 'hero hits' : 'heroes hit'} Weak</span>` : ''}${!strong && !weak ? 'No essence edge either way' : ''}</p></section>
+        <section class="pp-side foe"><div class="pp-h"><div class="seg pp-ph" role="group" aria-label="Phase">${ph.map((p, k) => `<button type="button" class="${k === PREP.ph ? 'on' : ''}" data-act="ppph" data-n="${k}" aria-pressed="${k === PREP.ph}">Phase ${k + 1}${p.some(f => K.BOSSES[f]) ? ' · Boss' : ''}</button>`).join('')}</div></div>
+          <div class="pp-slots foes">${foes.map(foeCard).join('')}</div>
+          <p class="pp-ess">${[...new Set(foes.map(f => E[f].aff))].map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</p></section>
+      </div>
+      <div class="pp-bottom"><div class="pp-roster">${roster}</div>
+        <div class="pp-go">${clearedOn(d) >= i ? `<button type="button" class="btn ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>` : ''}<button type="button" class="btn primary pp-fight" data-act="ppgo" ${tids.length ? '' : 'disabled'}>Fight${enCost(stEn(i, d))}</button></div></div>
+    </div>`;
+  }
   function startCampaign(i, rep) {
     const st = K.STAGES[i], diff = S.diff || 0, D = K.DIFFS[diff], lvl = K.diffLvl(st, diff);
     if (!spendEnergy(stEn(i, diff))) { render(); return; }
@@ -4574,7 +4629,7 @@
     const tower = cfg.type === 'tower';
     const canNext = isStage ? cfg.i + 1 < K.STAGES.length : tower ? cfg.floor < K.TOWER.floors : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
     const acts = win
-      ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : tower ? 'Next floor' : 'Next level'}</button>` : ''}${tower ? '' : '<button class="btn" data-act="modal" data-go="again">Replay</button>'}<button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
+      ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : tower ? 'Next floor' : 'Next level'}</button>` : ''}${tower ? '' : '<button class="btn" data-act="modal" data-go="again">Fight again</button>'}<button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
       : `<button class="btn primary" data-act="modal" data-go="again">Try again</button><button class="btn" data-act="modal" data-go="champs">Upgrade champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`;
     const openBtns = pups.map(u => u[3]).filter(Boolean).map(t => `<button class="btn violet" data-act="modal" data-go="open-${t}">Open the ${UNLOCK_NAME[t]}</button>`).join('');
     if (pups.length) SFX.up();
@@ -4609,7 +4664,7 @@
     return `<details class="meter"><summary>Damage meter <small>tap a hero for details · damage over time in red</small></summary>${body}</details>`;
   }
   function endBattleView() {
-    R.running = false; pending = null; document.body.classList.remove('in-battle');
+    R.running = false; pending = null; document.body.classList.remove("in-battle"); { const t = $("#b-chat"); if (t) t.hidden = true; }
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
   }
