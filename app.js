@@ -769,7 +769,7 @@
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
-    if (tab === 'team') hxFit();
+    navTop(); if (tab === 'team') hxFit();
     // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
     if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
     // a picked piece is compared above the list: bring that window into view when it is scrolled away
@@ -1046,9 +1046,17 @@
     const h = document.querySelector('.hx'); if (!h) return;
     if (innerWidth <= 760) { h.style.height = ''; return; }
     const top = h.getBoundingClientRect().top + scrollY;
-    h.style.height = Math.max(520, innerHeight - top - 14) + 'px';
+    const pad = parseFloat(getComputedStyle($('#app')).paddingBottom) || 0; // the page's own bottom padding
+    h.style.height = Math.max(innerHeight < 500 ? 260 : 520, innerHeight - top - pad - 4) + 'px'; // a phone on its side is ~360-430 px high
   }
-  addEventListener('resize', () => { if (tab === 'team') hxFit(); });
+  addEventListener('resize', () => { navTop(); if (tab === 'team') hxFit(); });
+  // where the screens start below the header: the icon bar on the left is never taller than the window below it
+  // (with all its buildings it would make the page scroll, most of all on a phone on its side)
+  function navTop() {
+    const nw = document.querySelector('.navwrap'), st = document.documentElement.style; if (!nw) return;
+    st.setProperty('--nav-top', Math.round(nw.getBoundingClientRect().top + scrollY) + 'px');
+    st.setProperty('--app-pb', (parseFloat(getComputedStyle($('#app')).paddingBottom) || 0) + 'px');
+  }
   function teamHtml() {
     if (!S.roster[selChamp]) selChamp = S.team[0] || Object.keys(S.roster)[0];
     if (!HX_TABS.some(([k]) => k === champTab)) champTab = 'gear';
@@ -2487,6 +2495,25 @@
     if (!$('#mmenu').hidden && !e.target.closest('#mmenu')) setMenu(false);
     if (e.target.closest('#homebtn')) { if (B) return; SFX.click(); setTab('home'); window.scrollTo({ top: 0 }); }
   });
+  // ---------- landscape on phones: the game is played sideways. In portrait a cover asks to turn the phone (shell.html
+  // .rotate, CSS only); where the browser can (Android Chrome), Fullscreen hides the browser bars and locks landscape.
+  // iPhones cannot lock it: there the cover is the only guard. ----------
+  const fsCan = () => !!document.documentElement.requestFullscreen && !!(screen.orientation && screen.orientation.lock) && matchMedia('(pointer: coarse)').matches;
+  async function goFullscreen() {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      try { await screen.orientation.lock('landscape'); } catch (e) {}
+    } catch (e) { toast('Fullscreen is not available in this browser.', true); }
+  }
+  function paintFs() {
+    const b = $('#fsbtn'), r = $('#rotate-fs'), ok = fsCan(), on = !!document.fullscreenElement;
+    if (b) { b.hidden = !ok; b.title = on ? 'Leave fullscreen' : 'Fullscreen'; b.setAttribute('aria-pressed', on); b.classList.toggle('on', on); }
+    if (r) r.hidden = !ok;
+  }
+  document.addEventListener('fullscreenchange', paintFs);
+  document.addEventListener('click', e => { if (e.target.closest('#fsbtn, #rotate-fs')) { SFX.click(); goFullscreen(); } });
+  paintFs();
   function paintMail() {
     const b = $('#mail'); if (!b) return;
     const n = signedIn() ? mailCount() : 0, badge = b.querySelector('.mail-n');
