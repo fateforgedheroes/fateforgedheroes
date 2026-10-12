@@ -807,6 +807,30 @@
     ...Object.entries(r.fs).map(([k, n]) => `<span class="cv-rw" title="${n} × ${K.FATE_SHARDS.find(f => f.id === k).name}">${shardIc(k)}<b>${n}</b></span>`),
     `<span class="cv-rw" title="${r.stones} Lesser Ascension Stones">${stoneIc('lesser')}<b>${r.stones}</b></span>`].join('');
   const CHAP_CHEST = `<svg viewBox="0 0 64 52" aria-hidden="true"><path d="M6 22h52v26H6z" fill="#5a3517" stroke="#e2b452" stroke-width="2.5"/><path d="M6 22C6 8 16 4 32 4s26 4 26 18z" fill="#7a4a20" stroke="#e2b452" stroke-width="2.5"/><path d="M6 22h52M20 5v43M44 5v43" stroke="#e2b452" stroke-width="2.5" fill="none"/><rect x="27" y="18" width="10" height="13" rx="2" fill="#f2cf72" stroke="#3a220c" stroke-width="1.5"/><circle cx="32" cy="25" r="1.8" fill="#3a220c"/></svg>`;
+  // Campaign, first: every chapter in a list under each other (its scene, story, progress on this difficulty, and the
+  // gear it drops: the chapter's set, one slot per stage, at this difficulty's rarities); tap one for its stages
+  // (CV.view = 'stages'). Home and the icon bar open the list; a new player's first battle skips it (fightSpot).
+  const CV = { view: 'chapters' };
+  const SLOT_ORDER = ['wapen', 'helm', 'schild', 'handschoenen', 'borstpantser', 'laarzen'];
+  function chapterListHtml(head) {
+    const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
+    const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter), hi = D.rars[D.rars.length - 1];
+    const rows = K.CHAPTERS.map((ch, c) => {
+      const open = c <= maxChap, done = K.STAGES.filter((s, i) => s.chapter === c && i <= cleared).length, cur = open && c === maxChap && done < 7;
+      const SS = K.SETS[ch.set], [need, bonus] = SS.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length;
+      const boss = (K.STAGES.find(s => s.chapter === c && s.n === 6) || {}).boss, chest = done === 7 && !chrClaimed(c, d);
+      return `<button type="button" class="cl-ch ${open ? '' : 'locked'} ${cur ? 'cur' : ''} ${done === 7 ? 'done' : ''}" data-act="chopen" data-n="${c}" style="--art:url(${CHAPTER_BG[CHAPTER_BG_OF[c]]})" ${open ? '' : 'disabled'}>
+        <span class="cl-num">${ROMAN[c]}</span>
+        <span class="cl-t"><small>Chapter ${ROMAN[c]}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${esc(ch.name)}</b><span class="cl-desc">${esc(ch.desc)}</span>
+          <span class="cl-prog">${open ? `<span class="cv-dots">${[0, 1, 2, 3, 4, 5, 6].map(k => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</span>${done}/7${chest ? ' · <b class="cl-chest">Reward ready</b>' : ''}` : `${LOCK_SVG} Clear Chapter ${ROMAN[c - 1]} first`}${boss ? `<span class="cl-boss">Boss: ${esc(boss)}</span>` : ''}</span></span>
+        <span class="cl-gear rar-${hi}"><span class="cl-set"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
+          <span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, hi)]}" alt="" title="${K.SLOT_NAMES[s]}">`).join('')}</span>
+          <small>${own} ${own === 1 ? 'piece' : 'pieces'} owned</small></span></button>`;
+    }).join('');
+    return `<div class="campaign cv cl ${d ? 'hardmode diff-' + D.id : ''}">${head}
+      <p class="cl-hint">Every chapter drops its own gear set: one slot per stage, a random slot from the boss. ${esc(D.name)} drops ${rarsHtml(D.rars)}.</p>
+      <div class="cl-list">${rows}</div></div>`;
+  }
   function campaignHtml() {
     const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter);
@@ -869,9 +893,12 @@
       <div class="cv-rw-t"><b>Chapter rewards</b><small>${cdone} / 7 cleared${d ? ` · ${esc(D.name)}` : ''}</small><span class="cv-dots">${idx.map(i => `<i class="${i <= cleared ? 'on' : ''}"></i>`).join('')}</span></div>
       <div class="cv-rws">${chapRewardIcons(chapterReward(chap, d))}</div>
       ${claimed ? '<span class="cv-claimed">✓ Claimed</span>' : `<button class="btn ${canClaim ? 'primary' : ''}" data-act="chclaim" data-chap="${chap}" ${canClaim ? '' : `disabled title="Clear all seven stages of Chapter ${ROMAN[chap]} first"`}>Claim</button>`}</section>`;
-    return `<div class="campaign cv ${d ? 'hardmode diff-' + D.id : ''}">
-      <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.campagne})" aria-hidden="true"></span><div class="cv-ht"><h2>Campaign</h2><p>Explore a shattered world and uncover the truth.</p></div>
+    const head = `      <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.campagne})" aria-hidden="true"></span><div class="cv-ht"><h2>Campaign</h2><p>Explore a shattered world and uncover the truth.</p></div>
         <label class="cv-diff"><span>Difficulty</span><select id="cp-diff" aria-label="Difficulty">${K.DIFFS.map((x, i) => `<option value="${i}" ${i === d ? 'selected' : ''} ${diffOk(i) ? '' : 'disabled'}>${x.name}${diffOk(i) ? '' : ' 🔒︎'}</option>`).join('')}</select><small>Drops ${rarsHtml(D.rars)}</small></label></div>
+`;
+    if (CV.view === "chapters" && !spot && !firstSteps()) return chapterListHtml(head);
+    return `<div class="campaign cv ${d ? 'hardmode diff-' + D.id : ''}">
+      ${head.replace('<div class="cv-head">', '<div class="cv-head"><button type="button" class="btn small cl-back" data-act="chlist">‹ Chapters</button>')}
       ${chapCard}
       ${stage}
       ${team}
@@ -2916,7 +2943,7 @@
     else if (act === 'pcok') { $('#modal').hidden = true; createHero(); }
     else if (act === 'pccancel') $('#modal').hidden = true;
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
-    else if (act === 'go') { if (a.dataset.go === 'team' && S.teams[S.tfav]) { S.tsel = S.tfav; S.team = S.teams[S.tfav].ids; } if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+    else if (act === 'go') { if (a.dataset.go === 'campagne') CV.view = 'chapters'; if (a.dataset.go === 'team' && S.teams[S.tfav]) { S.tsel = S.tfav; S.team = S.teams[S.tfav].ids; } if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
     else if (act === 'tutlock') toast('Fight your first campaign battle to open the rest of your homebase.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
@@ -2972,6 +2999,8 @@
     else if (act === 'restorebk') { const n = +a.dataset.n; confirmBox('Restore this backup?', 'Your game goes back to this saved copy. Your current progress is kept as a backup, so you can switch back.', 'Restore', () => restoreBackup(n)); }
     else if (act === 'mode') { S.diff = +a.dataset.diff; delete S.chap; campSel = null; save(); render(); }
     else if (act === 'chap') { S.chap = +a.dataset.n; save(); render(); }
+    else if (act === 'chopen') { S.chap = +a.dataset.n; CV.view = 'stages'; campSel = null; save(); render(); window.scrollTo({ top: 0 }); }
+    else if (act === 'chlist') { CV.view = 'chapters'; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'csel') { campSel = +a.dataset.stage; render(); }
     else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); toast(`Chapter ${ROMAN[c]} rewards claimed!`); } }
     else if (act === 'play') { spotFight = false; startCampaign(+a.dataset.stage); }
