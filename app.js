@@ -647,7 +647,7 @@
   }
 
   // ---------- tabs ----------
-  let tab = 'home', selChamp = 'draelyn', champTab = 'stats';
+  let tab = 'home', selChamp = 'draelyn', champTab = 'gear';
   // ----- Home: the main menu, every building as a banner under the other (menu.js MENU_ART: frame, icon and scene
   // per building) with its name and how it stands (the next stage, rewards to claim, the ship is back, or what opens it).
   const HOME_LIST = [
@@ -769,6 +769,7 @@
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    if (tab === 'team') hxFit();
     // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
     if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
     // a picked piece is compared above the list: bring that window into view when it is scrolled away
@@ -1026,34 +1027,94 @@
     ];
   }
   const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'} role-${k.toLowerCase()}" title="${esc(tip)}"><i aria-hidden="true">${{ Damage: '⚔', Healing: '✚', Protection: '⛨', Control: '✦' }[k]}</i>${k}${ok ? '' : ' <small>missing</small>'}</li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
-  // Team: the four slots, and every owned hero with its details (stats, skills, gear, ascend and feed) next to the list;
-  // tap a hero to see it, "Add to team" / "Remove from team" in its details
+  // Heroes: one screen like a gacha hero screen. On the left the roster (its own scroll; Show, Sort and a Filter
+  // panel), in the middle the chosen hero (art, level, power, team and lock), on the right its tabs (champTab): Gear
+  // (the six slots, total stats with what gear adds, the active sets), Skills, Level up and Ascend. The Teams view
+  // (HX.view) puts the teams in the middle: tapping heroes in the roster puts them in the team or takes them out.
+  // Phones stack it: a strip of four heroes, the hero, the tabs. Nothing scrolls the page on PC, only the columns.
+  const HX = { view: 'hero', filt: false };
+  const HX_TABS = [['gear', 'Gear'], ['skills', 'Skills'], ['level', 'Level up'], ['ascend', 'Ascend']];
+  function rosterTile(id) {
+    const c = C[id], r = S.roster[id];
+    if (!r) return `<button type="button" class="hx-t missing rar-${c.rar}" style="--ec:${AFF_COL[c.aff]};--rc:var(--r${c.rar})" data-act="hinfo" data-id="${id}" title="${esc(c.name)} · not unlocked yet: ${esc(heroSource(id))}">${por(id)}<span class="hx-lk" aria-hidden="true">${LOCK_SVG}</span></button>`;
+    const slot = S.team.indexOf(id) + 1, teams = HX.view === 'teams';
+    return `<button type="button" class="hx-t rar-${c.rar} ${id === selChamp ? "on" : ""} ${slot ? "tm" : ""}" style="--ec:${AFF_COL[c.aff]};--rc:var(--r${c.rar})" data-act="${teams ? 'toggle' : 'sel'}" data-id="${id}" title="${esc(c.name)} · Lv ${r.lvl}${slot ? ` · in ${esc(S.teams[S.tsel].name)}` : ''}${teams ? (slot ? ' · tap to take out' : ' · tap to add') : ''}">
+      ${por(id)}${essBadge(c.aff)}<span class="hx-lv">${r.lvl}</span>${slot ? `<span class="hx-slot">${slot}</span>` : ''}${r.lock ? '<span class="hx-lock" aria-hidden="true">🔒</span>' : ''}<span class="hx-st">${'★'.repeat(r.stars)}</span></button>`;
+  }
+  // on PC the Heroes screen fills the window below the header: only its columns scroll, never the page
+  function hxFit() {
+    const h = document.querySelector('.hx'); if (!h) return;
+    if (innerWidth <= 760) { h.style.height = ''; return; }
+    const top = h.getBoundingClientRect().top + scrollY;
+    h.style.height = Math.max(520, innerHeight - top - 14) + 'px';
+  }
+  addEventListener('resize', () => { if (tab === 'team') hxFit(); });
   function teamHtml() {
-    if (!S.roster[selChamp]) selChamp = S.team[0];
-    const slots = [0, 1, 2, 3].map(i => {
-      const id = S.team[i];
-      if (!id) return `<div class="slot"><small>Empty</small></div>`;
-      return `<button class="slot filled rar-${C[id].rar} ${id === selChamp ? 'sel' : ''}" style="--ec:${AFF_COL[C[id].aff]}" data-act="sel" data-id="${id}" title="Show ${esc(C[id].short)}"><span class="lv" title="Level ${S.roster[id].lvl}">${S.roster[id].lvl}</span>${por(id)}<b>${esc(C[id].short)}</b>${starStr(S.roster[id].stars, K.maxStars(id))}<small>${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`;
-    }).join('');
-    // the favourite team (S.tfav, ★) comes first and is the one the Team screen opens on
+    if (!S.roster[selChamp]) selChamp = S.team[0] || Object.keys(S.roster)[0];
+    if (!HX_TABS.some(([k]) => k === champTab)) champTab = 'gear';
+    const list = filteredIds(TF.own), nf = [TF.aff, TF.rar, TF.role].filter(v => v !== 'all').length;
+    const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
+    const roster = `<aside class="hx-col hx-ros">
+      <div class="hx-rh"><select data-filter="own" aria-label="Show">${[['owned', 'My heroes'], ['all', 'All heroes'], ['missing', 'Not unlocked']].map(([v, l]) => opt(v, l, TF.own)).join('')}</select><select data-filter="sort" aria-label="Sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select>
+        <button type="button" class="btn small ${HX.filt || nf ? 'on' : ''}" data-act="hxfilt" aria-expanded="${HX.filt}">Filter${nf ? ` · ${nf}` : ''}</button>
+        <button type="button" class="btn small ${HX.view === 'teams' ? 'primary' : ''} hx-teams" data-act="hxview" data-v="${HX.view === 'teams' ? 'hero' : 'teams'}">${HX.view === 'teams' ? 'Done' : 'Teams'}</button></div>
+      ${HX.filt ? filterBar() : ''}
+      ${HX.view === 'teams' ? '<p class="empty-note hx-tip">Tap a hero to put it in the team or take it out.</p>' : ''}
+      <div class="hx-list">${list.length ? list.map(rosterTile).join('') : '<p class="empty-note">No heroes match these filters.</p>'}</div>
+      <small class="empty-note hx-count">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes unlocked</small></aside>`;
+    const mid = HX.view === 'teams' ? hxTeams() : hxHero(selChamp);
+    return `<div class="hx ${HX.view === 'teams' ? 'teams' : ''}">${roster}${mid}${hxSide(selChamp)}</div>`;
+  }
+  // the middle in the Teams view: the teams, the four places (tap one to see that hero), what the team brings
+  function hxTeams() {
     const order = S.teams.map((t, i) => i).sort((a, b) => (b === S.tfav) - (a === S.tfav) || a - b);
     const tabs = order.map(i => { const t = S.teams[i], fav = i === S.tfav; return `<button type="button" class="tm-tab ${i === S.tsel ? 'on' : ''} ${fav ? 'fav' : ''}" data-act="tmsel" data-i="${i}" aria-pressed="${i === S.tsel}"><b>${fav ? '<span class="tm-star" title="Favourite team">★</span> ' : ''}${esc(t.name)}</b><small>${t.ids.length}/4 · ${TEAM_MODES.filter(([m]) => S.modeTeam[m] === i).map(([, l]) => l).join(', ') || 'not used'}</small></button>`; }).join('')
       + (S.teams.length < TEAM_MAX ? `<button type="button" class="tm-tab add" data-act="tmnew"><b>+ Create a team</b><small>up to ${TEAM_MAX}</small></button>` : '');
     const modes = TEAM_MODES.map(([m, l]) => { const on = S.modeTeam[m] === S.tsel; return `<button type="button" class="tm-mode ${on ? 'on' : ''}" data-act="tmmode" data-m="${m}" aria-pressed="${on}" title="${on ? `${l} uses this team` : `Use this team for ${l}`}">${on ? '✓ ' : ''}${l}</button>`; }).join('');
-    const bar = `<div class="tm-bar"><div class="tm-tabs" role="group" aria-label="Your teams">${tabs}</div>
-      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}<span class="tm-acts"><button type="button" class="linkbtn" data-act="tmfav" aria-pressed="${S.tsel === S.tfav}">${S.tsel === S.tfav ? '★ Favourite' : '☆ Make favourite'}</button><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span></div></div>`;
-    const list = filteredIds(TF.own);
-    // heroes not unlocked yet (Show: All heroes): dimmed, with where to find them; tapping one shows its stats and skills
-    const missingCard = id => { const c = C[id]; return `<button type="button" class="card rar-${c.rar} missing" style="--ec:${AFF_COL[c.aff]}" data-act="hinfo" data-id="${id}" title="${esc(c.name)} · not unlocked yet">${affChip(c.aff)}<span class="lockpin" aria-hidden="true">${LOCK_SVG}</span>${por(id)}<span class="nm">${esc(c.short)}</span><span class="rartxt mini">${K.RARITIES[c.rar]}</span><span class="sub">${esc(heroSource(id).replace(/^Unlock: /, '').replace(/ \(Easy\), or the Fate Altar$/, ' / Altar'))}</span></button>`; };
-    const have = K.CHAMP_ORDER.filter(x => S.roster[x]).length;
-    return `<div class="section-head"><div><h2>Heroes</h2><p class="lede">Your team on top, every hero below. Tap a hero for its stats, skills, stars and levels; its gear is in the Forge. A mix of damage, protection and healing beats four attackers.</p></div><div class="power"><span class="tag">Team power</span><b>${teamPower().toLocaleString('en-US')}</b><small class="empty-note">${have} / ${K.CHAMP_ORDER.length} heroes unlocked</small></div></div>
-      ${bar}
-      <div class="slots">${slots}</div>
-      ${rolesHtml(S.team)}
-      <div class="champ-layout"><div>${filterBar(true)}
-        ${list.length ? `<div class="grid-cards">${list.map(id => S.roster[id] ? cardHtml(id, { act: 'sel', sel: id === selChamp, inteam: S.team.includes(id) }) : missingCard(id)).join('')}</div>` : '<p class="empty-note">No heroes match these filters.</p>'}</div>
-        ${heroDetail(selChamp)}</div>
-      ${S.roster[selChamp] ? `<div class="m-act"><button class="btn" data-act="toggle" data-id="${selChamp}" ${C[selChamp].pc ? 'disabled' : ''}>${C[selChamp].pc ? 'Always in your team' : S.team.includes(selChamp) ? 'Remove from team' : 'Add to team'}</button><button class="btn primary" data-act="fgo" data-id="${selChamp}">Gear ›</button></div>` : ''}`;
+    const slots = [0, 1, 2, 3].map(i => { const id = S.team[i]; return id
+      ? `<button type="button" class="hx-ts rar-${C[id].rar} ${id === selChamp ? "on" : ""}" style="--ec:${AFF_COL[C[id].aff]};--rc:var(--r${C[id].rar})" data-act="sel" data-id="${id}">${por(id)}<b>${esc(C[id].short)}</b><small>Lv ${S.roster[id].lvl} · ${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`
+      : '<div class="hx-ts empty"><small>Empty: tap a hero on the left</small></div>'; }).join('');
+    return `<section class="hx-col hx-mid hx-tm">
+      <div class="tm-tabs" role="group" aria-label="Your teams">${tabs}</div>
+      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}</div>
+      <div class="tm-row"><span class="tm-acts"><button type="button" class="linkbtn" data-act="tmfav" aria-pressed="${S.tsel === S.tfav}">${S.tsel === S.tfav ? '★ Favourite' : '☆ Make favourite'}</button><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span><span class="hx-tpow">Team power <b>${teamPower().toLocaleString('en-US')}</b></span></div>
+      <div class="hx-tslots">${slots}</div>
+      ${rolesHtml(S.team)}</section>`;
+  }
+  // the middle in the hero view: the hero on its essence's stage, who it is, level and power, team and lock
+  function hxHero(id) {
+    const c = C[id], r = S.roster[id], st = statsOf(id), cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap, inTeam = S.team.includes(id);
+    const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name));
+    return `<section class="hx-col hx-mid" style="--ec:${AFF_COL[c.aff]}">
+      <div class="fg-art hx-art"><div class="fg-scene" style="--scene:url(${CHAPTER_BG[ESS_BG[c.aff] || 0]})"></div><div class="fg-ring"></div><div class="fg-floor"></div><img class="${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""></div>
+      <div class="hx-id"><div class="fg-name">${essBadge(c.aff, 'big')}<div><h2>${esc(c.name)}</h2>${starStr(r.stars, mxs)}</div><div class="hx-pow"><small>Power</small><b>${power(st).toLocaleString('en-US')}</b></div></div>
+        <div class="fg-sub"><span class="rartxt rar-${c.rar}">${K.RARITIES[c.rar]}</span> · ${roleStr(c)} · ${c.aff}</div>
+        <div class="hx-lvl"><b>Lv ${r.lvl}</b><span>/ ${cap}</span><div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div><small class="empty-note">${atCap ? (r.stars < mxs ? 'Max for this star: ascend' : 'Max level') : `${r.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP`}</small></div></div>
+        <div class="hx-acts"><button type="button" class="btn small ${inTeam || c.pc ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${c.pc ? 'disabled title="Your hero always fights with you"' : ''}>${c.pc ? 'Always in your team' : inTeam ? `Remove from ${esc(S.teams[S.tsel].name)}` : `Add to ${esc(S.teams[S.tsel].name)}`}</button><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${c.pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen">${FCS_SVG} Change class</button>` : ''}</div>
+        ${other.length ? `<small class="empty-note hx-also">Also in ${other.join(', ')}</small>` : ''}</section>`;
+  }
+  // the right: the hero's tabs
+  function hxSide(id) {
+    const c = C[id], r = S.roster[id];
+    let canRank = false, rank = '';
+    if (c.pc) rank = `<div class="rank"><span class="empty-note">Your hero gains stars by itself: 5★ at level 40, 6★ at level 50. Its skills grow every 12 levels.</span></div>
+      <div class="rank fcs-rank"><button class="btn small" data-act="fcopen">${FCS_SVG} Change class</button><span class="empty-note">With a Fate Changing Stone (Market): level, gear and team places move along.</span></div>`;
+    else if (r.stars < K.maxStars(id)) {
+      const atCap = r.lvl >= K.maxLvl(r.stars, id), rc = K.rankCost(r.stars), ok = atCap && stoneN(rc.tier) >= rc.stones && S.silver >= rc.silver;
+      canRank = ok;
+      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${stoneIc(rc.tier)} ${rc.stones} ${stoneName(rc.tier, rc.stones)} (you have ${stoneN(rc.tier)}) · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${K.maxLvl(r.stars, id)} first`}</span></div>`;
+    }
+    const st = statsOf(id), base = K.heroStats(id, r, []), items = itemsOf(id), sets = setRowsHtml(items);
+    const stats = [['hp'], ['atk'], ['def'], ['spd'], ['crit', 1], ['cdmg', 1], ['acc'], ['res']].map(([k, p]) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k].toLocaleString('en-US')}${p ? '%' : ''}${st[k] > base[k] ? `<small>+${(st[k] - base[k]).toLocaleString('en-US')}${p ? '%' : ''}</small>` : ''}</dd>`).join('');
+    const body = champTab === 'skills' ? skillsHtml(id, r)
+      : champTab === 'level' ? elixirHtml(id) + fodderHtml(id)
+      : champTab === 'ascend' ? `<div class="ascend">${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div>`
+      : `<div class="fg-sgrid hx-slots">${gearTilesHtml(id, 'hxslot')}</div>
+        <div class="hx-gacts"><button type="button" class="btn small primary" data-act="bestgear">Equip best</button><button type="button" class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div>
+        <dl class="stats hx-stats">${stats}</dl><small class="empty-note">Green: what gear and sets add.</small>
+        <div class="fg-sets"><h3>Active set bonuses</h3>${sets || '<p class="empty-note">No set bonus yet.</p>'}</div>`;
+    return `<aside class="hx-col hx-side"><div class="dtabs hx-tabs" role="tablist" aria-label="Hero">${HX_TABS.map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}${k === 'ascend' && canRank ? '<span class="dot"></span>' : ''}</button>`).join('')}</div>
+      <div class="hx-body" data-t="${champTab}">${body}</div></aside>`;
   }
   // ----- hero filters: essence, rarity and class filter the list; power, level, rarity or name sort it.
   // own: 'owned' (Team), or on the Heroes index 'all' / 'owned' / 'missing' (TF.own) -----
@@ -1063,59 +1124,21 @@
     const keep = id => (TF.aff === 'all' || C[id].aff === TF.aff) && (TF.rar === 'all' || C[id].rar === +TF.rar)
       && (TF.role === 'all' || C[id].role === TF.role || C[id].role2 === TF.role) && (own === 'all' || (own === 'owned') === !!S.roster[id]);
     const val = id => !S.roster[id] ? -1 : TF.sort === 'level' ? S.roster[id].lvl : TF.sort === 'rarity' ? C[id].rar : power(statsOf(id));
-    const ids = [...new Set([...K.CHAMP_ORDER, ...K.DEV_HEROES.filter(id => S.roster[id]), ...K.CAPTURE_ORDER.filter(id => S.roster[id])])].filter(keep);
+    const ids = [...new Set([...K.PC_IDS.filter(id => S.roster[id]), ...K.CHAMP_ORDER, ...K.DEV_HEROES.filter(id => S.roster[id]), ...K.CAPTURE_ORDER.filter(id => S.roster[id])])].filter(keep);
     return ids.sort((a, b) => (!!S.roster[b] - !!S.roster[a]) || (TF.sort === 'name' ? C[a].name.localeCompare(C[b].name) : val(b) - val(a) || C[b].rar - C[a].rar));
   }
-  function filterBar(index) {
+  // the Filter panel of the Heroes roster (Show and Sort sit above it)
+  function filterBar() {
     const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
     const essences = ['all', ...K.ESSENCES].map(a => `<button type="button" class="ess-f ${TF.aff === a ? 'on' : ''}" data-act="tfaff" data-aff="${a}" aria-pressed="${TF.aff === a}" title="${a === 'all' ? 'All essences' : a}">${a === 'all' ? 'All' : affChip(a)}</button>`).join('');
     return `<div class="tfilter">
       <div class="tf-ess" role="group" aria-label="Essence">${essences}</div>
       <label>Rarity<select data-filter="rar">${opt('all', 'All', TF.rar)}${K.RARITIES.slice(0, 5).map((r, i) => opt(i, r, TF.rar)).join('')}</select></label>
       <label>Class<select data-filter="role">${opt('all', 'All', TF.role)}${CLASSES.map(r => opt(r, r, TF.role)).join('')}</select></label>
-      <label>Sort by<select data-filter="sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select></label>
-      ${index ? `<label>Show<select data-filter="own">${[['owned', 'My heroes'], ['all', 'All heroes'], ['missing', 'Not unlocked']].map(([v, l]) => opt(v, l, TF.own)).join('')}</select></label>` : ''}
-      ${TF.aff !== 'all' || TF.rar !== 'all' || TF.role !== 'all' || (index && TF.own !== 'owned') ? '<button type="button" class="linkbtn" data-act="tfreset">Clear filters</button>' : ''}
+      ${TF.aff !== 'all' || TF.rar !== 'all' || TF.role !== 'all' ? '<button type="button" class="linkbtn" data-act="tfreset">Clear filters</button>' : ''}
     </div>`;
   }
 
-  // ----- hero details (Team screen): stats, skills, gear, ascend and feed of an owned hero -----
-  function heroDetail(id) {
-    const c = C[id], r = S.roster[id];
-    if (!['stats', 'skills', 'ascend', 'level'].includes(champTab)) champTab = 'stats';
-    const st = statsOf(id), base = K.heroStats(id, r, []);
-    const cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap;
-    const statRow = (k, pct) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k]}${pct ? '%' : ''}${st[k] > base[k] ? `<small>+${st[k] - base[k]}</small>` : ''}</dd>`;
-    const pips = lv => `<span class="pips" title="Skill-level ${lv}/${K.SKILL_MAX}">${Array.from({ length: K.SKILL_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span>`;
-    const skills = skillsHtml(id, r);
-    let rank = '', canRank = false;
-    if (C[id].pc) rank = `<div class="rank"><span class="empty-note">Your hero gains stars by itself: 5★ at level 40, 6★ at level 50. Its skills grow every 12 levels.</span></div>
-      <div class="rank fcs-rank"><button class="btn small" data-act="fcopen">${FCS_SVG} Change class</button><span class="empty-note">With a Fate Changing Stone (Market): level, gear and team places move along.</span></div>`;
-    else if (r.stars < mxs) {
-      const rc = K.rankCost(r.stars), ok = atCap && stoneN(rc.tier) >= rc.stones && S.silver >= rc.silver;
-      canRank = ok;
-      rank = `<div class="rank"><button class="btn primary small" data-act="rank" ${ok ? '' : 'disabled'}>Ascend to ${r.stars + 1}★</button><span class="empty-note">${stoneIc(rc.tier)} ${rc.stones} ${stoneName(rc.tier, rc.stones)} (you have ${stoneN(rc.tier)}) · ${sigils(rc.silver)}${atCap ? '' : ` · reach level ${cap} first`}</span></div>`;
-    }
-    // gear lives in the Forge now: here only a row of the six slots, the set bonuses that are on and a way there
-    const items = itemsOf(id), active = K.setTiers(items).filter(t => !t.fam);
-    const gearRow = `<div class="hd-gear"><div class="hd-gi">${K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl); return it ? `<span class="hd-g rar-${it.rar}" title="${esc(itemName(it))}">${gearIcon(it)}</span>` : `<span class="hd-g empty" title="${K.SLOT_NAMES[sl]}: empty">${SLOT_GLYPH[sl]}</span>`; }).join('')}</div><small class="empty-note">${items.length}/${K.SLOTS.length} · ${active.length ? `${active.length} set ${active.length === 1 ? 'bonus' : 'bonuses'} on` : 'no set bonus'}</small><button type="button" class="btn small primary" data-act="fgo" data-id="${id}">Gear ›</button></div>`;
-    const inTeam = S.team.includes(id);
-    return `<div class="detail rar-${c.rar}" data-dtab="${champTab}" style="--ec:${AFF_COL[c.aff]}">
-        <div class="d-head"><img class="spr bigspr ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
-          <h2>${esc(c.name)}${S.team.includes(id) ? ` <span class="team-tag">In ${esc(S.teams[S.tsel].name)}</span>` : ''}</h2>
-          <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
-          <div>${starStr(r.stars, mxs)} · Level <b>${r.lvl}</b> / ${cap} · Power <b>${power(st).toLocaleString('en-US')}</b></div>
-          <div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div>
-          <small class="empty-note">${atCap ? (r.stars < mxs ? 'Max level for this star. Ascend for more.' : `Maxed (${K.RARITIES[c.rar]} cap ${cap})`) : `${r.xp} / ${need} XP`}</small>
-          <div class="d-team"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${C[id].pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen" title="Turn your hero into another Fateborn with a Fate Changing Stone">${FCS_SVG} Change class</button>` : ''}<button type="button" class="btn small ${inTeam ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${C[id].pc ? 'disabled title="Your hero always fights with you"' : ''}>${C[id].pc ? 'Always in your team' : inTeam ? 'Remove from team' : 'Add to team'}</button>${(() => { const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name)); return other.length ? `<small class="empty-note">Also in ${other.join(', ')}</small>` : ''; })()}</div>
-        </div></div>
-        <div class="dtabs" role="tablist" aria-label="Hero details">${[['stats', 'Stats'], ['skills', 'Skills'], ['ascend', 'Ascend' + (canRank ? '<span class="dot"></span>' : '')], ['level', 'Level up']].map(([k, l]) => `<button type="button" role="tab" data-act="ctab" data-t="${k}" aria-selected="${champTab === k}">${l}</button>`).join('')}</div>
-        <div class="dpanel" data-p="stats"><dl class="stats">${statRow('hp')}${statRow('atk')}${statRow('def')}${statRow('spd')}${statRow('crit', 1)}${statRow('cdmg', 1)}${statRow('acc')}${statRow('res')}</dl><p class="empty-note">Green: what gear and sets add.</p>${gearRow}</div>
-        <div class="dpanel" data-p="skills">${skills}</div>
-        <div class="dpanel" data-p="ascend"><div class="ascend"><h3>Ascend</h3>${rank || `<p class="empty-note">${esc(c.short)} has the maximum number of stars.</p>`}</div></div>
-        <div class="dpanel" data-p="level">${elixirHtml(id)}${fodderHtml(id)}</div>
-      </div>`;
-  }
   // what a skill level adds: the skill's damage, healing and shields are multiplied (not added to its %), shown with the
   // skill's own first damage or heal number so "+8%" cannot be read as "90% becomes 98%"
   function skillLvTxt(s, lv) {
@@ -1641,6 +1664,17 @@
     const g = gainFor(id, it), owner = it.owner && C[it.owner];
     return `<button type="button" class="fg-cell rar-${it.rar} ${FG.pick === it.id ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgpick" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}${owner ? ' · worn by ' + esc(owner.short) : ''}">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}${owner ? `<span class="fg-who">${por(it.owner)}</span>` : ''}${it.lock ? `<span class="fg-lk">${LOCK_SVG}</span>` : ''}${g > 0 ? '<span class="fg-up" title="Stronger for this hero">▲</span>' : ''}</button>`;
   }
+  function gearTilesHtml(id, act) { const items = itemsOf(id), c = C[id];
+    return K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl); return it
+      ? `<button type="button" class="fg-tile rar-${it.rar} ${act === 'fgslot' && FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
+      : `<button type="button" class="fg-tile empty ${act === 'fgslot' && FG.slot === sl ? 'on' : ''}" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
+  }
+  // the active set bonuses of what a hero wears (a live set: its circle glows)
+  function setRowsHtml(items) { const counts = K.setCounts(items), active = K.setTiers(items);
+    return Object.keys(counts).filter(k => K.SETS[k]).map(k => { const SS = K.SETS[k], n = counts[k], tiers = setTiersOf(k), max = tiers[tiers.length - 1][0], on = tiers.filter(([t]) => n >= t), nx = tiers.find(([t]) => t > n), asc = active.some(t => t.k === k && t.asc);
+      return `<div class="fg-srow ${on.length ? 'live' : ''}">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
+      + active.filter(t => t.fam).map(t => `<div class="fg-srow live"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
+  }
   function gearingHtml() {
     const ids = fgHeroes(); if (!S.roster[selChamp] || C[selChamp].captured) selChamp = ids[0];
     const id = selChamp, c = C[id], r = S.roster[id], st = statsOf(id), base = K.heroStats(id, r, []), items = itemsOf(id);
@@ -1654,12 +1688,8 @@
         <table class="fg-stats">${[['hp'], ['atk'], ['def'], ['spd'], ['crit', 1], ['cdmg', 1], ['acc'], ['res']].map(([k, p]) => `<tr><td>${K.STAT_NAMES[k]}</td><td>${st[k].toLocaleString('en-US')}${p ? '%' : ''}</td><td>${st[k] > base[k] ? '+' + (st[k] - base[k]).toLocaleString('en-US') + (p ? '%' : '') : ''}</td></tr>`).join('')}</table>
         <button type="button" class="btn small fg-wide" data-act="fghero" data-id="${id}">Hero details ›</button></div></aside>`;
     const carousel = `<div class="fg-car"><button type="button" class="fg-arr" data-act="fgstep" data-d="-1" aria-label="Previous hero">‹</button><div class="fg-hlist">${ids.map(x => `<button type="button" class="fg-hc rar-${C[x].rar} ${x === id ? 'on' : ''}" data-act="fgsel" data-id="${x}" title="${esc(C[x].name)}">${por(x)}${essBadge(C[x].aff)}<b>${esc(C[x].short)}</b><small>Lv ${S.roster[x].lvl}</small></button>`).join('')}</div><button type="button" class="fg-arr" data-act="fgstep" data-d="1" aria-label="Next hero">›</button></div>`;
-    const tiles = K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl); return it
-      ? `<button type="button" class="fg-tile rar-${it.rar} ${FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
-      : `<button type="button" class="fg-tile empty ${FG.slot === sl ? 'on' : ''}" data-act="fgslot" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
-    const setRows = Object.keys(counts).filter(k => K.SETS[k]).map(k => { const SS = K.SETS[k], n = counts[k], tiers = setTiersOf(k), max = tiers[tiers.length - 1][0], on = tiers.filter(([t]) => n >= t), nx = tiers.find(([t]) => t > n), asc = active.some(t => t.k === k && t.asc);
-      return `<div class="fg-srow ${on.length ? 'live' : ''}">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
-      + active.filter(t => t.fam).map(t => `<div class="fg-srow live"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
+    const tiles = gearTilesHtml(id, 'fgslot');
+    const setRows = setRowsHtml(items);
     const pick = S.inv.find(x => x.id === FG.pick) || items.find(x => x.slot === FG.slot);
     return `<div class="fg-stage"><div class="fg-left">${splash}<section class="fg-panel fg-ctrlp">${fgCtrl()}</section></div><div class="fg-right">
       <section class="fg-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Gearing</h1><p>Pick a hero, tap a slot, compare and equip. Upgrades happen in the Forge.</p></div>${carousel}</section>
@@ -2848,7 +2878,7 @@
     const act = a.dataset.act, id = a.dataset.id, item = S.inv.find(x => x.id === +a.dataset.item);
     if (act !== 'modal') SFX.click();
     if (act === 'tfaff') { TF.aff = a.dataset.aff; render(); }
-    else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all', own: 'owned' }); render(); }
+    else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all' }); render(); }
     else if (act === 'pcgender') { pcSel.g = a.dataset.g; render(); }
     else if (act === 'pcclass') { pcSel.cls = a.dataset.k; render(); }
     else if (act === 'pccreate') { if (pcReady()) confirmHero(); }
@@ -2984,12 +3014,15 @@
     }
     else if (act === 'hlock') { const h = S.roster[id]; if (!h) return; h.lock = !h.lock; if (!h.lock) delete h.lock; save(); render(); toast(h.lock ? `${C[id].short} is locked: it will never be offered as food.` : `${C[id].short} is unlocked.`); }
     else if (act === 'hinfo') heroInfo(id);
-    else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; champTab = 'stats'; setTab('team'); }
+    else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; champTab = 'gear'; HX.view = 'hero'; setTab('team'); }
     else if (act === 'ctab') { champTab = a.dataset.t; render(); }
+    else if (act === 'hxfilt') { HX.filt = !HX.filt; render(); }
+    else if (act === 'hxview') { HX.view = a.dataset.v; render(); }
+    else if (act === 'hxslot' && S.roster[selChamp]) { FG.slot = a.dataset.slot; FG.view = 'gear'; FG.pick = null; FG.tab = 'bag'; setTab('forge'); window.scrollTo({ top: 0 }); } // step 2 opens the bag right here
     // ----- Forge: Gearing and Items -----
     else if (act === 'fgview') { FG.view = a.dataset.v; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'fgo' && S.roster[id]) { selChamp = id; FG.view = 'gear'; FG.pick = null; FG.tab = 'bag'; setTab('forge'); window.scrollTo({ top: 0 }); }
-    else if (act === 'fghero' && S.roster[id]) { selChamp = id; champTab = 'stats'; setTab('team'); window.scrollTo({ top: 0 }); }
+    else if (act === 'fghero' && S.roster[id]) { selChamp = id; champTab = 'gear'; HX.view = 'hero'; setTab('team'); window.scrollTo({ top: 0 }); }
     else if (act === 'fgsel' && S.roster[id]) { selChamp = id; FG.pick = null; render(); }
     else if (act === 'fgstep') { const ids = fgHeroes(), i = ids.indexOf(selChamp); selChamp = ids[(i + +a.dataset.d + ids.length) % ids.length]; FG.pick = null; render(); const on = document.querySelector('.fg-hc.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
     else if (act === 'fgslot') { FG.slot = a.dataset.slot || null; FG.pick = null; FG.tab = 'bag'; render(); }
