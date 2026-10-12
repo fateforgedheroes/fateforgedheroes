@@ -2889,14 +2889,6 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 }
 /* ===== landscape phones (a phone on its side, ~360-430 px high) ===== */
 @media (max-height: 500px) and (orientation: landscape) {
-  /* a battle result: the outcome and the buttons on the left, the rewards on the right */
-  .modal { padding: 8px; }
-  .modal-box.result:not(.rep-done) { width: min(840px, 100%); max-height: calc(100dvh - 16px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-content: start; gap: 0 16px; padding: 12px 14px; }
-  .modal-box.result:not(.rep-done) > * { grid-column: 1; margin: 0 0 8px; }
-  .modal-box.result:not(.rep-done) > h2 { font-size: 1.5rem; }
-  .modal-box.result:not(.rep-done) > .rewards { grid-column: 2; grid-row: 1 / span 12; align-self: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 0; }
-  .modal-box.result:not(.rep-done) > .rewards li { padding: 4px 8px; font-size: .85rem; }
-  .modal-box.result:not(.rep-done) > .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .modal-box.result .modal-actions .btn { padding: 7px 8px; font-size: .85rem; }
   /* every screen: the title in one short line, the intro text left out (the lit icon on the left says where you are) */
   .section-head { margin-bottom: 6px; padding: 5px 12px !important; } .section-head .lede { display: none; } #screen .section-head h2 { font-size: 1.2rem; padding-bottom: 0; } #screen .section-head h2::after { display: none; }
   /* Boss Hall: the boss list and the boss card are columns that scroll on their own; Challenge stays at the bottom */
@@ -3127,6 +3119,70 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   #battle .sk { width: 58px; } #battle .sk-ic { width: 50px; height: 50px; border-width: 2px; } #battle .sk-ic svg { width: 26px; height: 26px; } #battle .sk-cd { top: 12px; font-size: 1.3rem; } #battle .b-skills { gap: 6px; } #battle .b-bar { right: 6px; bottom: 6px; }
   #battle .b-desc { display: none; } #battle .coach { width: 70%; font-size: .78rem; padding: 6px 10px; }
 }
+/* the battle, part 2: the skills with what they do in a column right of the field (the field keeps its size; the
+   battle uses the whole window width) */
+#battle:not([hidden]) { display: grid !important; grid-template-columns: auto minmax(130px, 1fr); align-items: stretch; justify-content: start; gap: 8px; width: calc(100vw - 32px); margin-left: calc(50% - 50vw + 16px); }
+#battle .stage-wrap { width: min(calc(100vw - 32px - 138px), calc((100dvh - var(--nav-top, 0px) - 40px) * 16 / 9)) !important; max-width: none !important; margin: 0 !important; }
+#battle .b-bar { position: static !important; display: flex !important; flex-direction: column; gap: 6px; max-width: 340px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 8px !important; border: 1px solid rgba(217, 180, 90, .45) !important; border-radius: 8px; background: rgba(13, 10, 17, .92) !important; }
+#battle .b-who { display: flex; align-items: center; gap: 8px; justify-content: flex-start; } #battle .b-who img { display: block; width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--gold-dim); }
+#battle .b-who b { display: block; font: 700 .95rem var(--font-display); color: #f7dfa4; } #battle .b-who small { padding: 0; background: none; color: var(--muted); font-size: .76rem; }
+#battle .b-skills { flex-direction: column !important; flex-wrap: nowrap !important; align-items: stretch !important; gap: 6px; }
+#battle .sk { width: auto !important; display: grid !important; grid-template-columns: 46px minmax(0, 1fr); grid-auto-rows: auto; align-items: start; justify-items: start; gap: 1px 8px; padding: 6px !important; text-align: left; border: 1px solid rgba(217, 180, 90, .25) !important; border-radius: 8px; background: rgba(255, 255, 255, .03) !important; cursor: pointer; }
+#battle .sk-ic { grid-row: 1 / span 3; width: 46px !important; height: 46px !important; border-width: 2px !important; } #battle .sk-ic svg { width: 24px !important; height: 24px !important; }
+#battle .sk > b { display: block !important; font: 700 .86rem var(--font-display); color: #f7ead0; } #battle .sk > small { display: block !important; font-size: .7rem; color: var(--muted); }
+#battle .sk-d { grid-column: 2; font-size: .72rem; line-height: 1.25; color: #d9ccb6; } #battle .sk-n, #battle .b-desc { display: none !important; }
+#battle .sk.sel { border-color: var(--gold) !important; background: rgba(240, 190, 90, .12) !important; } #battle .sk.sel .sk-ic { transform: none; }
+#battle .sk-cd { top: 29px !important; left: 29px !important; transform: translate(-50%, -50%) !important; font-size: 1.3rem !important; }
+#battle.auto .b-skills { display: none !important; }
+@media (max-height: 500px) and (orientation: landscape), (max-width: 760px) {
+  #battle:not([hidden]) { width: calc(100vw - 24px); margin-left: calc(50% - 50vw + 12px); gap: 6px; }
+  #battle .stage-wrap { width: min(calc(100vw - 24px - 136px), calc((100dvh - 8px) * 16 / 9)) !important; }
+  #battle .b-bar { padding: 6px !important; gap: 4px; } #battle .b-who { padding-right: 34px; } #battle .b-who img { width: 28px; height: 28px; } #battle .b-who b { font-size: .8rem; } #battle .b-who small { font-size: .66rem; }
+  #battle .sk { grid-template-columns: 34px minmax(0, 1fr); padding: 4px !important; gap: 0 6px; } #battle .sk-ic { width: 34px !important; height: 34px !important; } #battle .sk-ic svg { width: 18px !important; height: 18px !important; }
+  #battle .sk > b { font-size: .72rem; } #battle .sk > small { font-size: .6rem; } #battle .sk-d { font-size: .62rem; } #battle .sk-cd { top: 21px !important; left: 21px !important; font-size: 1rem !important; }
+}
+/* ===== battle result (RAID-style): banner, reward tiles, a card per hero, round nav buttons and big actions ===== */
+.modal-box.rs2 { width: min(980px, 100%); max-height: calc(100dvh - 16px); gap: 10px; padding: 0 0 12px; text-align: center; overflow-y: auto;
+  background: radial-gradient(120% 60% at 50% 0%, rgba(240, 190, 90, .14), transparent 60%), linear-gradient(180deg, #1e1724, #0e0a12); }
+.modal-box.rs2.lose { background: radial-gradient(120% 60% at 50% 0%, rgba(220, 70, 60, .16), transparent 60%), linear-gradient(180deg, #1e1416, #0e0a0c); }
+.rs-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 10px; padding: 10px 14px 0; }
+.rs-stage { display: grid; justify-items: start; text-align: left; } .rs-stage b { font: 700 .95rem var(--font-display); color: #f7dfa4; } .rs-stage small { color: var(--muted); font-size: .78rem; }
+.rs-ban { padding: 6px 34px 8px; border: 2px solid #d9b45a; border-top: 0; border-radius: 0 0 14px 14px; background: linear-gradient(180deg, #3a2a12, #1a120a); box-shadow: 0 6px 16px rgba(0,0,0,.6), inset 0 -2px 0 rgba(255, 220, 140, .25); }
+.rs-ban h2 { margin: 0; font-size: 2.2rem !important; letter-spacing: .08em; color: #fff1cc !important; text-shadow: 0 0 16px rgba(240, 190, 90, .7), 0 3px 0 #6a4a14; text-transform: uppercase; }
+.lose .rs-ban { border-color: #c0392b; background: linear-gradient(180deg, #3a1414, #1a0a0a); } .lose .rs-ban h2 { color: #ffd0c8 !important; text-shadow: 0 0 16px rgba(230, 80, 60, .7), 0 3px 0 #5a1414; }
+.rs-strip { margin: 0 0 -6px; padding: 4px; background: linear-gradient(90deg, transparent, rgba(60, 120, 180, .45) 20%, rgba(60, 120, 180, .45) 80%, transparent); border-block: 1px solid rgba(217, 180, 90, .35); }
+.rs-lbl { font: 700 1rem var(--font-display); color: #f7ead0; letter-spacing: .06em; }
+.rs2 .rewards.rs-rw { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 12px; margin: 0; list-style: none; background: linear-gradient(90deg, transparent, rgba(30, 60, 100, .35) 20%, rgba(30, 60, 100, .35) 80%, transparent); }
+.rs2 .rewards li.rt { position: relative; display: grid; place-items: center; width: 64px; height: 64px; padding: 0; border: 2px solid var(--rc, #9c7c37); border-left-width: 2px; border-radius: 6px; background: radial-gradient(circle at 50% 40%, color-mix(in srgb, var(--rc, #9c7c37) 30%, #1a1420), #0d0a10 75%); box-shadow: 0 3px 8px rgba(0,0,0,.6); }
+.rs2 .rewards li.rt.rar-1 { --rc: var(--r1); } .rs2 .rewards li.rt.rar-2 { --rc: var(--r2); } .rs2 .rewards li.rt.rar-3 { --rc: var(--r3); } .rs2 .rewards li.rt.rar-4 { --rc: var(--r4); } .rs2 .rewards li.rt.rar-5 { --rc: var(--r5); }
+.rs2 .rt-ic { display: grid; place-items: center; width: 40px; height: 40px; } .rs2 .rt-ic img, .rs2 .rt-ic svg, .rs2 .rt-ic .gear-ic, .rs2 .rt-ic .gear-asc { max-width: 40px; max-height: 40px; width: 40px; height: 40px; object-fit: contain; }
+.rs2 .rt b { position: absolute; right: 3px; bottom: 1px; font: 700 .78rem var(--font-display); color: #fff; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.rs2 .rt-t { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px; font: 800 .9rem var(--font-tag); color: #120d10; } .rs2 .rt-t.xp { background: #6aa8ff; } .rs2 .rt-t.px { background: #e8b83b; }
+.rs2 .rt.hero .rt-ic img { border-radius: 4px; } .rs2 .rt.lvup b { left: 0; right: 0; text-align: center; font-size: .6rem; } .rs2 .rt.none { width: auto; padding: 0 14px; color: var(--muted); }
+.rs-heroes { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; padding: 4px 12px; }
+.rs-h { display: grid; justify-items: center; gap: 3px; width: 108px; } .rs-h.fell .pp-c { filter: grayscale(.8) brightness(.6); }
+.rs-hl { font: 700 .82rem var(--font-display); color: #9fd3ff; min-height: 1.1em; } .rs-hl.up { color: #9fe08a; }
+.rs-xp { display: block; width: 100%; height: 4px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; } .rs-xp > i { display: block; height: 100%; background: linear-gradient(90deg, #6aa8ff, #9fd3ff); }
+.rs-h .pp-c { width: 92px; cursor: default; } .rs-nm { font: 700 .86rem var(--font-display); color: #f7ead0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.rs-n { width: 100%; font: 700 .82rem var(--font-display); font-variant-numeric: tabular-nums; border-bottom: 2px solid; padding-bottom: 1px; }
+.rs-n.dmg { color: #ff8a7a; border-color: #c0392b; } .rs-n.tak { color: #8ab8ff; border-color: #3a78d8; } .rs-n.heal { color: #9fe08a; border-color: #3fa86b; }
+.rs2 > .lede, .rs2 > .coach-note { margin: 0 14px; text-align: left; } .rs2 > .meter { margin: 0 14px; text-align: left; }
+.rs-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 4px 14px 0; flex-wrap: wrap; }
+.rs-nav { display: flex; gap: 10px; }
+.rs-rb { display: grid; justify-items: center; gap: 2px; padding: 0; border: 0; background: none; color: #f1e6d2; cursor: pointer; font: 700 .72rem var(--font-display); }
+.rs-rb svg { width: 46px; height: 46px; padding: 11px; border-radius: 50%; fill: #f3d891; background: radial-gradient(circle at 50% 35%, #3a2a18, #120c08 75%); border: 2px solid #d9b45a; box-shadow: 0 3px 8px rgba(0,0,0,.6); }
+.rs-rb:hover svg { filter: brightness(1.2); }
+.rs-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.rs-big { display: grid; justify-items: center; gap: 2px; min-width: 130px; padding: 8px 14px !important; font-size: 1rem !important; }
+.rs-bi { font-size: 1.2rem; line-height: 1; } .rs-en { display: inline-flex; align-items: center; gap: 2px; margin-left: 6px; } .rs-en img, .rs-en svg { width: 16px; height: 16px; }
+.modal-box.rs2.rep-done .rs-heroes, .modal-box.rs2.rep-done .rs-strip { display: none; }
+@media (max-height: 500px) and (orientation: landscape), (max-width: 760px) {
+  .modal { padding: 6px; } .modal-box.rs2 { gap: 6px; padding-bottom: 8px; } .rs-top { padding: 6px 10px 0; } .rs-ban { padding: 4px 22px 6px; } .rs-ban h2 { font-size: 1.5rem !important; }
+  .rs2 .rewards.rs-rw { gap: 5px; padding: 6px 8px; } .rs2 .rewards li.rt { width: 46px; height: 46px; } .rs2 .rt-ic, .rs2 .rt-ic img, .rs2 .rt-ic svg, .rs2 .rt-ic .gear-ic, .rs2 .rt-ic .gear-asc { width: 30px !important; height: 30px !important; } .rs2 .rt b { font-size: .64rem; }
+  .rs-strip { display: none; } .rs-heroes { gap: 8px; padding-block: 0; } .rs-h { width: 74px; gap: 1px; } .rs-h .pp-c { width: 50px; } .rs-xp { height: 3px; } .rs-hl, .rs-nm { font-size: .68rem; } .rs-n { font-size: .66rem; }
+  .rs2 > .lede, .rs2 > .coach-note, .rs2 > .meter { display: none; } .rs-rb svg { width: 36px; height: 36px; padding: 8px; } .rs-rb { font-size: .6rem; }
+  .rs-big { min-width: 100px; padding: 5px 10px !important; font-size: .82rem !important; } .rs-bi { font-size: .95rem; }
+}
 </style>
 
 <div id="app">
@@ -3167,11 +3223,11 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
         <button class="rb danger" id="b-quit" type="button" aria-label="Give up"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13.5" stroke="currentColor" stroke-width="1.6"/><path d="M4.3 2.2h8.2l-2 3.2 2 3.2H4.3z" fill="currentColor"/></svg></button>
       </div>
       <div id="coach" class="coach" role="status" aria-live="polite" hidden></div>
+      <button type="button" class="b-chat" id="b-chat" hidden></button>
+    </div>
       <div class="b-bar">
       <div class="b-who"><img id="b-por" class="spr" alt=""><div><b id="b-name">&nbsp;</b><small id="b-hint">&nbsp;</small></div></div>
       <div class="b-skills" id="b-skills"></div>
-    </div>
-      <button type="button" class="b-chat" id="b-chat" hidden></button>
     </div>
     <ol id="b-log" aria-live="polite"></ol>
   </section>

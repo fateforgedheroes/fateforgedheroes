@@ -3290,9 +3290,11 @@
 
   // ================= BATTLE VIEW =================
   const W = 480, H = 270;
-  const HERO_POS = [[162, 196], [96, 212], [170, 252], [104, 266]];
-  const ENEMY_POS = { 1: [[356, 236]], 2: [[326, 204], [332, 256]], 3: [[322, 196], [390, 218], [330, 258]], 4: [[322, 194], [390, 208], [318, 250], [386, 266]] };
-  const BOSS_POS = [374, 244], GBOSS_POS = [372, 266], ADD_POS = [[296, 198], [300, 262], [270, 232]];
+  // where the units stand (x, feet y on the 480 × 270 field): both sides pulled back to their own edge and spread out,
+  // so the field looks roomy (front line 0/2, back line 1/3)
+  const HERO_POS = [[150, 188], [66, 206], [160, 250], [76, 266]];
+  const ENEMY_POS = { 1: [[372, 236]], 2: [[344, 198], [352, 256]], 3: [[336, 190], [414, 220], [344, 258]], 4: [[334, 188], [414, 204], [328, 250], [408, 266]] };
+  const BOSS_POS = [390, 244], GBOSS_POS = [372, 266], ADD_POS = [[306, 190], [310, 264], [282, 228]];
   const R = { running: false, units: [], projs: [], parts: [], fx: [], ash: [], shake: 0, area: 0, hl: new Set(), hlKind: 'bad', active: null, dim: 0 };
   let B = null, pending = null, selSkill = 0, quitArm = 0;
   // battle speed: S.speed is the player's preferred speed, spd the speed this battle actually runs at.
@@ -4049,7 +4051,7 @@
   function skillBtn(u, s, i, sel) {
     const ok = B && B.b.usable(u, s);
     const sub = s.cdLeft > 0 ? `${s.cdLeft} more ${s.cdLeft === 1 ? 'turn' : 'turns'}` : (!ok ? (u.oneRevive && u.flags.revUsed && s.fx.some(f => f.t === 'revive') ? 'Used: once per arena fight' : 'Nobody has fallen') : TARGET_LABEL[s.target]);
-    return `<button class="sk sk-${skKind(s)} ${sel ? 'sel' : ''} ${ok ? 'ready' : ''} ${s.cd >= 3 ? 'big' : ''}" type="button" data-i="${i}" ${ok && pending ? '' : 'disabled'} title="${esc(s.name)}: ${esc(s.desc)}"><span class="sk-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${SK_GLYPH[skGlyph(s)]}</svg></span>${s.cdLeft > 0 ? `<span class="sk-cd">${s.cdLeft}</span>` : ''}<span class="sk-n">${esc(s.name)}</span><span class="k">${i + 1} · ${SKILL_TAG[i] || ''}${s.cd ? ' · cd ' + s.cd : ''}${s.lv ? ' · lv ' + s.lv : ''}</span><b>${esc(s.name)}</b><small>${sub}</small></button>`;
+    return `<button class="sk sk-${skKind(s)} ${sel ? 'sel' : ''} ${ok ? 'ready' : ''} ${s.cd >= 3 ? 'big' : ''}" type="button" data-i="${i}" ${ok && pending ? '' : 'disabled'} title="${esc(s.name)}: ${esc(s.desc)}"><span class="sk-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${SK_GLYPH[skGlyph(s)]}</svg></span>${s.cdLeft > 0 ? `<span class="sk-cd">${s.cdLeft}</span>` : ''}<span class="sk-n">${esc(s.name)}</span><span class="k">${i + 1} · ${SKILL_TAG[i] || ''}${s.cd ? ' · cd ' + s.cd : ''}${s.lv ? ' · lv ' + s.lv : ''}</span><b>${esc(s.name)}</b><small>${sub}</small><span class="sk-d">${esc(s.desc)}</span></button>`;
   }
   // ----- coach: explains the game step by step in the very first battle (Chapter I · Stage 1, first time) -----
   const TUT = { on: false, turns: 0 };
@@ -4628,13 +4630,52 @@
         : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
     const tower = cfg.type === 'tower';
     const canNext = isStage ? cfg.i + 1 < K.STAGES.length : tower ? cfg.floor < K.TOWER.floors : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
-    const acts = win
-      ? `${canNext ? `<button class="btn primary" data-act="modal" data-go="next">${isStage ? 'Next stage' : tower ? 'Next floor' : 'Next level'}</button>` : ''}${tower ? '' : '<button class="btn" data-act="modal" data-go="again">Fight again</button>'}<button class="btn" data-act="modal" data-go="champs">Champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`
-      : `<button class="btn primary" data-act="modal" data-go="again">Try again</button><button class="btn" data-act="modal" data-go="champs">Upgrade champions</button><button class="btn" data-act="modal" data-go="back">Back</button>`;
+    // the result, RAID-style: the outcome on a banner, what it paid as tiles, a card per hero (level up, damage, taken,
+    // healed), the meter folded away, round buttons home / stages / heroes and the big ones Fight again / Edit team / Next
+    const cost = (i) => cfg.type === 'stage' ? stEn(i, cfg.diff) : cfg.type === 'boss' ? K.bossEnergy(i) : 0;
+    const here = isStage ? cfg.i : tower ? cfg.floor : cfg.n, en = n => n ? `<span class="rs-en">${enIc()}${n}</span>` : '';
+    const tile = (icon, amount, title, cls) => `<li class="rt ${cls || ''}" title="${esc(title)}" ${d()}><span class="rt-ic">${icon}</span>${amount !== '' ? `<b>${amount}</b>` : ''}</li>`;
+    const shardN = {}; gotShards.forEach(t => (shardN[t] = (shardN[t] || 0) + 1));
+    dl = 0;
+    const tiles = [
+      ...loot.map(it => tile(gearIcon(it, 'loot-ic'), `+${it.lvl}`, `${itemName(it)} · ${K.SETS[it.set].name}`, `gear rar-${it.rar}`)),
+      silver ? tile(ic('coin'), silver.toLocaleString('en-US'), 'Sigils') : '',
+      xp ? tile('<span class="rt-t xp">XP</span>', xp.toLocaleString('en-US'), 'XP for every hero in the team') : '',
+      pxp ? tile('<span class="rt-t px">P</span>', pxp.toLocaleString('en-US'), `Player XP · ${S.p.xp} / ${pxNeed(S.p.lvl)} to level ${S.p.lvl + 1}`) : '',
+      refund ? tile(enIc(), `+${refund}`, 'Energy back: a defeat costs only half') : '',
+      ...Object.entries(shardN).map(([t, n]) => tile(shardIc(t), n, K.SHARD[t].name, `rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}`)),
+      ...Object.entries(stones).filter(([, n]) => n > 0).map(([t, n]) => tile(stoneIc(t), n, stoneName(t, n))),
+      elixir ? tile(elxIc(elixir), 1, `${elxName(elixir, 1)}: ${elixir === 'Aether' ? 'any hero' : elixir + ' heroes'} drink it for XP`) : '',
+      captured ? tile(por(captured.id), captured.isNew ? 'New' : '+1', `Captured: ${C[captured.id].name}`, `hero rar-${C[captured.id].rar}`) : '',
+      unlock ? tile(por(unlock), 'New', `New champion: ${C[unlock].name}`, `hero rar-${C[unlock].rar}`) : '',
+      ...pups.map(([l, sv, sh, t, en2]) => tile(`<span class="lvbadge">${l}</span>`, 'Level up', `Player level ${l}! +${en2} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Crystals${sh ? ` · +1 ${K.SHARD[sh].name}` : ''}${t ? ` · ${UNLOCK_NAME[t]} unlocked` : ''}`, 'lvup')),
+    ].filter(Boolean);
+    const meter = b.meterAll || {}, n0 = v => Math.round(v).toLocaleString('en-US');
+    const heroCards = b.heroes.map(u => {
+      const r = S.roster[u.id], up = ups.find(x => x[0] === u.id), x = meter[u.uid] || { dmg: {}, heal: {}, taken: 0 };
+      const cap = r && r.lvl >= K.maxLvl(r.stars, u.id), lab = up ? (up[2] ? 'Max level' : 'Level up!') : cap ? 'Max level' : '';
+      return `<div class="rs-h ${u.alive ? '' : 'fell'}"><span class="rs-hl ${up ? 'up' : ''}">${lab || '&nbsp;'}</span>${r ? `<i class="rs-xp"><i style="width:${cap ? 100 : Math.round(r.xp / K.xpNeed(r.lvl) * 100)}%"></i></i>` : ''}
+        <span class="pp-c rar-${C[u.id] ? C[u.id].rar : 0}" style="--ec:${AFF_COL[u.aff]};--rc:var(--r${C[u.id] ? C[u.id].rar : 0})">${por(u.id)}${essBadge(u.aff)}<span class="hx-lv">${r ? r.lvl : ''}</span>${r ? `<span class="hx-st">${'★'.repeat(r.stars)}</span>` : ''}</span>
+        <b class="rs-nm">${esc(u.name)}</b><span class="rs-n dmg" title="Damage dealt">${n0(sumOf(x.dmg))}</span><span class="rs-n tak" title="Damage taken">${n0(x.taken)}</span><span class="rs-n heal" title="Healed">${n0(sumOf(x.heal))}</span></div>`;
+    }).join('');
+    const nav = `<div class="rs-nav"><button class="rs-rb" data-act="modal" data-go="open-home" title="Home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg><small>Home</small></button><button class="rs-rb" data-act="modal" data-go="back" title="${isStage ? 'Stage selection' : tower ? 'Tower' : 'Boss Hall'}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3l4-1.5 4 1.5 4-1.5v11L10 14l-4-1.5L2 14z"/><path d="M6 1.5v11M10 3v11"/></svg><small>${isStage ? 'Stages' : tower ? 'Tower' : 'Bosses'}</small></button><button class="rs-rb" data-act="modal" data-go="champs" title="Heroes"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5l5 2v4c0 3.3-2.2 5.7-5 7-2.8-1.3-5-3.7-5-7v-4z"/></svg><small>Heroes</small></button></div>`;
+    const big = (go, label, icon, n, cls) => `<button class="btn rs-big ${cls || ''}" data-act="modal" data-go="${go}"><span class="rs-bi">${icon}</span><span>${label}${en(n)}</span></button>`;
+    const acts = [
+      tower && win ? '' : big('again', win ? 'Fight again' : 'Try again', '↻', cost(here)),
+      isStage ? big('prep', 'Edit team', '⇄', cost(here)) : '',
+      win && canNext ? big('next', isStage ? 'Next stage' : tower ? 'Next floor' : 'Next level', '➜', cost(isStage ? here + 1 : here + 1), 'primary') : '',
+    ].join("");
     const openBtns = pups.map(u => u[3]).filter(Boolean).map(t => `<button class="btn violet" data-act="modal" data-go="open-${t}">Open the ${UNLOCK_NAME[t]}</button>`).join('');
     if (pups.length) SFX.up();
     const m = $('#modal');
-    m.innerHTML = `<div class="modal-box result ${win ? '' : 'lose'}" role="dialog" aria-modal="true"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeated'}</h2><p class="tag">${esc(cfg.title)}${win && first ? ' · first clear' : ''}</p>${mvp}<ul class="rewards">${items.join('')}</ul>${meterHtml(b)}${note}<div class="modal-actions">${openBtns}${acts}</div></div>`;
+    m.innerHTML = `<div class="modal-box result rs2 ${win ? '' : 'lose'}" role="dialog" aria-modal="true" aria-label="${win ? 'Victory' : 'Defeat'}">
+      <div class="rs-top"><div class="rs-stage"><b>${esc(cfg.title)}</b><small>${b.turns} turns${win && first ? ' · first clear' : ''}</small></div>
+        <div class="rs-ban"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeat'}</h2></div><span class="rs-sp"></span></div>
+      <div class="rs-strip"><span class="rs-lbl">${win ? 'Reward' : 'Consolation'}</span></div>
+      <ul class="rewards rs-rw">${tiles.join('') || '<li class="rt none">Nothing this time</li>'}</ul>
+      <div class="rs-heroes">${heroCards}</div>
+      ${note}${meterHtml(b)}
+      <div class="rs-foot">${nav}<div class="rs-acts">${openBtns}${acts}</div></div></div>`;
     m.hidden = false;
     const f = m.querySelector('.btn'); if (f) f.focus();
     setTimeout(() => showUnlocks(unlocks), 500);
@@ -4762,6 +4803,7 @@
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'champs') setTab('team');
+    else if (go === 'prep' && cfg.type === 'stage') openPrep(cfg.i); // Edit team: the team screen before this stage
     else if (cfg.type === 'arena') setTab('arena');
     else if (cfg.type === 'gboss') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
     else setTab(cfg.type === 'stage' ? 'campagne' : cfg.type === 'tower' ? 'tower' : 'kerkers');
