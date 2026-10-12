@@ -2894,6 +2894,46 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .modal-box.result:not(.rep-done) > .rewards { grid-column: 2; grid-row: 1 / span 12; align-self: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 0; }
   .modal-box.result:not(.rep-done) > .rewards li { padding: 4px 8px; font-size: .85rem; }
   .modal-box.result:not(.rep-done) > .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .modal-box.result .modal-actions .btn { padding: 7px 8px; font-size: .85rem; }
+  /* every screen: the title in one short line, the intro text left out (the lit icon on the left says where you are) */
+  .section-head { margin-bottom: 6px; padding: 5px 12px !important; } .section-head .lede { display: none; } #screen .section-head h2 { font-size: 1.2rem; padding-bottom: 0; } #screen .section-head h2::after { display: none; }
+  /* Boss Hall: the boss list and the boss card are columns that scroll on their own; Challenge stays at the bottom */
+  .bh { grid-template-columns: 200px minmax(0, 1fr); gap: 8px; align-items: stretch; }
+  .bh-list { max-height: none; min-height: 0; overflow-y: auto; }
+  .bh .bhv { min-height: 0; overflow-y: auto; overscroll-behavior: contain; gap: 8px; }
+  .bhv-hero { flex: none; height: 200px; } .bhv-title h3 { font-size: 1.4rem; }
+  .bhv-go { position: sticky; bottom: 0; z-index: 2; padding: 6px; border-radius: 6px; background: rgba(13, 10, 17, .94); } .bhv-go .btn { min-height: 40px; font-size: 1rem; }
+  /* Tower: slim tower tabs, the floor in one row, the team as small cards */
+  .tw-tabs { gap: 4px; margin: 0 0 6px; } .tw-tab { padding: 3px 6px; gap: 4px; } .tw-tab b { font-size: .74rem; } .tw-tab small { font-size: .66rem; }
+  .tw-prog { display: none; }
+  .tw-next { grid-template-columns: 84px minmax(0, 1fr) minmax(0, 200px); gap: 10px; padding: 8px 10px; margin-bottom: 6px; } .tw-fl { padding: 6px 4px; }
+  .tw-foes img, .tw-foes canvas { width: 50px !important; height: 50px !important; } .tw-mss li:nth-child(n+3) { display: none; } .tw-go { min-height: 38px; }
+  .tw-pick { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; } .tw-pick .card { padding: 4px; } .tw-pick .card .sub { display: none; } .tw-pick .card .spr { height: 56px; }
+  /* Forge · Gearing: carousel, slots and filters on the left, the bag (its own scroll) on the right; the hero art is left out */
+  .fg-stage { display: grid !important; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); grid-template-rows: auto auto 1fr; gap: 8px; align-items: start; }
+  .fg-left, .fg-right, .fg-work { display: contents !important; }
+  .fg-splash { display: none !important; }
+  .fg-head { grid-column: 1; grid-row: 1; padding: 6px 8px !important; } .fg-head h1, .fg-head p { display: none; }
+  .fg-slots { grid-column: 1; grid-row: 2; } .fg-ctrlp { grid-column: 1; grid-row: 3; }
+  .fg-bagp { grid-column: 2; grid-row: 1 / span 3; position: sticky; top: 4px; max-height: calc(100dvh - var(--nav-top, 60px) - 10px); overflow-y: auto; overscroll-behavior: contain; }
+  .fg-hc { width: auto; flex: 0 0 calc((100% - 18px) / 4); } .fg-arr { display: none; }
+  .fg-slots { grid-template-columns: minmax(0, 1fr) !important; gap: 6px; padding: 8px; } .fg-slots .fg-sgrid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; } .fg-tile .fg-lab { font-size: .55rem; }
+  .fg-detail { grid-template-columns: 64px minmax(0, 1fr) !important; gap: 8px; } .fg-acts { grid-column: 1 / -1; display: flex !important; flex-wrap: wrap; gap: 5px; } .fg-acts .btn { flex: 1 1 auto; padding: 5px 8px; font-size: .78rem; min-height: 0; }
+  /* Market: the offers two by two, compact; the "how to get Crystals" note left out */
+  .mk-sec { padding: 8px 10px !important; margin-bottom: 6px; } .mk-sec h3 { font-size: .9rem; margin-bottom: 4px; }
+  .mk-list { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .mk-card { padding: 6px 8px; gap: 8px; } .mk-card small { display: none; } .mk-how { display: none; }
+  /* Fate Altar: the altar a small column, the shards three across */
+  .altar { grid-template-columns: 170px minmax(0, 1fr) !important; gap: 8px; align-items: start; } .altar-stage { min-height: 0; padding: 8px; } .altar-stage canvas, .altar-stage .fs-anim.big { width: 110px !important; height: 110px !important; }
+  .fs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } .fs-card { padding: 8px; gap: 5px; } .fs-card > p { display: none; }
+  /* Expeditions: crew cards small, the three voyages side by side */
+  .exp-pick { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; } .exp-pick .card { padding: 4px; } .exp-pick .card .sub { display: none; } .exp-pick .card .spr { height: 56px; }
+  .exp-trips { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } .exp-trip { padding: 8px; gap: 5px; font-size: .85rem; }
+  /* Town Hall: a slimmer profile head */
+  .prof-head { padding: 8px 10px; gap: 10px; } .th-tabs button { min-height: 36px; font-size: .8rem; }
+  /* Arena: the three opponents side by side, the explanations left out */
+  .arena { gap: 8px; margin-bottom: 8px; } .ar-me, .ar-def, .ar-opps, .ar-board { padding: 8px 10px; } .ar-me > p, .ar-def > p { font-size: .82rem; }
+  .ar-opps > .empty-note, .ar-board > .empty-note { display: none; }
+  .ar-opps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 8px; } .ar-opps > :not(.ar-opp) { grid-column: 1 / -1; }
+  .ar-opp { flex-direction: column; align-items: stretch; text-align: center; margin: 0; gap: 6px; } .ar-opp > img.spr { align-self: center; }
   /* Home: the buildings in two columns (all twelve fit on one screen) */
   .home { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; max-width: calc((100dvh - 84px) / 6 * 6.97 * 2 + 8px); margin: 2px auto 0; } /* six rows of banners (892 x 128) always fit the height */
   /* Campaign: stages on the left, the chosen stage and the team on the right */

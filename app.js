@@ -769,7 +769,7 @@
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
-    navTop(); if (tab === 'team') hxFit();
+    navTop(); hxFit();
     // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
     if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
     // a picked piece is compared above the list: bring that window into view when it is scrolled away
@@ -916,7 +916,7 @@
     const lv = K.bossLvl(ci, sel), col = AFF_COL[B0.aff];
     const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length))]] : '';
     const hero = `<div class="bhv-hero" style="--art:url(${art});--c:${col}"><img class="bhv-boss" src="${bossBig(cur)}" alt="${esc(B0.name)}"></div>`;
-    if (!open) return `<div class="section-head"><div><h2>Boss Hall</h2></div></div><div class="bh"><div class="bh-list">${list}</div>
+    if (!open) return `<div class="section-head"><div><h2>Boss Hall</h2></div></div><div class="bh lfit"><div class="bh-list">${list}</div>
       <div class="bhv locked">${hero}<section class="bhv-panel"><div class="bhv-title"><h3>${esc(B0.name)}</h3></div><p class="empty-note">${LOCK_SVG} ${ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign to open the Boss Hall.` : `Defeat ${esc(K.BOSSES[K.BOSS_ORDER[ci - 1]].name)} on level 1 first.`}</p></section></div></div>`;
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === B0.aff);
     const icon = (svg, c) => `<span class="bhv-ic" style="--c:${c}">${svg}</span>`;
@@ -947,7 +947,7 @@
     const level = `<section class="bhv-panel bhv-lv"><div class="lvls" role="group" aria-label="Level">${lvls}</div><p>Level ${sel} · ${K.DIFFS[K.bossDiff(sel)].name} · enemy level ${lv} · drops ${rarsHtml(K.bossLoot(sel).rars)}</p>${lockedTo && best + 1 >= lockedTo ? `<p class="bhv-need">${LOCK_SVG} Level ${lockedTo} and up open with ${K.DIFFS[K.bossDiff(lockedTo)].name}: clear all of ${K.DIFFS[K.bossDiff(lockedTo) - 1].name} in the campaign.</p>` : ''}</section>`;
     const go = `<div class="bhv-go"><button class="btn violet" data-act="bhauto" data-id="${cur}" data-n="${sel}" ${sel <= best ? '' : `disabled title="Beat level ${sel} once first"`}>Auto ×10${enCost(K.bossEnergy(sel))}</button><button class="btn primary" data-act="bhplay" data-id="${cur}" data-n="${sel}" ${bhLvlOpen(sel) ? '' : `disabled title="${bhLvlNeed(sel)}"`}>⚔ Challenge${enCost(K.bossEnergy(sel))}</button></div>`;
     return `<div class="section-head"><div><h2>Boss Hall</h2><p class="lede">Twenty-five bosses, each with phases, a passive and a Break Meter. Beat a boss once to unlock the next. Each boss has ten levels and drops gear from its own sets.</p></div></div>
-      <div class="bh"><div class="bh-list">${list}</div><div class="bhv">${hero}${info}${team}${level}${go}</div></div>`;
+      <div class="bh lfit"><div class="bh-list">${list}</div><div class="bhv">${hero}${info}${team}${level}${go}</div></div>`;
   }
   function paintDungeonArt() {
     document.querySelectorAll('canvas[data-bg]').forEach(c => { const g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(SPR.bg(+c.dataset.bg), 0, 0); });
@@ -1042,14 +1042,18 @@
       ${por(id)}${essBadge(c.aff)}<span class="hx-lv">${r.lvl}</span>${slot ? `<span class="hx-slot">${slot}</span>` : ''}${r.lock ? '<span class="hx-lock" aria-hidden="true">🔒</span>' : ''}<span class="hx-st">${'★'.repeat(r.stars)}</span></button>`;
   }
   // on PC the Heroes screen fills the window below the header: only its columns scroll, never the page
+  // Screens built as columns that scroll on their own fill the window below the header: Heroes (.hx) on PC and on a
+  // phone on its side, others (.lfit: Boss Hall, Tower…) only on a phone on its side
+  const landPhone = () => innerHeight < 500 && innerWidth > innerHeight;
   function hxFit() {
-    const h = document.querySelector('.hx'); if (!h) return;
-    if (innerWidth <= 760) { h.style.height = ''; return; }
-    const top = h.getBoundingClientRect().top + scrollY;
-    const pad = parseFloat(getComputedStyle($('#app')).paddingBottom) || 0; // the page's own bottom padding
-    h.style.height = Math.max(innerHeight < 500 ? 260 : 520, innerHeight - top - pad - 4) + 'px'; // a phone on its side is ~360-430 px high
+    for (const h of document.querySelectorAll('.hx, .lfit')) {
+      if (h.classList.contains('lfit') ? !landPhone() : innerWidth <= 760) { h.style.height = ''; continue; }
+      const top = h.getBoundingClientRect().top + scrollY;
+      const pad = parseFloat(getComputedStyle($('#app')).paddingBottom) || 0; // the page's own bottom padding
+      h.style.height = Math.max(innerHeight < 500 ? 240 : 520, innerHeight - top - pad - 4) + 'px'; // a phone on its side is ~360-430 px high
+    }
   }
-  addEventListener('resize', () => { navTop(); if (tab === 'team') hxFit(); });
+  addEventListener('resize', () => { navTop(); hxFit(); });
   // where the screens start below the header: the icon bar on the left is never taller than the window below it
   // (with all its buildings it would make the page scroll, most of all on a phone on its side)
   function navTop() {
