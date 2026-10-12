@@ -3183,6 +3183,24 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .rs2 > .lede, .rs2 > .coach-note, .rs2 > .meter { display: none; } .rs-rb svg { width: 36px; height: 36px; padding: 8px; } .rs-rb { font-size: .6rem; }
   .rs-big { min-width: 100px; padding: 5px 10px !important; font-size: .82rem !important; } .rs-bi { font-size: .95rem; }
 }
+/* a phone on its side: heroes left, the buttons in a column right of them, so the result fits even ~320 px high */
+@media (max-height: 500px) and (orientation: landscape) {
+  .modal-box.rs2 { display: grid; grid-template-columns: minmax(0, 1fr) 210px; grid-template-areas: "top top" "rw rw" "heroes foot"; align-content: start; column-gap: 10px; max-height: calc(100dvh - 10px); }
+  .modal-box.rs2 > * { grid-column: 1 / -1; }
+  .rs2 .rs-top { grid-area: top; padding-top: 4px; } .rs-ban { padding: 2px 20px 4px; } .rs-ban h2 { font-size: 1.25rem !important; } .rs-stage b { font-size: .78rem; } .rs-stage small { font-size: .66rem; }
+  .rs2 .rewards.rs-rw { grid-area: rw; padding: 4px 8px; }
+  .rs2 .rs-heroes { grid-area: heroes; align-self: center; flex-wrap: nowrap; gap: 6px; }
+  .rs-h { width: 68px; } .rs-h .pp-c { width: 44px; } .rs-hl { font-size: .6rem; min-height: .9em; } .rs-nm { font-size: .62rem; } .rs-n { font-size: .6rem; border-bottom-width: 1px; }
+  .rs2 .rs-foot { grid-area: foot; display: grid; gap: 6px; align-content: center; padding: 0 10px 0 0; }
+  .rs2 .rs-acts { display: grid; gap: 5px; justify-content: stretch; } .rs-big { display: flex !important; justify-content: center; align-items: center; gap: 6px; min-width: 0; width: 100%; padding: 6px 8px !important; font-size: .8rem !important; }
+  .rs2 .rs-nav { order: 2; justify-content: space-between; } .rs-rb svg { width: 32px; height: 32px; padding: 7px; }
+  .modal-box.rs2.rep-done { display: flex; }
+}
+/* very short phones (status bar showing): a little tighter still */
+@media (max-height: 320px) and (orientation: landscape) {
+  .rs-ban h2 { font-size: 1.1rem !important; } .rs2 .rewards.rs-rw { padding: 2px 8px; } .rs2 .rewards li.rt { width: 40px; height: 40px; }
+  .rs-h .pp-c { width: 38px; } .rs-n { line-height: 1.15; } .rs-big { padding: 5px 8px !important; } .rs-rb svg { width: 28px; height: 28px; padding: 6px; }
+}
 </style>
 
 <div id="app">
