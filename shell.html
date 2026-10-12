@@ -1905,6 +1905,10 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   #app:has(#battle:not([hidden])) .top { display: none; }
   #battle .order .ord-l { display: none; }
   #battle .b-top h2 { font-size: 1rem; }
+  /* the chat button moves up into the title row (its right end is kept free), off the skill buttons */
+  #battle .b-top { padding-right: 44px; }
+  body.in-battle .chat-fab { top: calc(3px + env(safe-area-inset-top, 0px)); bottom: auto; right: 10px; width: 34px; height: 34px; } body.in-battle .chat-fab svg { width: 18px; height: 18px; }
+  body.in-battle .chat-n { width: 16px; min-width: 16px; height: 16px; top: -3px; right: -3px; font-size: .7rem; }
 }
 @media (max-width: 760px), (max-height: 500px) and (orientation: landscape) { #app:has(#battle:not([hidden])) { padding-top: 0; padding-bottom: 0; } #battle:not([hidden]) { box-sizing: border-box; } }
 /* campaign: the next battle lists the enemies of each phase */
@@ -2879,6 +2883,39 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .hx-acts .btn { font-size: .78rem; padding: 5px 8px; }
   .dtabs.hx-tabs { top: calc(50px + env(safe-area-inset-top, 0px)); }
   .hx-tslots { gap: 4px; } .hx-ts small:last-of-type { display: none; } .hx-ts b { font-size: .75rem; }
+}
+/* ===== landscape phones (a phone on its side, ~360-430 px high) ===== */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* a battle result: the outcome and the buttons on the left, the rewards on the right */
+  .modal { padding: 8px; }
+  .modal-box.result:not(.rep-done) { width: min(840px, 100%); max-height: calc(100dvh - 16px); display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); align-content: start; gap: 0 16px; padding: 12px 14px; }
+  .modal-box.result:not(.rep-done) > * { grid-column: 1; margin: 0 0 8px; }
+  .modal-box.result:not(.rep-done) > h2 { font-size: 1.5rem; }
+  .modal-box.result:not(.rep-done) > .rewards { grid-column: 2; grid-row: 1 / span 12; align-self: start; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 0; }
+  .modal-box.result:not(.rep-done) > .rewards li { padding: 4px 8px; font-size: .85rem; }
+  .modal-box.result:not(.rep-done) > .modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .modal-box.result .modal-actions .btn { padding: 7px 8px; font-size: .85rem; }
+  /* Home: the buildings in two columns (all twelve fit on one screen) */
+  .home { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px 8px; max-width: calc((100dvh - 84px) / 6 * 6.97 * 2 + 8px); margin: 2px auto 0; } /* six rows of banners (892 x 128) always fit the height */
+  /* Campaign: stages on the left, the chosen stage and the team on the right */
+  .cv { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 8px; align-items: start;
+    grid-template-areas: "head team" "chaps stage" "stages stage" "reward reward" "info info"; }
+  .cv-head { grid-area: head; align-self: stretch; padding: 6px 10px; gap: 10px; flex-wrap: nowrap; } .cv-emb { width: 40px; height: 40px; background-size: auto 46px; background-position: -4px -3px; }
+  .cv-ht { display: none; } /* the lit Campaign icon on the left says where you are */ .cv-diff { margin-left: auto; display: flex; align-items: center; gap: 8px; } .cv-diff > span { display: none; } .cv-diff select { padding: 4px 8px; }
+  .cv-chaps { grid-area: chaps; gap: 3px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 4px; margin: 0; } .cv-chaps .tag { display: none; } .cv-chaps button { flex: 1 0 auto; min-width: 28px; height: 28px; padding: 0 3px; font-size: .78rem; }
+  .cv-chap { display: none; } /* the chapter row and the stage cards carry it; its painted scene is behind every card */
+  .cv-stages { grid-area: stages; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .cv-card { min-height: 94px; padding: 5px; gap: 3px; } .cv-card-h b { font-size: .7rem; letter-spacing: 0; } .cv-card > .cv-card-h { top: 4px; left: 5px; right: 4px; } .cv-ok { transform: scale(.8); }
+  .cv-card:not(.boss) .cv-card-a [data-act="auto10"] { display: none; } /* Auto ×10 sits with the chosen stage on the right */
+  .cv-st-h { flex-wrap: nowrap; gap: 8px; } .cv-st-h > b { font-size: .95rem; white-space: nowrap; } .cv-st-h .st-boss { font-size: .72rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .cv-st-s { white-space: nowrap; flex: none; }
+  .cv-card-f .cv-foe-s img, .cv-card-f .cv-foe-s canvas { width: 20px; height: 20px; } .cv-card-m .gt-ic { width: 16px; height: 16px; } .cv-card-m .pill { font-size: .62rem; padding: 1px 4px; }
+  .cv-card-a .btn { font-size: .66rem; padding: 3px 2px; min-height: 0; }
+  .cv-stage { grid-area: stage; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 6px 8px; } .cv-foe img, .cv-foe canvas { width: 26px; height: 26px; } .cv-ph small { font-size: .62rem; } .cv-ph > span { gap: 2px; } .cv-ph { padding: 4px; } .cv-meta { font-size: .78rem; gap: 4px 10px; }
+  .cv-go .btn.primary { min-width: 0; font-size: .95rem; } .cv-go .btn { padding: 6px 12px; }
+  .cv-team { grid-area: team; align-self: stretch; gap: 8px; padding: 4px 8px; flex-wrap: nowrap; } .cv-team .cv-lbl { display: none; } .cv-tm { flex: 0 1 auto; min-width: 0; overflow: hidden; } .cv-heroes { gap: 3px; } .cv-hero { width: 30px; border-width: 1px; border-radius: 6px; } .cv-hero i, .cv-hero-e { display: none; }
+  .cv-pw { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 8px; } .cv-pw small { display: none; } .cv-pw b { font-size: .95rem; white-space: nowrap; } .cv-pw { flex: none; margin-left: auto; gap: 6px; padding: 3px 6px; } .cv-pw .btn { padding: 4px 8px; font-size: .74rem; min-height: 0; }
+  .cv-reward { grid-area: reward; } .camp-info { grid-area: info; }
+  .cv > * { min-width: 0; } .cv-phases { gap: 3px; } .cv-phases > :not(.cv-ph) { display: none; } .cv-go { flex-wrap: nowrap; } .cv-go .btn { white-space: nowrap; padding-inline: 10px; }
+  .cv-team .cv-hero:nth-child(n+5) { display: none; }
 }
 </style>
 
