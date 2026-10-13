@@ -3683,17 +3683,57 @@
   const pctX = x => ((x - VIEW.x) / VIEW.w * 100) + '%', pctW = w => (w / VIEW.w * 100) + '%', pctY = y => (y / H * 100) + '%';
 
   // manga heroes in battle: a little taller and narrower than drawn (the painted figures are broad: wide capes and weapons)
-  const STRETCH = [0.9, 1.12], stretch = id => (SPR.manga(id) && K.CHAMPS[id] ? STRETCH : [1, 1]);
+  const STRETCH = [0.9, 1.12], baseStretch = id => (SPR.manga(id) && K.CHAMPS[id] ? STRETCH : [1, 1]);
+  // size per character in battle: the figure's height from crown to feet in game pixels (the field is 270 high), set by
+  // the owner per character so a goblin or a hound stands smaller than a hero and a boss towers over them; a character
+  // not listed keeps the size it was drawn at. The scale reaching that height (fitOf) is folded into stretch(), so every
+  // way a figure is drawn (manga pictures, pose sheets, the procedural poses) and its metrics follow it; sheet figures
+  // (sheets.js) are drawn at SH.w x SH.h and take fitOf themselves
+  const BATTLE_H = {
+    pc_tank_m: 80, pc_tank_f: 80, pc_warrior_m: 79, pc_warrior_f: 79, pc_mage_m: 78, pc_mage_f: 78, pc_ranger_m: 78, pc_ranger_f: 78, pc_rogue_m: 78,
+    pc_rogue_f: 78, pc_healer_m: 78, pc_healer_f: 78, bromir: 80, grythor: 79, skavren: 78, draelyn: 78, vaessa: 78, brukkar: 79, karnok: 79,
+    morgrim: 78, vorlund: 80, valkessa: 78, faedrin: 78, krothar: 79, ithyra: 78, nyressa: 78, selenia: 78, drakulen: 79, keldrax: 79, oraneth: 78,
+    zarvion: 80, sylreth: 78, thalnir: 80, aurelion: 80, zyrael: 78, velmira: 78, nithara: 78, kaelira: 78, vorak: 80, elyndra: 78, morveth: 78,
+    theryn: 78, arkanis: 78, liora: 78, gorvann: 79, sylvara: 78, veyrith: 80, astraea: 78, korran: 79, zephara: 78, malreth: 78, eryndor: 80,
+    ignara: 78, thalessa: 78, ravok: 79, seraphine: 78, draevan: 79, mirella: 78, volkaris: 79, nyxara: 78, orvyn: 78, celesthyr: 78, grimtar: 77,
+    krogash: 77, zulgroth: 77, bloodsnarl: 77, dio: 78, malvek: 78, j3duin: 78, botkrijger: 78, cryptschutter: 78, schim: 76, zombie: 78,
+    pestbrenger: 81, skeletridder: 80, doodsmagier: 78, banshee: 76, vampier: 78, bloedpriesteres: 78, gevallenridder: 76, hellehond: 70,
+    helsebruut: 81, succubus: 76, afgrondsduivel: 81, hagedisstrijder: 78, hagedissjamaan: 78, hagedisbruut: 79, moerasheks: 76, krokodilbeest: 70,
+    cultist: 78, cultgruwel: 80, wouddruide: 78, steengolem: 81, ijselementaal: 81, gravestalker: 78, cryptguard: 78, soulreaver: 78, dreadarcher: 78,
+    gravewarden: 79, ashgoblin: 72, flameberserker: 76, cinderhound: 70, magmabrute: 80, hellfireshaman: 76, mosscrawler: 70, thornbeast: 70,
+    rotvineshambler: 80, bogreaper: 78, woodwraith: 79, frostfangwolf: 70, iceboundknight: 79, glacierbrute: 81, frostbornwitch: 76, frozenhorror: 80,
+    stormimp: 72, thunderraider: 78, tempestharpy: 76, stormcaller: 78, thundergolem: 80, brimstone: 90, voidtitan: 90, frostcolossus: 90,
+    plaguelord: 90, bloodempress: 90, stormbehemoth: 90, ashenphoenix: 90, shadowlich: 90, ironjuggernaut: 90, sealeviathan: 90, celestial: 90,
+    overlord: 90, boneking: 90, treant: 90, dunewyrm: 90, netherqueen: 90, grakk: 90, frostwitch: 90, serpentpriest: 90, doomharvester: 90,
+    crystaltitan: 90, vampirelord: 90, lizardking: 90, chaosabom: 90, stonedragon: 90, zaroth: 100, frostborn: 100, seraphimfallen: 100,
+    blightedtitan: 100, endlessoracle: 100
+  };
+  // the idle frame's content box, measured once per character
+  const boxes = {};
+  function bbox(id) {
+    if (boxes[id]) return boxes[id];
+    const s = SPR.frame(id, 'idle0'), d = s.getContext('2d').getImageData(0, 0, s.width, s.height).data;
+    let x0 = s.width, x1 = 0, y0 = s.height, y1 = 0;
+    for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (d[(y * s.width + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    return (boxes[id] = { w: s.width, h: s.height, x0, x1, y0, y1 });
+  }
+  const fits = {};
+  function fitOf(id) {
+    if (fits[id] != null) return fits[id];
+    const want = BATTLE_H[id]; if (!want) return (fits[id] = 1);
+    const b = bbox(id), top = (b.y1 - b.y0) / SPR.k(id) * baseStretch(id)[1];
+    return (fits[id] = top > 0 ? want / top : 1);
+  }
+  const stretch = id => { const [x, y] = baseStretch(id), f = fitOf(id); return [x * f, y * f]; };
   // sprite metrics: feet offset + content box, from the idle frame
   const metrics = {};
   function info(id) {
     if (metrics[id]) return metrics[id];
-    const s = SPR.frame(id, 'idle0'), d = s.getContext('2d').getImageData(0, 0, s.width, s.height).data;
-    let x0 = s.width, x1 = 0, y0 = s.height, y1 = 0;
-    for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (d[(y * s.width + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
-    // a fine picture (manga figure) counts in game pixels; manga heroes are drawn a little taller and narrower (STRETCH)
+    const s = bbox(id), { x0, x1, y0, y1 } = s;
+    // a fine picture (manga figure) counts in game pixels; manga heroes are drawn a little taller and narrower (STRETCH),
+    // and every figure is scaled to its BATTLE_H
     const k = SPR.k(id), [sx, sy] = stretch(id);
-    return (metrics[id] = { w: s.width / k * sx, h: s.height / k * sy, fy: y1 / k * sy, top: (y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
+    return (metrics[id] = { w: s.w / k * sx, h: s.h / k * sy, fy: y1 / k * sy, top: (y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
   }
   function place(u, [x, y], off) {
     const m = info(u.id);
@@ -4112,7 +4152,7 @@
       if (SH) {
         // an animated hero (sheets.js): this moment's frame of its move, feet on the spot, mirrored on the enemy side
         const img = sheetFrame(u, SH, now), sx = rs.x + rs.ox + (u.alive ? P.dx * dir : 0) + sh, sy = rs.y + rs.oy - rs.jump + (u.alive ? P.dy : 0) + shy;
-        if (img) { g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; g.drawImage(img, -SH.w / 2, -SH.h + 1 / SH.k, SH.w, SH.h); g.restore(); g.imageSmoothingEnabled = false; }
+        if (img) { g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; const f = fitOf(u.id); g.drawImage(img, -SH.w * f / 2, (-SH.h + 1 / SH.k) * f, SH.w * f, SH.h * f); g.restore(); g.imageSmoothingEnabled = false; }
         if (rs.flash > 0.02) rs.flash *= FADE;
       } else if (SPR.manga(u.id)) drawManga(u, P, now, a, flip, dir, fr, sh, shy);
       else {
