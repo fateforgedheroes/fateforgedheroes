@@ -1468,7 +1468,7 @@
     // on a phone on its side the arena is four tabs (AR.tab, shell.html .ar-wrap[data-t]): Battle (rating and opponents),
     // Defense, Rewards (the weekly ones) and Rankings; a bigger screen shows everything under each other
     const t = AR.tab || 'fight', tabs = `<div class="ar-tabs" role="tablist" aria-label="Arena">${[['fight', 'Battle'], ['def', 'Defense'], ['week', 'Rewards'], ['board', 'Rankings']].map(([k, l]) => `<button type="button" role="tab" data-act="artab" data-t="${k}" aria-selected="${k === t}">${l}${k === 'week' && st.rewards ? '<span class="dot"></span>' : ''}</button>`).join('')}</div>`;
-    return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="ar-wrap" data-t="${t}">${tabs}<div class="arena">${me}${def}</div>${opps}${boardHtml()}</div>`;
+    return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="ar-wrap lfit" data-t="${t}">${tabs}<div class="arena">${me}${def}</div>${opps}${boardHtml()}</div>`;
   }
   function startArena(f) {
     runBattle({ type: 'arena', att: f.att, def: f.def, seed: f.seed, win: f.win, fight: f, area: f.seed % 5, title: `Arena · vs ${f.opponent.name}` });
@@ -1594,8 +1594,7 @@
         <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
-      ${me === 'leader' || me === 'officer' ? guildInviteHtml(g) : ''}
-      <div class="row g-leave"><button class="btn small danger" data-act="gleave">Leave guild</button></div></div>
+      <div class="row g-leave">${me === 'leader' || me === 'officer' ? '<button class="btn small primary" data-act="ginvopen">Invite members</button>' : ''}<button class="btn small danger" data-act="gleave">Leave guild</button></div></div>
       <section class="fr-sec g-mem"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section></div>`;
   }
   // Guildmaster and officers: invite by friend code, or one of your friends who is not in this guild yet
@@ -1610,6 +1609,13 @@
       ${friends.length ? `<ul class="g-inv-friends">${friends.map(f => `<li>${f.avatar && C[f.avatar] ? por(f.avatar) : ''}<b>${esc(f.name)}</b><button class="btn small" data-act="ginvf" data-code="${friendCode(f.user_id)}">Invite</button></li>`).join('')}</ul>` : ''}`}</section>`;
   }
   const INVITE_MSG = { sent: 'Invite sent: it is waiting in their Mail.', already: 'This player already has an invite from your guild.', in_guild: 'This player is already in a guild.', self: 'That is your own friend code.', full: 'Your guild is full.', not_found: 'No player has that friend code.', not_allowed: 'Only the Guildmaster and officers can invite.' };
+  // Invite members (Guildmaster and officers): the friend code form and the friends not in the guild yet, in a popup
+  function openInvite() {
+    if (!GD.mine) return;
+    const m = $('#modal');
+    m.innerHTML = `<div class="modal-box g-invbox" role="dialog" aria-modal="true" aria-label="Invite members"><button class="btn small pf-close" data-act="pfclose" aria-label="Close">✕</button><h2>Invite members</h2>${guildInviteHtml(GD.mine)}</div>`;
+    m.hidden = false; const i = $('#g-icode'); if (i) i.focus();
+  }
   async function sendInvite(code) {
     const c = String(code || '').replace(/[^0-9a-f]/gi, '');
     if (c.length !== 8) { toast('A friend code has 8 characters (letters A-F and numbers).', true); return; }
@@ -3021,6 +3027,7 @@
     else if (act === 'gbfight') gbossFight();
     else if (act === 'profile') openProfile(id);
     else if (act === 'ginvf') sendInvite(a.dataset.code);
+    else if (act === 'ginvopen') openInvite();
     else if (act === 'ginvacc') answerInvite(+id, true);
     else if (act === 'ginvdec') answerInvite(+id, false);
     else if (act === 'pfhero') { PF.sel = id; renderProfile(); }
@@ -3319,7 +3326,7 @@
     SFX.summon(best);
     const cards = res.map((r, i) => `<div class="sum-card rar-${r.rar}" style="animation-delay:${i * 0.12}s">${por(r.id)}<span class="nm">${esc(C[r.id].short)}</span><small class="rartxt">${K.RARITIES[r.rar]}</small>${r.isNew ? '<span class="new">NEW</span>' : '<small>Spare copy: feed it to level a skill</small>'}</div>`).join('');
     const m = $('#modal');
-    m.innerHTML = `<div class="modal-box violet ${n > 1 ? 'wide' : ''}" role="dialog" aria-modal="true"><h2>${best >= 4 ? 'Legendary!' : best >= 3 ? 'Epic!' : 'Summoned'}</h2><p class="tag">${esc(K.SHARD[type].name)} · ${S.fs[type]} left</p><div class="summon-grid">${cards}</div>
+    m.innerHTML = `<div class="modal-box violet sum-box ${n > 1 ? 'wide' : ''}" role="dialog" aria-modal="true"><h2>${best >= 4 ? 'Legendary!' : best >= 3 ? 'Epic!' : 'Summoned'}</h2><p class="tag">${esc(K.SHARD[type].name)} · ${S.fs[type]} left</p><div class="summon-grid">${cards}</div>
       <div class="modal-actions"><button class="btn violet" data-act="modal" data-go="summon1" ${S.fs[type] < 1 ? 'disabled' : ''}>1 more · ${shardIc(type)}</button>${S.fs[type] >= 10 ? '<button class="btn violet" data-act="modal" data-go="summon10">10 more</button>' : ''}<button class="btn" data-act="modal" data-go="close">Close</button></div></div>`;
     m.hidden = false;
   }

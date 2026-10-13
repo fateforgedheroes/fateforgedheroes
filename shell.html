@@ -3440,6 +3440,53 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .pf-heroes { grid-area: heroes; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; } .pf-hero { padding: 4px 3px; gap: 1px; } .pf-hero img.spr { width: 34px; height: 34px; } .pf-hero b { font-size: .64rem; } .pf-hero small { font-size: .56rem; } .pf-hero .stars { font-size: .5rem; } .pf-hero .lv { top: 2px; right: 2px; min-width: 16px; height: 14px; font-size: .55rem; }
   .pf-gear { grid-area: gear; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; } .pf-item { gap: 5px; padding: 4px 6px; } .pf-item .gear-ic { width: 26px; height: 26px; } .pf-item b { font-size: .68rem; } .pf-item small { font-size: .58rem; } .pf-item .item-stats { font-size: .56rem; line-height: 1.2; columns: 2; column-gap: 6px; } .pf-item > div { width: 100%; } .pf-slot svg { width: 18px; height: 18px; margin: 4px; }
 }
+/* Invite members (app.js openInvite): a button next to Leave guild opens the friend code form and the friends to invite */
+.g-home .g-leave { gap: 6px; } .g-home .g-leave:has(.btn.primary) { justify-content: space-between; }
+.modal-box.g-invbox { width: min(480px, 100%); position: relative; text-align: left; gap: 8px; max-height: calc(100dvh - 16px); overflow-y: auto; }
+.g-invbox > .pf-close { position: absolute !important; top: 6px; right: 6px; left: auto; width: 30px; height: 30px; min-height: 0; padding: 0; border-radius: 50%; }
+.g-invbox h2 { margin: 0; padding-right: 40px; color: var(--gold); } .g-invbox .g-invite { margin: 0; padding: 0 !important; border: 0; background: none; box-shadow: none; } .g-invbox .g-invite > h3 { display: none; }
+.g-invbox .g-invite > small { display: block !important; margin: 4px 0; }
+.g-inv-friends { max-height: 240px; overflow-y: auto; scrollbar-width: thin; }
+@media (max-height: 500px) and (orientation: landscape) { .g-invbox h2 { font-size: 1.05rem; } .g-inv-friends { max-height: calc(100dvh - 170px); } }
+/* Town Hall on a phone on its side: the seven tabs fit one row; Profile in three columns (you, unlocks, statistics) with
+   the avatars as a small strip below */
+@media (max-height: 500px) and (orientation: landscape) {
+  .th-tabs { gap: 2px; } .th-tabs button { flex: 1 1 auto !important; padding: 0 5px !important; font-size: .62rem !important; letter-spacing: .02em; min-width: 0; } .th-tabs button svg { width: 11px; height: 11px; margin-right: 3px; }
+  .th-body .profile { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); gap: 6px; align-items: start; } .th-body .profile > .prof-cols { display: contents; } .th-body .profile { grid-template-areas: "head unl st" "av unl st"; } .th-body .profile > .prof-head { grid-area: head; } .th-body .prof-cols > section:first-child { grid-area: unl; } .th-body .prof-cols > section:last-child { grid-area: st; } .th-body .profile > section:last-child { grid-area: av; }
+  .th-body .profile > * { margin: 0 !important; }
+  .prof-head { flex-direction: column; align-items: stretch; gap: 5px; padding: 6px 8px !important; border-bottom-width: 2px; } .prof-head .prof-av { align-self: flex-start; } .prof-av img { width: 44px !important; height: 44px !important; }
+  .prof-head { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: start; } .prof-main { gap: 3px; }
+  .th-body .pname { gap: 4px; } .th-body .pname h2 { font-size: .95rem; margin: 0; } .th-body .pname .btn { padding: 2px 6px; font-size: .6rem; min-height: 0; } .th-body .pname input { font-size: .8rem; padding: 2px 6px; min-width: 0; width: 100%; }
+  .prof-lv { gap: 5px; font-size: .7rem; } .prof-lv .lvbadge { min-width: 18px; height: 18px; font-size: .66rem; } .prof-main .xpbar { height: 6px; } .prof-main > small { font-size: .58rem !important; line-height: 1.25; }
+  .prestige-box p { font-size: .62rem; margin: 0; } .prestige-box .btn { padding: 2px 8px; font-size: .64rem; min-height: 0; }
+  .th-body .profile section h3 { font-size: .7rem; margin: 0 0 3px; }
+  .road { gap: 2px; margin: 0; } .road li { gap: 6px; padding: 2px 6px; border-width: 1px; font-size: .66rem; } .road .lvtag { font-size: 9px; min-width: 28px; } .road li b { font-size: .7rem; } .road li .empty-note { font-size: .6rem; }
+  .th-body .profile section > p.empty-note { display: none; }
+  .th-body .profile dl.stats { gap: 1px 8px; font-size: .64rem; }
+  .av-grid { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; } .av-pick { flex: 0 0 38px; padding: 1px; }
+}
+/* the summon result on a phone on its side: small hero cards (ten in two rows), 1 more / 10 more / Close always in view */
+@media (max-height: 500px) and (orientation: landscape) {
+  .modal-box.sum-box { max-height: calc(100dvh - 12px); overflow-y: auto; padding: 8px 12px; gap: 6px; } .sum-box h2 { font-size: 1.15rem; margin: 0; } .sum-box > .tag { margin: 0; font-size: .64rem; }
+  .sum-box .summon-grid { grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 5px; } .sum-box.wide .summon-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .sum-box .sum-card { padding: 4px 3px; gap: 1px; } .sum-box .sum-card img.spr { width: 46px; height: 46px; } .sum-box .sum-card .nm { font-size: .7rem; } .sum-box .sum-card small { font-size: .58rem; line-height: 1.15; }
+  .sum-box .sum-card small:not(.rartxt) { display: none; } .sum-box .modal-actions { gap: 6px; margin: 0; } .sum-box .modal-actions .btn { padding: 5px 12px; min-height: 0; font-size: .82rem; }
+}
+/* Arena · Battle on a phone on its side: the tab fills the screen's height (.ar-wrap.lfit), the three opponents stretch
+   into it with bigger portraits and team icons, Fight at the bottom of each card with room above it */
+@media (max-height: 500px) and (orientation: landscape) {
+  .ar-wrap { display: flex; flex-direction: column; min-height: 0; } .ar-wrap > * { flex: none; }
+  .ar-wrap[data-t="fight"] .ar-opps { flex: 1 1 auto; min-height: 0; grid-template-rows: auto minmax(0, 1fr); align-items: stretch; margin: 0; }
+  .ar-wrap .ar-opp { grid-template-columns: 48px minmax(0, 1fr); grid-template-rows: auto 1fr auto; align-content: stretch; gap: 6px 10px; padding: 8px 10px; }
+  .ar-wrap .ar-opp > img.spr { width: 48px; height: 48px; } .ar-wrap .ar-opp-main { gap: 3px; } .ar-wrap .ar-opp-main > b { font-size: .88rem; } .ar-wrap .ar-opp-main small { font-size: .7rem; }
+  .ar-wrap .ar-team { gap: 4px; margin-top: 4px; } .ar-wrap .ar-h { width: 32px; height: 32px; }
+  .ar-wrap .ar-opp > .btn { grid-row: 3; align-self: end; margin-top: 6px; padding: 6px 10px; font-size: .88rem; }
+}
+@media (max-height: 500px) and (orientation: landscape) and (max-width: 760px) {
+  .ar-wrap .ar-opp { grid-template-columns: 40px minmax(0, 1fr); gap: 4px 8px; padding: 6px 8px; } .ar-wrap .ar-opp > img.spr { width: 40px; height: 40px; }
+  .ar-wrap .ar-team { flex-wrap: nowrap; gap: 3px; } .ar-wrap .ar-h { width: 26px; height: 26px; } .ar-wrap .ar-opp > .btn { margin-top: 4px; padding: 5px 8px; }
+}
+/* the + after Sigils and Crystals is shelved until the game sells things for real money (the buttons stay in the markup) */.res-plus.shelved { display: none !important; }
 </style>
 
 <div id="app">
@@ -3448,8 +3495,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
     <button class="homebtn" id="homebtn" type="button" aria-label="Menu: go to a building" aria-expanded="false" aria-controls="navdrop"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></svg><span>Menu</span><i class="nd-caret" aria-hidden="true">▾</i></button>
     <div class="wallet">
       <div class="res en" title="Energy"><img id="ic-energy" class="en-ic" alt="Energy"><b id="energy">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
-      <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
-      <div class="res gems" title="Crystals: spend them in the Market"><img id="ic-crystal" class="gem-ic" alt="Crystals"><b id="gems">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
+      <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b><button class="res-plus shelved" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
+      <div class="res gems" title="Crystals: spend them in the Market"><img id="ic-crystal" class="gem-ic" alt="Crystals"><b id="gems">0</b><button class="res-plus shelved" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
       <div class="res" title="Fate Shards: summon heroes at the Fate Altar"><img id="ic-shard" class="spr" alt=""><b id="shards">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
       <div class="res" title="Ascension Stones: needed to ascend heroes (more stars)"><img id="ic-stone" class="spr" alt=""><b id="stones">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
       <button class="iconbtn" id="sound" type="button" aria-pressed="true" aria-label="Sound" title="Sound on or off">Sound</button>
