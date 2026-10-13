@@ -363,6 +363,7 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .coach-pop { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; padding: 12px; background: rgba(8,6,10,.55); animation: fadein .2s ease-out; }
 .coach-card { width: min(460px, 100%); max-height: 100%; overflow-y: auto; background: linear-gradient(160deg, #2c2213, var(--panel) 70%); border: 2px solid var(--gold); box-shadow: 0 0 0 2px #000, 0 0 24px -6px var(--gold); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; font-size: clamp(.8rem, 2.4vw, 1rem); animation: pop .25s ease-out; }
 .coach-card .btn { align-self: flex-end; }
+.coach-card .coach-body { flex: none; } /* (.coach-body grows in the small tip bar; in the card it keeps its own height) */
 .rb.locked { opacity: .45; }
 /* battle controls: small round buttons over the top right of the battle view */
 .b-ctl { position: absolute; top: 6px; right: 6px; display: flex; gap: 6px; z-index: 4; }
@@ -2041,6 +2042,7 @@ img.en-ic { filter: none; object-fit: contain; }
 .dc-card h2 { color: #c3c8ff; }
 .btn.dc-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #5865f2; border-color: #7983ff; color: #fff; font-weight: 700; text-decoration: none; }
 .btn.dc-btn:hover { background: #6b77ff; }
+.fb-sec .dc-btn .dc-ic, .mm-ic .dc-ic { width: 18px; height: 18px; }
 .dc-card .dc-btn { min-width: 220px; margin-top: 4px; }
 .mm-it .dc-ic { width: 16px; height: 16px; color: #8c95ff; }
 /* the Discord banner on the Social screen */
@@ -2935,6 +2937,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .sv-foes { display: flex; gap: 3px; } .sv-foes .cv-foe img, .sv-foes .cv-foe canvas { width: 42px; height: 42px; }
 .sv-go { display: flex; align-items: center; gap: 6px; } .sv-go .btn.primary { min-width: 128px; }
 .sv-go:has(.spot-wrap) { z-index: 22 !important; } /* the first battle's Fight button stays above the spotlight shade */
+/* in the stage rows the shade is the fixed .spot-block itself (a shadow around the button got lost between the rows), and the call sits left of the button */
+.cv.sv .spot-block { background: rgba(6, 4, 10, .78); } .sv-go .spot-call { bottom: auto; top: 50%; left: auto; right: calc(100% + 12px); transform: translateY(-50%); }
 .sv-more { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid rgba(217, 180, 90, .2); }
 @media (max-width: 760px) and (min-height: 501px), (max-width: 760px) and (orientation: portrait) {
   .sv-wrap { grid-template-columns: minmax(0, 1fr); } .sv-side { position: static; }
@@ -3239,6 +3243,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 @media (max-height: 500px) and (orientation: landscape) {
   .sv-wrap.lfit { align-items: stretch; } .sv-wrap.lfit .sv-side { height: 100%; max-height: none; align-content: start; grid-auto-rows: max-content; }
   .cv.sv .camp-info { display: none; } .cl-back { white-space: nowrap; }
+  /* the first battle's spotlight is a shadow around Fight: campaignHtml leaves out .lfit then, so the list does not clip it */
+  .sv-wrap.lfit .sv-list { overflow-x: hidden; } .sv-t { min-width: 0; }
   .sv-wrap.lfit .sv-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; align-content: start; padding-right: 2px; }
   .bs-ch { min-height: 92px; } .bs-boss { height: 96%; } .bs-side .bhv-row small { font-size: .7rem; } .bs-side .bhv-row b { font-size: .78rem; }
   .bs-side .bhv-sets { font-size: .7rem; } .bs-side .bhv-sets li span { display: none; } .bs-side .bhv-sets li.bhv-sethead span { display: inline; }
@@ -3487,6 +3493,35 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .ar-wrap .ar-team { flex-wrap: nowrap; gap: 3px; } .ar-wrap .ar-h { width: 26px; height: 26px; } .ar-wrap .ar-opp > .btn { margin-top: 4px; padding: 5px 8px; }
 }
 /* the + after Sigils and Crystals is shelved until the game sells things for real money (the buttons stay in the markup) */.res-plus.shelved { display: none !important; }
+/* opened from the home screen (manifest.webmanifest: full screen, on its side) the Fullscreen button has nothing left to do */@media (display-mode: fullscreen), (display-mode: standalone) { #fsbtn { display: none !important; } }
+/* ===== found in the new-player playtest (a phone on its side) ===== */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* the homebase tour: the card takes the half of the screen the lit building is not in (app.js render, tc-left/right) */
+  .tour-card.tc-left, .tour-card.tc-right { width: min(380px, 47%); margin: 0; bottom: 8px; padding: 8px 12px; gap: 4px; } .tour-card.tc-left { left: 12px; right: auto; } .tour-card.tc-right { right: 12px; left: auto; }
+  .tour-card h3 { font-size: 1rem; } .tour-card p { font-size: .8rem; line-height: 1.35; } .tour-card .tc-acts .btn { padding: 4px 10px; min-height: 0; }
+  /* the first battle's coach: a compact card over the field (above the title), taps on the small tips go through to the units */
+  #battle .coach-pop { z-index: 8; padding: 8px; } #battle .coach-card { height: auto; max-height: calc(100% - 16px); width: min(440px, 82%); padding: 10px 14px; gap: 6px; font-size: .84rem; } #battle .coach-card .btn { padding: 5px 14px; min-height: 0; }
+  #battle .coach { pointer-events: none; opacity: .95; }
+  /* in a battle the chat button sits with the round controls at the bottom left, not over the hero's name in the skill column */
+  body.in-battle .chat-fab { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); right: auto; left: 200px; }
+  /* messages (toasts) drop in under the header, where they cover no buttons (the tour card, Fight, the result) */
+  .toast { top: calc(50px + env(safe-area-inset-top, 0px)); bottom: auto !important; z-index: 40; }
+  /* the result after a level-up that opens a building gets an extra "Open the …" button: a small one, so the column still fits */
+  .rs2 .rs-acts > .btn.violet { padding: 3px 8px; min-height: 0; font-size: .7rem; } .rs2 .rs-acts:has(> .btn.violet) .rs-big { padding: 4px 8px !important; }
+}
+/* Create your hero (app.js createHtml, .pc-wrap): one column with the class's details between the gender and the name;
+   on a phone on its side the choices left and the details right (their own scroll) */
+.pc-wrap { display: flex; flex-direction: column; } .pc-left { display: contents; } .pc-wrap .st-info { order: 1; } .pc-wrap .pc-namerow, .pc-wrap .st-go, .pc-wrap .starter-acc { order: 2; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .pc-wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 10px; align-items: stretch; } .pc-left { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
+  .pc-wrap .st-title { font-size: 1.15rem; margin: 0; text-align: left; } .pc-wrap .pc-lede { display: none; } .pc-wrap .pc-row { margin: 0; gap: 8px; } .pc-wrap .pc-row .tag { font-size: .62rem; }
+  .pc-wrap .pc-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 0; } .pc-wrap .pc-card { padding: 3px; gap: 1px; } .pc-wrap .pc-por { width: 32px; height: 32px; } .pc-wrap .pc-card b { font-size: .76rem; } .pc-wrap .pc-card small, .pc-wrap .pc-card span:not(.pc-por) { font-size: .56rem; }
+  .pc-wrap .pc-g .btn { padding: 3px 12px; min-height: 0; font-size: .74rem; } .pc-wrap .pc-namerow input { padding: 4px 8px; font-size: .82rem; min-width: 0; flex: 1; } .pc-wrap .st-go { margin: 0; } .pc-wrap .st-go .btn { width: 100%; padding: 6px 12px; min-height: 0; }
+  .pc-left { gap: 4px; } .pc-wrap .pc-card > span:not(.pc-por), .pc-wrap .pc-card > small { display: none; } .pc-wrap .starter-acc { display: flex; align-items: center; gap: 6px; } .pc-wrap .starter-acc .row { margin: 0; }
+  .pc-wrap .starter-acc { padding: 4px 8px !important; } .pc-wrap .starter-acc p { font-size: .66rem; margin: 0; } .pc-wrap .starter-acc .btn { padding: 2px 8px; min-height: 0; font-size: .68rem; }
+  .pc-wrap .st-info { margin: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; } .pc-wrap .st-card { padding: 8px 10px; gap: 4px; font-size: .74rem; } .pc-wrap .st-card h3 { font-size: .95rem; } .pc-wrap .starter-top img, .pc-wrap .starter-top .spr { width: 40px; height: 40px; }
+  .pc-wrap .st-pitch { margin: 0; font-size: .72rem; } .pc-wrap .st-cols { grid-template-columns: minmax(0, 1fr); gap: 6px; } .pc-wrap .sbar { font-size: .66rem; } .pc-wrap .st-card .skill { margin: 0 0 4px; } .pc-wrap .st-card .skill p { font-size: .68rem; margin: 0; } .pc-wrap .starter-sk { font-size: .7rem; } .pc-wrap .starter-sk span { font-size: .66rem; margin-bottom: 3px; }
+}
 </style>
 
 <div id="app">

@@ -759,12 +759,14 @@
     if (!B) MUSIC.play(tab === 'kerkers' || (tab === 'prep' && PREP.boss) ? 'boss' : 'home'); // the Boss Hall keeps the boss track from its screen through every fight
     hud();
     const el = $('#screen');
-    if (noHero()) { el.innerHTML = createHtml(); return; }
+    if (noHero()) { el.innerHTML = createHtml(); navTop(); hxFit(); return; }
     if (tab === 'home') {
       el.innerHTML = homeHtml();
       // the tour scrolls its building into view, in the room above the tour card
       const on = tourOn() && el.querySelector('.hb.tour-on'), card = el.querySelector('.tour-card');
-      if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
+      // (a phone on its side: the card goes to the half of the screen the building is not in, the building to the middle)
+      if (on && card && landPhone()) { const r = on.getBoundingClientRect(); card.classList.add(r.left + r.width / 2 > innerWidth / 2 ? 'tc-left' : 'tc-right'); window.scrollBy({ top: r.top - (innerHeight - r.height) / 2 - 10, behavior: 'smooth' }); }
+      else if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
@@ -891,7 +893,7 @@
     }).join('');
     return `<div class="campaign cv sv ${d ? 'hardmode diff-' + D.id : ''}">
       ${head.replace('<div class="cv-head">', '<div class="cv-head"><button type="button" class="btn small cl-back" data-act="chlist">‹ Chapters</button>')}
-      <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}</div></div>
+      <div class="sv-wrap ${spot ? '' : 'lfit'}">${side}<div class="sv-list">${rows}</div></div>
       ${spot ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${playBtn(sel)}</div>`}
       <details class="camp-info"><summary>How the campaign works</summary>
         <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clearing all seven stages of a chapter opens its reward chest, once per difficulty. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
@@ -1265,7 +1267,7 @@
     const m = $('#modal'); if (!m.hidden || !needName()) return;
     m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pn-t"><h2 id="pn-t">Choose your player name</h2>
       <form data-form="pname" class="nb-form"><label class="empty-note" for="pn-in">Other players see it in the arena, on the leaderboards, in your guild and in their friend lists. 2 to 20 characters; changing it later costs ${RENAME_COST.toLocaleString('en-US')} Sigils.</label>
-      <input id="pn-in" name="pname" maxlength="20" required autocomplete="nickname" placeholder="Your name">
+      <input id="pn-in" name="pname" maxlength="20" required autocomplete="nickname" placeholder="Your name" value="${S.hero && S.hero.name && S.hero.name !== 'Adventurer' ? esc(S.hero.name) : ''}">
       <div class="modal-actions"><button class="btn primary" type="submit">Save name</button></div></form></div>`;
     m.hidden = false; m.querySelector('input').focus();
   }
@@ -1339,14 +1341,15 @@
     const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const signin = cl && cl.enabled && !cl.email && !Object.keys(S.roster).length ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
     const g = (k, label) => `<button type="button" class="btn ${pcSel.g === k ? 'primary' : ''}" data-act="pcgender" data-g="${k}" aria-pressed="${pcSel.g === k}">${label}</button>`;
-    return `<h2 class="st-title">Create your hero</h2>
+    // (.pc-wrap: on a phone on its side the choices on the left and the class's details on the right, .pc-left; elsewhere
+    // one column with the details between the gender and the name)
+    return `<div class="pc-wrap lfit"><div class="pc-left"><h2 class="st-title">Create your hero</h2>
       <p class="lede pc-lede">Your hero is forged by fate: <b>Aether</b>, never strong or weak against anyone, and always at your side in every fight. Later you can change its class with a Fate Changing Stone from the Market.</p>
       <div class="pc-row"><span class="tag">1 · Choose a class</span></div>
       <div class="pc-cards">${cards}</div>
       <div class="pc-row"><span class="tag">2 · Your hero is</span><div class="seg pc-g">${g('m', 'Male')}${g('f', 'Female')}</div></div>
-      <div class="st-info">${info}</div>
       <div class="pc-row pc-namerow"><label class="tag" for="pc-name">3 · Name your hero</label><input id="pc-name" maxlength="16" autocomplete="off" placeholder="Your hero's name" value="${esc(pcSel.name)}"></div>
-      <div class="st-go"><button class="btn primary" id="pc-go" data-act="pccreate" ${pcReady() ? '' : 'disabled'}>${pcReady() ? `Create ${esc(pcName())}` : 'Create your hero'}</button></div>${signin}`;
+      <div class="st-go"><button class="btn primary" id="pc-go" data-act="pccreate" ${pcReady() ? '' : 'disabled'}>${pcReady() ? `Create ${esc(pcName())}` : 'Create your hero'}</button></div>${signin}</div><div class="st-info">${info}</div></div>`;
   }
   // the name box updates the Create button without a re-render (keeps the focus)
   document.addEventListener('input', e => {
@@ -2530,7 +2533,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -2895,10 +2898,13 @@
       : cl.email
         ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
         : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
+    // feedback and bug reports go to the Discord, so everything stays in one place
+    const feedback = `<section class="prof-acc fb-sec"><h3>Feedback and bugs</h3><p class="empty-note">Found a bug or have an idea? Tell us in the Discord: post it in the feedback or bug channel, with a screenshot if you can.</p><div class="row"><a class="btn dc-btn small" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Give feedback in Discord</a></div></section>`;
     return `<div class="profile">
       <section class="prof-acc"><h3>Sound</h3><div class="vol-rows">${volSlider('music')}${volSlider('sfx')}</div><p class="empty-note">Tap a speaker (or slide to 0) to switch that sound off. The speaker in the top bar mutes both.</p></section>
       ${blockedHtml()}
       <section class="prof-acc"><h3>Account</h3>${account}</section>
+      ${feedback}
       ${startOverHtml()}
       ${backupsHtml()}
     </div>`;
@@ -4113,7 +4119,7 @@
     if (!TUT.on) return;
     TUT.turns++;
     const ready = u.skills.slice(1).filter(s => b.usable(u, s));
-    if (TUT.turns === 1) coach(`<b>Your turn!</b><ol><li>Pick a skill below. <b>Basic</b> is always ready; stronger skills need a few turns to recharge (the <b>cooldown</b>, CD).</li><li>Tap a highlighted enemy (the glowing marker at its feet) to attack it.</li></ol>`);
+    if (TUT.turns === 1) coach(`<b>Your turn!</b><ol><li>Pick a skill on the right. <b>Basic</b> is always ready; stronger skills need a few turns to recharge (the <b>cooldown</b>, CD).</li><li>Tap a highlighted enemy (the glowing marker at its feet) to attack it.</li></ol>`);
     else if (TUT.turns === 2) coach(`<b>Tip:</b> the colored icon next to every name is its <b>essence</b>. Some essences beat others and deal extra damage (a <b>Strong Hit</b>). Your Guide (the ? button) explains them all.`);
     else if (ready.length && TUT.turns <= 4) coach(`<b>${esc(ready[0].name)}</b> is ready: it hits harder than your Basic attack. Try it!`);
     else coachHide();
@@ -4126,10 +4132,10 @@
     R.hlKind = ['ally', 'allies', 'self', 'deadAlly', 'lowestAlly'].includes(s.target) ? 'good' : 'bad';
     const taunted = s.target === 'enemy' && b.tauntTarget(u);
     $('#b-hint').textContent = taunted ? `Taunted: you must attack ${taunted.name}.`
-      : s.target === 'enemy' ? 'Click an enemy to attack.'
-      : s.target === 'ally' ? 'Click an ally.'
-      : s.target === 'deadAlly' ? 'Click a fallen ally.'
-      : 'Click the skill again or a highlighted target.';
+      : s.target === 'enemy' ? 'Tap an enemy to attack.'
+      : s.target === 'ally' ? 'Tap an ally.'
+      : s.target === 'deadAlly' ? 'Tap a fallen ally.'
+      : 'Tap the skill again or a highlighted target.';
     updateOverlay();
   }
   function resolveChoice(target) {
@@ -4598,9 +4604,18 @@
     return ups;
   }
   // unlock messages (S.seen remembers which were shown): speed 3× and 5×, Fate Altar, Boss Hall
+  // what each building opens up, in the unlock message
+  const UNLOCK_TEXT = {
+    altaar: 'Use your Fate Shards at the Fate Altar to summon new heroes.',
+    expedition: 'Send heroes you are not using on a voyage at the harbour. They come back with XP, Sigils, Fate Shards and Ascension Stones.',
+    tower: 'Climb the Tower of Essence floor by floor with heroes of one essence. Every floor pays once, and climbing costs no energy.',
+    arena: 'Fight the teams of other players, climb the ranking and earn weekly rewards.',
+    guild: 'Create or join a guild in Social → Guild, fight the guild boss every day and earn a weekly Guild Chest.',
+    kerkers: 'Challenge the bosses of the Boss Hall for their rare gear sets.',
+  };
   function newUnlocks() {
     const out = [];
-    if (!S.seen.auto && S.cleared >= 0) { S.seen.auto = true; out.push({ k: 'auto', title: 'Auto battle unlocked', text: 'Tap the round Auto button at the top right of a battle and your heroes fight on their own. It stays on until you turn it off.' }); }
+    if (!S.seen.auto && S.cleared >= 0) { S.seen.auto = true; out.push({ k: 'auto', title: 'Auto battle unlocked', text: 'Tap the round Auto button at the bottom left of a battle and your heroes fight on their own. It stays on until you turn it off.' }); }
     // the homebase opens after the first campaign battle (see firstSteps)
     if (!S.seen.home && !noHero() && !firstSteps()) { S.seen.home = true; out.push({ k: 'home', title: 'Your homebase is open', text: 'A short tour shows you every building and what it is for. After that, the campaign continues.' }); }
     for (const [sp, at] of SPEED_UNLOCK) if (sp > 2 && !S.seen['spd' + sp] && S.cleared + 1 >= at) {
@@ -4609,7 +4624,7 @@
     }
     for (const k in UNLOCKS) if (!S.seen[k] && unlocked(k)) {
       S.seen[k] = true;
-      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: k === 'altaar' ? 'Use your Fate Shards at the Fate Altar to summon new heroes.' : k === 'guild' ? 'Create or join a guild in Social → Guild, fight the guild boss every day and earn a weekly Guild Chest.' : k === 'arena' ? 'Fight the teams of other players, climb the ranking and earn weekly rewards.' : 'Challenge the bosses of the Boss Hall for their rare gear sets.' });
+      out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: UNLOCK_TEXT[k] || '' });
     }
     // the homebase message comes last: its button leads there
     return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));

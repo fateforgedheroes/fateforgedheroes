@@ -41,6 +41,12 @@ const head = `<!doctype html>
 <meta property="og:title" content="Fate Forged Heroes">
 <meta property="og:description" content="Turn-based fantasy RPG in your browser.">
 <link rel="icon" href="/favicon.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fate Forged">
 </head>
 <body style="margin:0">
 `;
@@ -53,7 +59,8 @@ const build = (process.env.FFH_BUILD || createHash('sha256').update(page).digest
 writeFileSync(new URL('index.html', out), page.replace("window.FFH_BUILD = '@@BUILD@@'", () => `window.FFH_BUILD = '${build}'`));
 writeFileSync(new URL('version.json', out), JSON.stringify({ build }) + '\n');
 // Static extras (optional)
-for (const f of ['privacy.html', 'favicon.png', 'email-logo.png']) {
+// manifest.webmanifest + icon-192/512.png: installed on a home screen the game opens full screen and on its side
+for (const f of ['privacy.html', 'favicon.png', 'email-logo.png', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png']) {
   const dir = DIRS.find(d => existsSync(new URL(d + f, import.meta.url)));
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);
