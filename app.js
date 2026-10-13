@@ -3160,6 +3160,7 @@
     // feedback and bug reports go to the Discord, so everything stays in one place
     const feedback = `<section class="prof-acc fb-sec"><h3>Feedback and bugs</h3><p class="empty-note">Found a bug or have an idea? Tell us in the Discord: post it in the feedback or bug channel, with a screenshot if you can.</p><div class="row"><a class="btn dc-btn small" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Give feedback in Discord</a></div></section>`;
     return `<div class="profile">
+      <section class="prof-acc"><h3>Battle</h3><div class="set-rows"><div class="set-row"><span><b>Screen shake</b><small>The screen shakes on critical hits and big blows.</small></span><button class="set-tog${S.shake === false ? '' : ' on'}" data-act="shake" aria-pressed="${S.shake !== false}">${S.shake === false ? 'Off' : 'On'}</button></div></div></section>
       <section class="prof-acc"><h3>Sound</h3><div class="vol-rows">${volSlider('music')}${volSlider('sfx')}</div><p class="empty-note">Tap a speaker (or slide to 0) to switch that sound off. The speaker in the top bar mutes both.</p></section>
       ${blockedHtml()}
       <section class="prof-acc"><h3>Account</h3>${account}</section>
@@ -3259,6 +3260,7 @@
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
     else if (act === 'pnamecancel') { editName = false; render(); }
     else if (act === 'avatar') { S.p.avatar = id; save(); render(); }
+    else if (act === 'shake') { S.shake = S.shake === false; save(); render(); }
     else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
     else if (act === 'arstate') arenaCall('state');
     else if (act === 'arrefresh') arenaCall('refresh');
@@ -4121,7 +4123,8 @@
   if (/[?&]debug\b/.test(location.search)) window.FFH_DBG = { R, setPose, setPaused, info, animBefore, animAfter, updateOverlay, repSummary: r => { lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; return repSummary(r); }, S: () => S };
   function frame(now) {
     if (!R.running) return;
-    const sh = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = R.shake > 0.3 && !calm() ? Math.round((Math.random() - 0.5) * R.shake) : 0;
+    const shk = R.shake > 0.3 && !calm() && S.shake !== false; // Settings → Battle → Screen shake (S.shake false: never)
+    const sh = shk ? Math.round((Math.random() - 0.5) * R.shake * 2) : 0, shy = shk ? Math.round((Math.random() - 0.5) * R.shake) : 0;
     R.shake *= 0.86;
     // hit flashes fade by time, not by drawn frames (a slow screen would keep them white for long)
     FADE = Math.pow(0.8, Math.min(6, Math.max(0.5, (now - (R.lastNow || now - 16.7)) / 16.7))); R.lastNow = now;

@@ -317,9 +317,9 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .hitbox { position: absolute; pointer-events: auto; background: transparent; border: 0; padding: 0; cursor: default; }
 .hitbox.valid { cursor: pointer; }
 .pop { position: absolute; transform: translate(-50%, 0); font-family: var(--font-display); font-weight: 700; font-size: clamp(12px, 1.8vw, 20px); text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000; animation: rise 1.05s ease-out forwards; white-space: nowrap; pointer-events: none; z-index: 2; }
-.pop.dmg { color: #fff4e0; }
-.pop.crit { color: var(--ember); font-size: clamp(16px, 2.6vw, 30px); animation-name: critrise; }
-.pop.crit::before { content: "CRIT "; font-size: .45em; vertical-align: .5em; color: #ffd0a0; }
+/* damage numbers: white for a normal hit, a bigger clear red for a critical hit (no "CRIT" word: the colour says it) */
+.pop.dmg { color: #ffffff; }
+.pop.crit { color: #ff2e2e; font-size: clamp(16px, 2.6vw, 30px); animation-name: critrise; text-shadow: 2px 2px 0 #2a0000, -1px -1px 0 #2a0000, 1px -1px 0 #2a0000, -1px 1px 0 #2a0000, 0 0 8px rgba(255, 40, 40, .55); }
 .pop.heal { color: var(--good); }
 .pop.poison { color: #a8e060; }
 .pop.burn { color: #ff9a4a; }
@@ -746,6 +746,12 @@ button, a, input { touch-action: manipulation; }
   .chat-box { left: 8px; right: 8px; width: auto; top: calc(56px + env(safe-area-inset-top, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); height: auto; }
 }
 .vol-rows { display: grid; gap: 10px; max-width: 460px; }
+/* Settings → Battle: an on/off switch per option (Screen shake) */
+.set-rows { display: grid; gap: 8px; max-width: 460px; }
+.set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.set-row > span { display: flex; flex-direction: column; min-width: 0; } .set-row b { color: var(--fg); } .set-row small { color: var(--muted); }
+.set-tog { min-width: 64px; padding: 6px 12px; cursor: pointer; font-family: var(--font-display); font-weight: 700; letter-spacing: .04em; border: 1px solid #d9b45a; border-radius: 3px; background: linear-gradient(180deg, #2a2116, #120d08); color: var(--muted); }
+.set-tog.on { color: #1a1206; background: linear-gradient(180deg, #f3d891, #c9952f); border-color: #fbe4a0; }
 .vol-rows .vol-ctl, .mm-vol .vol-ctl { display: grid; grid-template-columns: 7.5em minmax(0, 1fr) 3.2em auto; width: 100%; }
 .vol-mute { display: inline-grid; place-items: center; width: 38px; height: 34px; padding: 0; cursor: pointer; color: #f3d891; border: 1px solid #d9b45a; border-radius: 3px;
   background: radial-gradient(120% 90% at 50% 0%, rgba(217, 180, 90, .12), transparent 60%), linear-gradient(180deg, #1c1520, #09070b);
