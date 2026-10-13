@@ -1018,14 +1018,14 @@ const K = (function () {
   const bossEnergy = n => ENERGY.boss + n;
   // ---------- Expeditions (the ship): one at a time, up to EXP_HEROES heroes that are in none of the player's teams ----------
   // Each hero gets xp × winXp(lvl) XP (a won stage gives 1×; a hero at its level cap passes its share to the rest of the crew) and the trip brings silver × winSilver(lvl) Sigils, with lvl
-  // the player's campaign level. Per hour that is 3 (1 h), 2 (12 h) and 1.5 (24 h) stages' worth: far below fighting,
+  // the player's campaign level. Per hour that is 0.6 (1 h), 0.42 (12 h) and 0.33 (24 h) stages' worth (cut to about a sixth after players found it too much: a level-1 hero reached level 23 in one Far Isles trip), far below fighting,
   // where a day of energy pays ~160 Easy stages for the whole team. fs / st: [kind, n]; n ≥ 1 is that many, below 1 the
   // chance of one.
   const EXP_HEROES = 4;
   const EXPEDITIONS = [
-    { id: 'coast', name: 'Coastal Patrol', hours: 1, xp: 3, silver: 1.5, desc: 'A short sail along the coast to chase off raiders.', fs: [['fate', 0.15]], st: [['lesser', 1]] },
-    { id: 'ruins', name: 'The Sunken Ruins', hours: 12, xp: 24, silver: 12, desc: 'Dive for relics in a drowned city off the cliffs.', fs: [['fate', 1], ['greater', 0.3]], st: [['lesser', 4], ['greater', 0.25]] },
-    { id: 'isles', name: 'The Far Isles', hours: 24, xp: 36, silver: 20, desc: 'A long voyage to uncharted islands at the edge of the map.', fs: [['fate', 2], ['greater', 1], ['ancient', 0.05]], st: [['lesser', 8], ['greater', 1], ['ancient', 0.1]] },
+    { id: 'coast', name: 'Coastal Patrol', hours: 1, xp: 0.6, silver: 1.5, desc: 'A short sail along the coast to chase off raiders.', fs: [['fate', 0.15]], st: [['lesser', 1]] },
+    { id: 'ruins', name: 'The Sunken Ruins', hours: 12, xp: 5, silver: 12, desc: 'Dive for relics in a drowned city off the cliffs.', fs: [['fate', 1], ['greater', 0.3]], st: [['lesser', 4], ['greater', 0.25]] },
+    { id: 'isles', name: 'The Far Isles', hours: 24, xp: 8, silver: 20, desc: 'A long voyage to uncharted islands at the edge of the map.', fs: [['fate', 2], ['greater', 1], ['ancient', 0.05]], st: [['lesser', 8], ['greater', 1], ['ancient', 0.1]] },
   ];
   // the rewards of a finished expedition (rolled once, when it is collected)
   function expReward(k, lvl) {
