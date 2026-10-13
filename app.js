@@ -664,7 +664,7 @@
   // Fight button is spotlighted (spotFight). S.seen.tour = done or skipped.
   const TOUR = [
     { go: 'team', title: 'Heroes', text: 'Your team and every hero. Level heroes up with Elixirs or by feeding spare heroes, ascend them for higher level caps and build up to seven teams of four, one for each game mode.' },
-    { go: 'forge', title: 'Forge', text: 'Gearing: pick a hero, tap a slot and compare the pieces of every set, then equip and upgrade them. Items: everything you own in one place, to lock what you keep and sell the rest.' },
+    { go: 'forge', title: 'Forge', text: 'Everything you own in one place: gear, stones, shards and elixirs. Upgrade gear, lock what you keep and sell the rest. To equip gear, open a hero in Heroes and tap a slot.' },
     { go: 'altaar', title: 'Fate Altar', text: 'Summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
     { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
@@ -727,16 +727,13 @@
         <span class="sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</nav>`;
   }
-  // every screen but Home gets a way back; the Forge has two tabs: Gearing (one hero's gear) and Items (everything)
-  function backBar() {
-    const tb = (v, label) => `<button type="button" data-act="fgview" data-v="${v}" aria-pressed="${FG.view === v}">${label}</button>`;
-    const sw = tab === 'forge' ? `<div class="seg big-tabs fg-subnav" role="group" aria-label="Gearing or items">${tb('gear', 'Gearing')}${tb('items', 'Items')}</div>` : '';
-    return `<div class="backbar"><button type="button" class="btn small" data-act="tab" data-tab="home">‹ Home</button>${sw}</div>`;
-  }
+  // every screen but Home gets a way back
+  function backBar() { return '<div class="backbar"><button type="button" class="btn small" data-act="tab" data-tab="home">‹ Home</button></div>'; }
   function setTab(t) {
     // old tab names: the hero index is now part of Heroes, the gear vault is Forge → Items
     if (t === 'champions') { t = 'team'; TF.own = 'all'; }
-    if (t === 'vault') { t = 'forge'; FG.view = 'items'; }
+    if (t === 'vault') t = 'forge';
+    if (t !== 'team') { HB.open = false; HB.up = null; } // the gear bag closes when you leave Heroes
     tab = t;
     document.body.dataset.tab = t; setMenu(false);
     document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t ? 'true' : 'false'));
@@ -770,11 +767,6 @@
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
-    // the carousel is drawn anew: keep the chosen hero in sight (only sideways, the page does not move)
-    if (tab === 'forge') { const on = el.querySelector('.fg-hc.on'), l = on && on.parentElement; if (l && on.offsetLeft + on.offsetWidth > l.offsetLeft + l.clientWidth) l.scrollLeft = on.offsetLeft - l.offsetLeft - (l.clientWidth - on.offsetWidth); }
-    // a picked piece is compared above the list: bring that window into view when it is scrolled away
-    if (tab === 'forge' && FG.scrollD) { FG.scrollD = false; const d = el.querySelector('.fg-cmp'); if (d) requestAnimationFrame(() => { const t = d.getBoundingClientRect().top; if (t < 60 || t > innerHeight * 0.5) d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
-    if (tab === 'forge' && FG.scroll) { FG.scroll = false; const l = el.querySelector('.fg-bagp'); if (l) requestAnimationFrame(() => { const r = l.getBoundingClientRect(); if (r.top < 0 || r.top > innerHeight * 0.35) l.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
     if (tab === 'altaar') paintAltar();
@@ -1065,7 +1057,7 @@
   const landPhone = () => innerHeight < 500 && innerWidth > innerHeight;
   function hxFit() {
     for (const h of document.querySelectorAll('.hx, .lfit')) {
-      if (h.classList.contains('lfit') ? !landPhone() : innerWidth <= 760) { h.style.height = ''; continue; }
+      if (h.classList.contains('lfit') ? !landPhone() : innerWidth <= 760 && !landPhone()) { h.style.height = ''; continue; }
       const top = h.getBoundingClientRect().top + scrollY;
       const pad = parseFloat(getComputedStyle($('#app')).paddingBottom) || 0; // the page's own bottom padding
       h.style.height = Math.max(innerHeight < 500 ? 240 : 520, innerHeight - top - pad - 4) + 'px'; // a phone on its side is ~360-430 px high
@@ -1093,7 +1085,8 @@
       <div class="hx-list">${list.length ? list.map(rosterTile).join('') : '<p class="empty-note">No heroes match these filters.</p>'}</div>
       <small class="empty-note hx-count">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes unlocked</small></aside>`;
     const mid = HX.view === 'teams' ? hxTeams() : hxHero(selChamp);
-    return `<div class="hx ${HX.view === 'teams' ? 'teams' : ''}">${roster}${mid}${hxSide(selChamp)}</div>`;
+    const bag = HB.open && HX.view !== 'teams';
+    return `<div class="hx ${HX.view === 'teams' ? 'teams' : ''} ${bag ? 'bag' : ''}">${roster}${mid}${bag ? `<aside class="hx-col hx-side hb-side">${hxBag(selChamp)}</aside>` : hxSide(selChamp)}</div>`;
   }
   // the middle in the Teams view: the teams, the four places (tap one to see that hero), what the team brings
   function hxTeams() {
@@ -1121,6 +1114,7 @@
         <div class="fg-sub"><span class="rartxt rar-${c.rar}">${K.RARITIES[c.rar]}</span> · ${roleStr(c)} · ${c.aff}</div>
         <div class="hx-lvl"><b>Lv ${r.lvl}</b><span>/ ${cap}</span><div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div><small class="empty-note">${atCap ? (r.stars < mxs ? 'Max for this star: ascend' : 'Max level') : `${r.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP`}</small></div></div>
         <div class="hx-acts"><button type="button" class="btn small ${inTeam || c.pc ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${c.pc ? 'disabled title="Your hero always fights with you"' : ''}>${c.pc ? 'Always in your team' : inTeam ? `Remove from ${esc(S.teams[S.tsel].name)}` : `Add to ${esc(S.teams[S.tsel].name)}`}</button><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${c.pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen">${FCS_SVG} Change class</button>` : ''}</div>
+        ${HB.open ? `<div class="fg-sgrid hx-mslots">${gearTilesHtml(id, 'hxslot')}</div>` : ''}
         ${other.length ? `<small class="empty-note hx-also">Also in ${other.join(', ')}</small>` : ''}</section>`;
   }
   // the right: the hero's tabs
@@ -1649,20 +1643,23 @@
   // All gear in one place (tab 'vault', next to Heroes and Team), like the artifact screen in RAID: filter by slot,
   // rarity, set and whether it is worn, sort it, lock pieces you want to keep (it.lock) and sell several at once.
   // Sell mode: tap pieces to select them; worn and locked gear can never be selected.
-  const VT = { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar', sell: false, sel: new Set(), open: null };
+  const VT = { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar', sell: false, sel: new Set(), open: null, up: null };
   const VT_SORTS = { rar: ['Rarity', (a, b) => b.rar - a.rar || b.lvl - a.lvl || b.il - a.il], lvl: ['Upgrade level', (a, b) => b.lvl - a.lvl || b.rar - a.rar], new: ['Newest', (a, b) => b.id - a.id], value: ['Sell value', (a, b) => K.sellValue(b) - K.sellValue(a)] };
   const sellable = it => !it.owner && !it.lock;
   function vaultItems() {
     return S.inv.filter(it => (VT.slot === 'all' || it.slot === VT.slot) && (VT.rar === 'all' || it.rar === +VT.rar) && (VT.set === 'all' || it.set === VT.set)
       && (VT.st === 'all' || (VT.st === 'free' ? !it.owner : VT.st === 'worn' ? !!it.owner : VT.st === 'asc' ? !!it.asc : !!it.lock))).sort((VT_SORTS[VT.sort] || VT_SORTS.rar)[1]);
   }
-  // ================= FORGE: Gearing (one hero's gear) and Items (everything owned) =================
-  // Gearing: pick a hero (carousel), tap a slot: its pieces are listed per set (the sets the hero wears first, with
-  // "Wearing 3/6" and what the next bonus needs), tap a piece to compare it with what the hero wears (stat by stat and
-  // in power) and equip it; upgrades and ascension happen in the Forge tab. Browsing tools (Bag/Forge, filters) sit
-  // under the hero. Items: every piece of gear plus stones, shards and elixirs, with all filters and
-  // selling (the old Vault, state VT). The hero being geared is selChamp (shared with the Heroes screen).
-  const FG = { view: 'gear', slot: 'wapen', pick: null, tab: 'bag', rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', worn: true, free: true, cat: 'all' };
+  // ================= GEAR: the bag on the Heroes screen, and the Forge (Items) =================
+  // Heroes → Gear: tapping a slot opens the gear bag over the right column (HB.open): the filters, what the hero wears
+  // in that slot next to the piece picked (stat by stat with ▲/▼, the set's progress, the power change), Equip /
+  // Upgrade / Lock / Sell, and the slot's pieces as one grid (each with its set's essence badge, or a gold dot for a
+  // campaign set). Upgrade turns the bag into the upgrade panel (HB.up: the +0…+16 track, chance, cost, Upgrade and
+  // To +N; ascension at +16), "‹ Bag" goes back. The Forge is Items: every piece of gear plus stones, shards and
+  // elixirs, with all filters and selling (the old Vault, state VT); a piece can be upgraded there too (VT.up).
+  // The hero being geared is selChamp.
+  const FG = { view: 'items', slot: 'wapen', pick: null, rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', worn: true, free: true, cat: 'all' };
+  const HB = { open: false, up: null };
   const ESS_BG = { Ember: 2, Frost: 5, Radiant: 4, Aether: 0, Verdant: 3, Umbral: 8, Storm: 1 };
   const essBadge = (e, cls) => e ? `<span class="fg-ess ${cls || ''}" style="--ec:${AFF_COL[e]}">${essIcon(e)}</span>` : '';
   const setEss = k => (K.SETS[k] && K.SETS[k].ess) || null;
@@ -1677,8 +1674,6 @@
     const now = itemsOf(id), next = [...now.filter(x => x.slot !== it.slot), it];
     return power(K.heroStats(id, r, next)) - power(K.heroStats(id, r, now));
   }
-  // heroes in the carousel: the team first, then everyone else by power
-  const fgHeroes = () => Object.keys(S.roster).filter(id => C[id] && !C[id].captured).sort((a, b) => (S.team.includes(b) - S.team.includes(a)) || power(statsOf(b)) - power(statsOf(a)));
   function fgList(id) {
     let l = S.inv.filter(x => x.owner !== id && (!FG.slot || x.slot === FG.slot));
     if (!FG.worn) l = l.filter(x => !x.owner); // the tick boxes: pieces other heroes wear, spare pieces
@@ -1690,14 +1685,18 @@
     const by = { power: (a, b) => gainFor(id, b) - gainFor(id, a) || b.rar - a.rar, rarity: (a, b) => b.rar - a.rar || b.lvl - a.lvl, level: (a, b) => b.lvl - a.lvl || b.rar - a.rar };
     return l.sort(by[FG.sort] || by.power);
   }
+  // a piece in the bag's grid: rarity frame, +level, its set, who wears it, ▲ when it makes this hero stronger; the
+  // piece the hero wears in the slot comes first with a gold ring
   function fgCell(it, id) {
-    const g = gainFor(id, it), owner = it.owner && C[it.owner];
-    return `<button type="button" class="fg-cell rar-${it.rar} ${FG.pick === it.id ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="fgpick" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}${owner ? ' · worn by ' + esc(owner.short) : ''}">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}${owner ? `<span class="fg-who">${por(it.owner)}</span>` : ''}${it.lock ? `<span class="fg-lk">${LOCK_SVG}</span>` : ''}${g > 0 ? '<span class="fg-up" title="Stronger for this hero">▲</span>' : ''}</button>`;
+    const g = gainFor(id, it), owner = it.owner && C[it.owner], mine = it.owner === id;
+    return `<button type="button" class="fg-cell rar-${it.rar} ${FG.pick === it.id ? 'on' : ''} ${mine ? 'mine' : ''}" style="--rc:var(--r${it.rar})" data-act="hbpick" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}${mine ? ' · equipped' : owner ? ' · worn by ' + esc(owner.short) : ''}">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${setDot(it.set)}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}${owner && !mine ? `<span class="fg-who">${por(it.owner)}</span>` : ''}${it.lock ? `<span class="fg-lk">${LOCK_SVG}</span>` : ''}${g > 0 ? '<span class="fg-up" title="Stronger for this hero">▲</span>' : ''}</button>`;
   }
+  // a set's mark: its essence badge, or a gold dot for a campaign set
+  const setDot = k => essBadge(setEss(k)) || '<span class="hb-sd" aria-hidden="true"></span>';
   function gearTilesHtml(id, act) { const items = itemsOf(id), c = C[id];
-    return K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl); return it
-      ? `<button type="button" class="fg-tile rar-${it.rar} ${act === 'fgslot' && FG.slot === sl ? 'on' : ''}" style="--rc:var(--r${it.rar})" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
-      : `<button type="button" class="fg-tile empty ${act === 'fgslot' && FG.slot === sl ? 'on' : ''}" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
+    return K.SLOTS.map(sl => { const it = items.find(x => x.slot === sl), on = HB.open && FG.slot === sl ? 'on' : ''; return it
+      ? `<button type="button" class="fg-tile rar-${it.rar} ${on}" style="--rc:var(--r${it.rar})" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span>${it.lock ? `<span class="fg-lk tile" title="Locked to ${esc(c.short)}">${LOCK_SVG}</span>` : ''}${gearIcon(it, 'fg-ic')}${essBadge(setEss(it.set))}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}<span class="fg-plv">+${it.lvl}</span></button>`
+      : `<button type="button" class="fg-tile empty ${on}" data-act="${act}" data-slot="${sl}"><span class="fg-lab">${K.SLOT_NAMES[sl]}</span><span class="fg-plus">+</span></button>`; }).join('');
   }
   // the active set bonuses of what a hero wears (a live set: its circle glows)
   function setRowsHtml(items) { const counts = K.setCounts(items), active = K.setTiers(items);
@@ -1705,65 +1704,59 @@
       return `<div class="fg-srow ${on.length ? 'live' : ''}">${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<span class="${on.length ? 'on' : 'off'}">${esc(SS.name)} (${n}/${max})</span><span class="fg-sb ${on.length ? '' : 'off'}">${on.length ? esc(on.map(t => t[1]).join(' · ')) + (asc ? ' · <span class="asc-st">★★★</span> Ascended' : '') : `${nx[0] - n} more`}</span></div>`; }).join('')
       + active.filter(t => t.fam).map(t => `<div class="fg-srow live"><span class="fg-ess"></span><span class="on">${t.fam} family</span><span class="fg-sb">${esc(t.d)}</span></div>`).join('');
   }
-  function gearingHtml() {
-    const ids = fgHeroes(); if (!S.roster[selChamp] || C[selChamp].captured) selChamp = ids[0];
-    const id = selChamp, c = C[id], r = S.roster[id], st = statsOf(id), base = K.heroStats(id, r, []), items = itemsOf(id);
-    const counts = K.setCounts(items), active = K.setTiers(items);
-    // the hero on a small stage (its essence's chapter scene behind it, never stretched past 1.5x)
-    const splash = `<aside class="fg-splash" style="--ec:${AFF_COL[c.aff]}">
-      <div class="fg-art"><div class="fg-scene" style="--scene:url(${CHAPTER_BG[ESS_BG[c.aff] || 0]})"></div><div class="fg-ring"></div><div class="fg-floor"></div><img class="${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""></div>
-      <div class="fg-info"><div class="fg-name">${essBadge(c.aff, 'big')}<div><h2>${esc(c.name)}</h2>${starStr(r.stars, K.maxStars(id))}</div></div>
-        <div class="fg-sub"><b>Lv ${r.lvl} / ${K.maxLvl(r.stars, id)}</b> · ${roleStr(c)}</div>
-        <div class="fg-pow">Power <b>${power(st).toLocaleString('en-US')}</b></div>
-        <table class="fg-stats">${[['hp'], ['atk'], ['def'], ['spd'], ['crit', 1], ['cdmg', 1], ['acc'], ['res']].map(([k, p]) => `<tr><td>${K.STAT_NAMES[k]}</td><td>${st[k].toLocaleString('en-US')}${p ? '%' : ''}</td><td>${st[k] > base[k] ? '+' + (st[k] - base[k]).toLocaleString('en-US') + (p ? '%' : '') : ''}</td></tr>`).join('')}</table>
-        <button type="button" class="btn small fg-wide" data-act="fghero" data-id="${id}">Hero details ›</button></div></aside>`;
-    const carousel = `<div class="fg-car"><button type="button" class="fg-arr" data-act="fgstep" data-d="-1" aria-label="Previous hero">‹</button><div class="fg-hlist">${ids.map(x => `<button type="button" class="fg-hc rar-${C[x].rar} ${x === id ? 'on' : ''}" data-act="fgsel" data-id="${x}" title="${esc(C[x].name)}">${por(x)}${essBadge(C[x].aff)}<b>${esc(C[x].short)}</b><small>Lv ${S.roster[x].lvl}</small></button>`).join('')}</div><button type="button" class="fg-arr" data-act="fgstep" data-d="1" aria-label="Next hero">›</button></div>`;
-    const tiles = gearTilesHtml(id, 'fgslot');
-    const setRows = setRowsHtml(items);
-    const pick = S.inv.find(x => x.id === FG.pick) || items.find(x => x.slot === FG.slot);
-    return `<div class="fg-stage"><div class="fg-left">${splash}<section class="fg-panel fg-ctrlp">${fgCtrl()}</section></div><div class="fg-right">
-      <section class="fg-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Gearing</h1><p>Pick a hero, tap a slot, compare and equip. Upgrades happen in the Forge.</p></div>${carousel}</section>
-      <div class="fg-work">
-        <section class="fg-panel fg-slots"><div class="fg-sgrid">${tiles}</div>
-          <div class="fg-sets"><h3>Active set bonuses</h3>${setRows || '<p class="empty-note">No set bonus yet.</p>'}</div>
-          <div class="fg-row"><button type="button" class="btn small primary" data-act="bestgear">Equip best</button><button type="button" class="btn small" data-act="unequipall" ${items.length ? '' : 'disabled'}>Remove all</button></div></section>
-        <section class="fg-panel fg-bagp">${fgDetail(pick, id)}${FG.tab === 'forge' ? fgForge(pick) : fgBag(id)}</section>
-      </div></div></div>`;
+  // the bag (Heroes → Gear → a slot): filters, the comparison, the slot's pieces as one grid
+  function hxBag(id) {
+    if (HB.up) { const it = S.inv.find(x => x.id === HB.up); if (it) return hbUp(it, id); HB.up = null; }
+    const cur = itemsOf(id).find(x => x.slot === FG.slot), pick = FG.pick ? S.inv.find(x => x.id === FG.pick && x.owner !== id) : null;
+    const list = fgList(id), cells = (cur ? [cur] : []).concat(list).map(it => fgCell(it, id)).join('');
+    const none = list.length ? '' : `<p class="empty-note hb-none">${S.inv.some(x => x.slot === FG.slot && x.owner !== id) ? 'No other piece matches these filters.' : `No other ${K.SLOT_NAMES[FG.slot].toLowerCase()} yet. Play the campaign or the Boss Hall to find gear.`}</p>`;
+    return `<div class="hb">
+      <div class="hb-head"><b>${K.SLOT_NAMES[FG.slot]} <small>· ${S.inv.filter(x => x.slot === FG.slot).length}</small></b><label class="hb-chk"><input type="checkbox" data-gf="worn" ${FG.worn ? 'checked' : ''}> Worn by others</label><label class="hb-chk"><input type="checkbox" data-gf="free" ${FG.free ? 'checked' : ''}> Not worn</label><button type="button" class="hb-x" data-act="hbclose" aria-label="Close the bag" title="Close">✕</button>${hbFilters()}</div>
+      ${hbCompare(cur, pick, id)}
+      <div class="hb-grid">${cells}</div>${none}</div>`;
   }
-  // the bag: the chosen slot's pieces, one block per set
-  function fgBag(id) {
-    const l = fgList(id), counts = K.setCounts(itemsOf(id)), g = {};
-    for (const it of l) (g[it.set] = g[it.set] || []).push(it);
-    const order = Object.keys(g).filter(k => K.SETS[k]).sort((a, b) => (counts[b] || 0) - (counts[a] || 0) || g[b].length - g[a].length);
-    if (!order.length) return `<p class="empty-note fg-none">${S.inv.some(x => x.slot === FG.slot && x.owner !== id) ? 'Nothing matches these filters.' : `No spare ${FG.slot ? K.SLOT_NAMES[FG.slot].toLowerCase() : 'gear'} yet. Play the campaign or the Boss Hall to find gear.`}</p>`;
-    return `<div class="fg-groups">${order.map(k => { const SS = K.SETS[k], n = counts[k] || 0, tiers = setTiersOf(k), max = tiers[tiers.length - 1][0], nx = tiers.find(([t]) => t > n);
-      return `<section class="fg-sg ${n ? 'worn' : ''}" style="--ec:${SS.ess ? AFF_COL[SS.ess] : '#d9b45a'}"><header>${essBadge(SS.ess) || '<span class="fg-ess"></span>'}<div><b>${esc(SS.name)}</b><div class="fg-tiers">${tiers.map(([t, d]) => `<span class="${n >= t ? 'on' : ''}">${t} pc: ${esc(d)}</span>`).join(' · ')}</div></div><span class="fg-cnt">${n ? `Wearing ${n}/${max}` : `${g[k].length} owned`}</span></header>${nx && n ? `<div class="fg-nx">${nx[0] - n} more for the ${nx[0]}-piece bonus</div>` : ''}<div class="fg-cells">${g[k].map(it => fgCell(it, id)).join('')}</div></section>`; }).join('')}</div>`;
+  function hbFilters() {
+    const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`, stats = Object.keys(K.STAT_NAMES);
+    const sets = [...new Set(S.inv.filter(x => x.slot === FG.slot).map(x => x.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
+    const nf = [FG.rar, FG.set, FG.main, FG.sub].filter(v => v !== 'all').length + !FG.worn + !FG.free;
+    return `<div class="hb-filt"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, STAT_SHORT[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, STAT_SHORT[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Best first', FG.sort)}${opt('rarity', 'Rarity', FG.sort)}${opt('level', 'Level', FG.sort)}</select>${nf ? '<button type="button" class="linkbtn" data-act="fgreset">Clear</button>' : ''}</div>`;
   }
-  // what the hero wears in the chosen slot, above the list; a picked piece is shown next to it, stat by stat
-  function fgDetail(it, id) {
-    if (!it) return `<div class="fg-detail"><p class="empty-note">Tap a slot or a piece to see it here.</p></div>`;
-    const mine = it.owner === id, cur = itemsOf(id).find(x => x.slot === it.slot), a = statMap(cur), b = statMap(it), g = gainFor(id, it), SS = K.SETS[it.set];
-    if (!mine) return fgCompare(it, cur, id, a, b, g);
-    const rows = Object.keys(b).map(k => `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, b[k])}</b><i></i>`).join('');
-    const acts =
-      `<button type="button" class="btn primary" data-act="fgforge" data-item="${it.id}">Upgrade</button><button type="button" class="btn" data-act="fgchange" ${it.lock ? 'disabled title="Locked to this hero: unlock it first"' : ''}>Change</button><button type="button" class="btn ${it.lock ? 'on' : ''}" data-act="vlock" data-item="${it.id}" title="${it.lock ? 'Unlock' : `Lock to ${esc(C[id].short)}: no other hero can take it`}">${it.lock ? `${LOCK_SVG} Locked` : `Lock to ${esc(C[id].short)}`}</button><button type="button" class="btn danger" data-act="unequip" data-item="${it.id}" ${it.lock ? 'disabled title="Locked to this hero: unlock it first"' : ''}>Remove</button>`
-    return `<div class="fg-detail rar-${it.rar}" style="--rc:var(--r${it.rar})"><div class="fg-big">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${essBadge(setEss(it.set))}</div>
-      <div class="fg-dmain"><small class="fg-ctag">Equipped${it.lock ? ' ' + LOCK_SVG : ''}</small><h3 class="rartxt">${itemNameH(it)}</h3><div class="fg-dsub">${esc(SS.name)} · ${K.SLOT_NAMES[it.slot]}</div>
-        <div class="fg-dstats">${rows}</div></div>
-      <div class="fg-acts">${acts}</div></div>`;
+  // short stat names for tight tables (HP% next to HP)
+  const STAT_SHORT = { hp: 'HP', hpP: 'HP%', atk: 'ATK', atkP: 'ATK%', def: 'DEF', defP: 'DEF%', spd: 'SPD', crit: 'C.Rate', cdmg: 'C.DMG', acc: 'ACC', res: 'RES' };
+  // what the hero wears in the slot (left) and the piece picked (right), each with its set's pieces now → after the
+  // swap (▲ a new set bonus, ▼ one lost); below them one stat table in two blocks (Now, New, ▲/▼), the power change and
+  // the buttons
+  function hbCompare(cur, pick, id) {
+    if (!cur && !pick) return '<div class="hb-cmp empty"><p class="empty-note">Nothing in this slot. Pick a piece below.</p></div>';
+    const now = itemsOf(id), next = pick ? [...now.filter(x => x.slot !== pick.slot), pick] : now, cn = K.setCounts(now), ca = K.setCounts(next);
+    const setLine = x => { const tiers = setTiersOf(x.set), max = tiers[tiers.length - 1][0], n = cn[x.set] || 0, af = ca[x.set] || 0;
+      const up = tiers.some(([t]) => n < t && af >= t), dn = tiers.some(([t]) => n >= t && af < t);
+      return `<div class="hb-set">${setDot(x.set)}<span>${esc(K.SETS[x.set].name)}</span><small>${n}/${max}${af !== n ? ` → ${af}/${max}` : ''}</small>${up ? '<i class="u" title="A new set bonus">▲</i>' : dn ? '<i class="d" title="A set bonus is lost">▼</i>' : ''}</div>`; };
+    const head = (x, tag) => `<div class="hb-cs"><div class="hb-ch"><span class="hb-ic rar-${x.rar}" style="--rc:var(--r${x.rar})">${gearIcon(x, 'fg-ic')}<span class="fg-plv">+${x.lvl}</span></span><div><small class="fg-ctag">${tag}</small><b class="rartxt rar-${x.rar}">${itemNameH(x)}</b></div></div>${setLine(x)}</div>`;
+    const a = statMap(cur), b = statMap(pick), ord = ['hp', 'hpP', 'atk', 'atkP', 'def', 'defP', 'spd', 'crit', 'cdmg', 'acc', 'res'];
+    const keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort((x, y) => ord.indexOf(x) - ord.indexOf(y));
+    const v = (m, k) => k in m ? fmtVal(k, m[k]) : '—';
+    if (!pick) {
+      const lk = cur.lock ? 'disabled title="Locked to this hero: unlock it first"' : '';
+      return `<div class="hb-cmp one">${head(cur, `Equipped${cur.lock ? ' ' + LOCK_SVG : ''}`)}<div class="hb-st">${keys.map(k => `<span>${STAT_SHORT[k]}</span><b>${v(a, k)}</b>`).join('')}</div>
+        <div class="hb-acts"><button type="button" class="btn primary" data-act="hbup" data-item="${cur.id}">${cur.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn ${cur.lock ? 'on' : ''}" data-act="vlock" data-item="${cur.id}">${cur.lock ? `${LOCK_SVG} Locked` : `Lock to ${esc(C[id].short)}`}</button><button type="button" class="btn danger" data-act="unequip" data-item="${cur.id}" ${lk}>Remove</button></div></div>`;
+    }
+    const left = cur ? head(cur, `Equipped${cur.lock ? ' ' + LOCK_SVG : ''}`) : '<div class="hb-cs empty"><small class="fg-ctag">Equipped</small><p class="empty-note">Nothing in this slot.</p></div>';
+    const right = head(pick, `Selected${pick.owner && C[pick.owner] ? ` · worn by ${esc(C[pick.owner].short)}` : ''}`).replace('class="hb-cs"', 'class="hb-cs sel"');
+    const hdr = '<span></span><small>Now</small><small>New</small><i></i>';
+    const rows = keys.map(k => { const d = (b[k] || 0) - (a[k] || 0); return `<span>${STAT_SHORT[k]}</span><b class="was">${v(a, k)}</b><b>${v(b, k)}</b><i class="${d > 0 ? 'u' : d < 0 ? 'd' : ''}">${d > 0 ? '▲' : d < 0 ? '▼' : ''}</i>`; }).join('');
+    const g = gainFor(id, pick), blk = equipBlock(id, pick);
+    const eq = blk ? `<button type="button" class="btn" disabled title="${esc(blk)}">${LOCK_SVG} ${lockedTo(pick) && lockedTo(pick) !== id ? `Locked to ${esc(C[pick.owner].short)}` : 'Slot locked'}</button>`
+      : `<button type="button" class="btn primary" data-act="equip" data-item="${pick.id}" ${wearOk(id, pick) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, pick) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button>`;
+    return `<div class="hb-cmp">${left}${right}<div class="hb-st two">${hdr}${keys.length > 1 ? hdr : ''}${rows}</div>
+      <div class="hb-acts"><span class="hb-pow ${g >= 0 ? 'u' : 'd'}" title="Power for ${esc(C[id].short)}">Power ${g >= 0 ? '+' : '−'}${Math.abs(g).toLocaleString('en-US')} ${g >= 0 ? '▲' : '▼'}</span>${eq}<button type="button" class="btn" data-act="hbup" data-item="${pick.id}">${pick.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn" data-act="vlock" data-item="${pick.id}">${pick.lock ? 'Unlock' : 'Lock'}</button>${pick.owner ? '' : `<button type="button" class="btn danger" data-act="sell" data-item="${pick.id}" ${pick.lock ? 'disabled title="Locked: unlock it first"' : ''}>Sell · ${K.sellValue(pick).toLocaleString('en-US')}</button>`}</div></div>`;
   }
-  // equipped (left) and picked (right) side by side: the same stat rows on both, ▲/▼ on the picked piece
-  function fgCompare(it, cur, id, a, b, g) {
-    const ord = ['hp', 'hpP', 'atk', 'atkP', 'def', 'defP', 'spd', 'crit', 'cdmg', 'acc', 'res'], keys = [...new Set([...Object.keys(a), ...Object.keys(b)])].sort((x, y) => ord.indexOf(x) - ord.indexOf(y));
-    const head = (x, tag) => `<small class="fg-ctag">${tag}</small><div class="fg-cmini"><div class="fg-big">${gearIcon(x, 'fg-ic')}<span class="fg-plv">+${x.lvl}</span>${essBadge(setEss(x.set))}</div><div class="fg-dmain"><h3 class="rartxt">${itemNameH(x)}</h3><div class="fg-dsub">${esc(K.SETS[x.set].name)}${x.owner && x.owner !== id && C[x.owner] ? ` · worn by ${esc(C[x.owner].short)}` : ''}</div></div></div>`;
-    const left = cur ? `<div class="fg-cs rar-${cur.rar}" style="--rc:var(--r${cur.rar})">${head(cur, `Equipped${cur.lock ? ' ' + LOCK_SVG : ''}`)}<div class="fg-dstats">${keys.map(k => `<span>${K.STAT_NAMES[k]}</span>${k in a ? `<b>${fmtVal(k, a[k])}</b>` : '<b class="off">—</b>'}<i></i>`).join('')}</div></div>`
-      : `<div class="fg-cs empty"><small class="fg-ctag">Equipped</small><p class="empty-note">Nothing in this slot.</p></div>`;
-    const right = `<div class="fg-cs rar-${it.rar}" style="--rc:var(--r${it.rar})">${head(it, 'Selected')}<div class="fg-dstats">${keys.map(k => { const d = (b[k] || 0) - (a[k] || 0); return `<span>${K.STAT_NAMES[k]}</span>${k in b ? `<b>${fmtVal(k, b[k])}</b>` : '<b class="off">—</b>'}<i class="${d > 0 ? 'u' : d < 0 ? 'd' : ''}">${d ? (d > 0 ? '▲ ' : '▼ ') + fmtDelta(k, d).replace(/^[+−]/, '') : ''}</i>`; }).join('')}</div></div>`;
-    const acts = equipBlock(id, it) ? `<button type="button" class="btn" disabled title="${esc(equipBlock(id, it))}">${LOCK_SVG} ${lockedTo(it) && lockedTo(it) !== id ? `Locked to ${esc(C[it.owner].short)}` : 'Slot locked'}</button>`
-      : `<button type="button" class="btn primary" data-act="equip" data-item="${it.id}" ${wearOk(id, it) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, it) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button>`;
-    return `<div class="fg-detail fg-cmp"><div class="fg-csides">${left}<span class="fg-carr">➜</span>${right}</div>
-      <div class="fg-cfoot"><div class="fg-dpow ${g >= 0 ? 'u' : 'd'}">${g >= 0 ? '▲' : '▼'} ${Math.abs(g).toLocaleString('en-US')} power for ${esc(C[id].short)}</div>
-      <div class="fg-acts row">${acts}<button type="button" class="btn" data-act="fgforge" data-item="${it.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${it.id}">${it.lock ? 'Unlock' : 'Lock'}</button>${it.owner ? '' : `<button type="button" class="btn danger" data-act="sell" data-item="${it.id}" ${it.lock ? 'disabled' : ''}>Sell · ${K.sellValue(it).toLocaleString('en-US')}</button>`}<button type="button" class="btn" data-act="fgpick" data-item="${it.id}">Close</button></div></div></div>`;
+  // the bag turned into the upgrade panel of one piece; "‹ Bag" goes back
+  function hbUp(it, id) {
+    const w = it.owner && C[it.owner];
+    return `<div class="hb hb-upv"><div class="hb-head"><button type="button" class="btn small" data-act="hbback">‹ Bag</button><b>${it.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</b><button type="button" class="hb-x" data-act="hbclose" aria-label="Close the bag" title="Close">✕</button></div>
+      <div class="hb-ch big"><span class="hb-ic rar-${it.rar}" style="--rc:var(--r${it.rar})">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span></span><div><b class="rartxt rar-${it.rar}">${itemNameH(it)}</b><small>${K.RARITIES[it.rar]} ${K.SLOT_NAMES[it.slot].toLowerCase()} · ${esc(K.SETS[it.set].name)} · ${it.owner === id ? 'equipped' : w ? `worn by ${esc(w.short)}` : 'not worn'}</small></div></div>
+      ${fgForge(it)}</div>`;
   }
   // the Forge tab: one place for upgrades (+0 to +16, milestones at +4/8/12/16) and, at +16, ascension
   function fgForge(it) {
@@ -1777,15 +1770,6 @@
         <div class="fg-go"><button type="button" class="btn primary" data-act="up" data-item="${it.id}" ${S.silver < cost ? 'disabled' : ''}>Upgrade</button><button type="button" class="btn" data-act="fgupms" data-item="${it.id}" ${S.silver < cost ? 'disabled' : ''}>To +${ms}</button></div></div>`;
     }
     return `<div class="fg-forge"><div class="fg-ascs">${Array.from({ length: K.MAX_ASC }, (_, i) => `<span class="${i < (it.asc || 0) ? 'on' : ''}">★</span>`).join('')}</div>${ascHtml(it)}<div class="fg-go">${ascBtn(it) || ''}</div></div>`;
-  }
-  // Bag/Forge tabs and the filters: in their own panel under the hero (the slot tiles pick the slot)
-  function fgCtrl() {
-    const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
-    const stats = Object.keys(K.STAT_NAMES).filter(k => k !== 'hpP' || true);
-    const sets = [...new Set(S.inv.map(x => x.set))].filter(k => K.SETS[k]).sort((a, b) => K.SETS[a].name.localeCompare(K.SETS[b].name));
-    return `<div class="fg-ctrl"><div class="fg-tabs">${[['bag', 'Bag'], ['forge', 'Forge']].map(([k, l]) => `<button type="button" class="${FG.tab === k ? 'on' : ''}" data-act="fgtab" data-t="${k}">${l}</button>`).join('')}</div>
-      ${FG.tab === 'bag' ? `<div class="fg-filters"><select data-gf="rar" aria-label="Rarity">${opt('all', 'Rarity', FG.rar)}${K.RARITIES.map((r, i) => opt(i, r, FG.rar)).join('')}</select><select data-gf="set" aria-label="Set">${opt('all', 'Set', FG.set)}${sets.map(k => opt(k, K.SETS[k].name, FG.set)).join('')}</select><select data-gf="main" aria-label="Main stat">${opt('all', 'Main stat', FG.main)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.main)).join('')}</select><select data-gf="sub" aria-label="Substat">${opt('all', 'Substat', FG.sub)}${stats.map(k => opt(k, K.STAT_NAMES[k], FG.sub)).join('')}</select><select data-gf="sort" aria-label="Sort">${opt('power', 'Sort: Power', FG.sort)}${opt('rarity', 'Sort: Rarity', FG.sort)}${opt('level', 'Sort: Level', FG.sort)}</select><button type="button" class="btn small" data-act="fgreset" title="Clear filters">✕</button>
-        <div class="fg-checks"><label><input type="checkbox" data-gf="worn" ${FG.worn ? 'checked' : ''}> Worn by others</label><label><input type="checkbox" data-gf="free" ${FG.free ? 'checked' : ''}> Not worn</label></div></div>` : ''}</div>`;
   }
   // ----- Items: every piece of gear plus stones, shards and elixirs -----
   function itemsHtml() {
@@ -1825,7 +1809,7 @@
     const o = VT.open && !VT.sell ? S.inv.find(it => it.id === VT.open) : null, mo = !o && FG.mat ? mats.find(m => m.k + m.id === FG.mat) : null;
     const detail = o ? `<div class="fg-detail rar-${o.rar}" style="--rc:var(--r${o.rar})"><div class="fg-big">${gearIcon(o, 'fg-ic')}<span class="fg-plv">+${o.lvl}</span>${essBadge(setEss(o.set))}</div>
         <div class="fg-dmain"><h3 class="rartxt">${itemNameH(o)}</h3><div class="fg-dsub">${esc(K.SETS[o.set].name)} · ${o.owner && C[o.owner] ? `worn by <b>${esc(C[o.owner].short)}</b>` : 'not worn'}</div><div class="fg-dstats">${K.gearStats(o).map(([k, v]) => `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, v)}</b><i></i>`).join('')}</div></div>
-        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn" data-act="fgforge" data-item="${o.id}">Forge</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div></div>`
+        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn ${VT.up === o.id ? 'on' : ''}" data-act="fgforge" data-item="${o.id}" aria-pressed="${VT.up === o.id}">${o.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div>${VT.up === o.id ? `<div class="it-up">${fgForge(o)}</div>` : ''}</div>`
       : mo ? `<div class="fg-detail mat"><div class="fg-big">${mo.ic}</div><div class="fg-dmain"><h3>${esc(mo.name)} ×${mo.n.toLocaleString('en-US')}</h3><p class="empty-note">${esc(mo.tip)}</p></div><div class="fg-acts"><button type="button" class="btn primary" ${mo.go === 'fcs' ? 'data-act="fcopen">Use on your hero ›' : `data-act="go" data-go="${mo.go}">${mo.go === 'altaar' ? 'Fate Altar ›' : 'Heroes ›'}`}</button></div></div>` : '';
     const selItems = S.inv.filter(it => VT.sel.has(it.id)), selValue = selItems.reduce((t, it) => t + K.sellValue(it), 0);
     const tools = VT.sell
@@ -1839,7 +1823,7 @@
         ${gearCells || matCells ? `<div class="fg-groups">${grouped}</div>` : '<p class="empty-note">Nothing matches these filters.</p>'}
         ${VT.sell ? `<div class="it-sellbar"><span><b>${selItems.length}</b> selected · ${ic('coin')} <b>${selValue.toLocaleString('en-US')}</b> · worn and locked pieces cannot be sold</span><button type="button" class="btn danger" data-act="vsell" ${selItems.length ? '' : 'disabled'}>Sell ${selItems.length || ''}</button></div>` : detail}</section></div></div>`;
   }
-  function forgeHtml() { return FG.view === 'items' ? itemsHtml() : gearingHtml(); }
+  function forgeHtml() { return itemsHtml(); }
 
   // ================= PLAYER PROFILES =================
   // Friends and guild mates can be opened (0007_profiles.sql, player_profile): their best 5 champions by power (tap
@@ -3028,7 +3012,7 @@
       else if (S.team.length < 4) S.team.push(id);
       else toast('Your team is full. Remove someone first.', true);
       save(); render();
-    } else if (act === 'sel') { selChamp = id; render(); }
+    } else if (act === 'sel') { selChamp = id; FG.pick = null; HB.up = null; render(); }
     else if (act === 'tmsel') { S.tsel = +a.dataset.i; S.team = S.teams[S.tsel].ids; if (!S.team.includes(selChamp)) selChamp = S.team[0] || selChamp; save(); render(); }
     else if (act === 'tmmode') { S.modeTeam[a.dataset.m] = S.tsel; save(); render(); }
     else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
@@ -3084,24 +3068,21 @@
     else if (act === 'ctab') { champTab = a.dataset.t; render(); }
     else if (act === 'hxfilt') { HX.filt = !HX.filt; render(); }
     else if (act === 'hxview') { HX.view = a.dataset.v; render(); }
-    else if (act === 'hxslot' && S.roster[selChamp]) { FG.slot = a.dataset.slot; FG.view = 'gear'; FG.pick = null; FG.tab = 'bag'; setTab('forge'); window.scrollTo({ top: 0 }); } // step 2 opens the bag right here
-    // ----- Forge: Gearing and Items -----
-    else if (act === 'fgview') { FG.view = a.dataset.v; render(); window.scrollTo({ top: 0 }); }
-    else if (act === 'fgo' && S.roster[id]) { selChamp = id; FG.view = 'gear'; FG.pick = null; FG.tab = 'bag'; setTab('forge'); window.scrollTo({ top: 0 }); }
-    else if (act === 'fghero' && S.roster[id]) { selChamp = id; champTab = 'gear'; HX.view = 'hero'; setTab('team'); window.scrollTo({ top: 0 }); }
-    else if (act === 'fgsel' && S.roster[id]) { selChamp = id; FG.pick = null; render(); }
-    else if (act === 'fgstep') { const ids = fgHeroes(), i = ids.indexOf(selChamp); selChamp = ids[(i + +a.dataset.d + ids.length) % ids.length]; FG.pick = null; render(); const on = document.querySelector('.fg-hc.on'); if (on) on.scrollIntoView({ block: 'nearest', inline: 'center' }); }
-    else if (act === 'fgslot') { FG.slot = a.dataset.slot || null; FG.pick = null; FG.tab = 'bag'; render(); }
-    else if (act === 'fgpick' && item) { FG.pick = FG.pick === item.id ? null : item.id; FG.scrollD = !!FG.pick; render(); }
-    else if (act === 'fgtab') { FG.tab = a.dataset.t; render(); }
+    // ----- the gear bag on the Heroes screen (HB) -----
+    else if (act === 'hxslot' && S.roster[selChamp]) { FG.slot = a.dataset.slot; FG.pick = null; HB.open = true; HB.up = null; render(); }
+    else if (act === 'hbpick' && item) { FG.pick = item.owner === selChamp || FG.pick === item.id ? null : item.id; HB.up = null; render(); }
+    else if (act === 'hbup' && item) { HB.up = item.id; render(); }
+    else if (act === 'hbback') { HB.up = null; render(); }
+    else if (act === 'hbclose') { HB.open = false; HB.up = null; FG.pick = null; render(); }
+    // Gear › elsewhere: that hero's bag
+    else if (act === 'fgo' && S.roster[id]) { selChamp = id; champTab = 'gear'; HX.view = 'hero'; FG.pick = null; HB.open = true; HB.up = null; setTab('team'); window.scrollTo({ top: 0 }); }
     else if (act === 'fgreset') { Object.assign(FG, { rar: 'all', set: 'all', main: 'all', sub: 'all', sort: 'power', worn: true, free: true }); render(); }
-    else if (act === 'fgchange') { FG.pick = null; FG.tab = 'bag'; FG.scroll = true; render(); }
     else if (act === 'fgforge' && item) {
-      // the Forge tab of Gearing; a piece worn by someone else (or from Items) opens with its wearer, or the current hero
+      // in Items: the upgrade panel under the piece; elsewhere: the bag's upgrade panel, with its wearer or the current hero
+      if (tab === 'forge') { VT.open = item.id; VT.up = VT.up === item.id ? null : item.id; render(); return; }
       if (item.owner && S.roster[item.owner]) selChamp = item.owner;
-      FG.slot = item.slot; FG.pick = item.owner === selChamp ? null : item.id; FG.tab = 'forge'; FG.view = 'gear'; VT.open = null;
-      if (tab !== 'forge') setTab('forge'); else render();
-      const p = document.querySelector('.fg-bagp'); if (p) p.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      FG.slot = item.slot; FG.pick = item.owner === selChamp ? null : item.id; HB.open = true; HB.up = item.id; champTab = 'gear'; HX.view = 'hero';
+      if (tab !== 'team') setTab('team'); else render();
     }
     else if (act === 'fgupms' && item) {
       const target = [4, 8, 12, 16].find(m => m > item.lvl), r = upgradeTo(item, target), rect = a.getBoundingClientRect();
@@ -3112,7 +3093,7 @@
     }
     else if (act === 'icat') { FG.cat = a.dataset.k; FG.mat = null; if (FG.cat !== 'all' && FG.cat !== 'gear') { VT.sell = false; VT.sel.clear(); } VT.open = null; render(); }
     else if (act === 'imat') { FG.mat = FG.mat === a.dataset.id.replace(':', '') ? null : a.dataset.id.replace(':', ''); VT.open = null; render(); }
-    else if (act === 'iequip' && item) { selChamp = item.owner && S.roster[item.owner] ? item.owner : selChamp; FG.slot = item.slot; FG.pick = item.owner === selChamp ? null : item.id; FG.tab = 'bag'; FG.view = 'gear'; VT.open = null; render(); window.scrollTo({ top: 0 }); }
+    else if (act === 'iequip' && item) { selChamp = item.owner && S.roster[item.owner] ? item.owner : selChamp; FG.slot = item.slot; FG.pick = item.owner === selChamp ? null : item.id; HB.open = true; HB.up = null; champTab = 'gear'; HX.view = 'hero'; VT.open = null; setTab('team'); window.scrollTo({ top: 0 }); }
 
     else if (act === 'vreset') { Object.assign(VT, { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar' }); render(); }
     else if (act === 'equip' && item && !wearOk(selChamp, item)) toast(`Ascended gear needs a ${K.ASC_STARS}★ hero.`, true);
