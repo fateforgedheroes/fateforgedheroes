@@ -563,14 +563,18 @@
   }
   // one upgrade try on a piece of gear, with a burst where its button was (upgFx): gold rays and the new level on a
   // success, a red crack and "Failed" on a failure
-  function tryUpgrade(item, btn) {
+  // one try: no message, the button glows gold on a success and red on a fail (upgGlow, after the redraw); returns
+  // 'ok', 'fail' or false (not enough Sigils, or already +16)
+  function tryUpgrade(item) {
     const cost = K.upgradeCost(item);
     if (S.silver < cost || item.lvl >= K.MAX_GEAR_LVL) return false;
-    const r = btn && btn.getBoundingClientRect();
     S.silver -= cost; track('upg');
-    if (Math.random() < K.upgradeChance(item)) { item.lvl++; const m = K.upgradeMilestone(item); SFX.up(); upgFx(r, true, `+${item.lvl}`); toast(`Success: ${itemName(item)}${m ? ' · ' + m : ''}.`); }
-    else { SFX.fail(); upgFx(r, false, 'Failed'); toast('Failed. The Sigils are spent, the item stays intact.', true); }
-    return true;
+    if (Math.random() < K.upgradeChance(item)) { item.lvl++; K.upgradeMilestone(item); SFX.up(); return 'ok'; }
+    SFX.fail(); return 'fail';
+  }
+  // the pressed button, drawn anew, glows for a moment: gold for a success, red for a fail
+  function upgGlow(act, item, res) {
+    requestAnimationFrame(() => { const b = document.querySelector(`[data-act="${act}"][data-item="${item.id}"]`); if (!b) return; b.classList.remove('glow-ok', 'glow-no'); void b.offsetWidth; b.classList.add(res === 'ok' ? 'glow-ok' : 'glow-no'); setTimeout(() => b.classList.remove('glow-ok', 'glow-no'), 1400); });
   }
   function upgFx(r, ok, text) {
     if (!r || !r.width) r = { left: innerWidth / 2, top: innerHeight / 2, width: 0, height: 0 };
@@ -1580,7 +1584,9 @@
         ${acts.length ? `<span class="fr-acts gm-acts">${acts.join('')}</span>` : ''}</li>`;
     };
     const keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
-    return `<section class="g-card">${emblem(g)}<div class="g-head"><h3>${esc(g.name)} <span class="tag">[${esc(g.tag)}]</span></h3>
+    // the guild home: on a phone on its side the guild, its tiles and invites on the left and the members beside them
+    // (.g-home); elsewhere everything under each other with Leave guild last
+    return `<div class="g-home"><div class="g-left"><section class="g-card">${emblem(g)}<div class="g-head"><h3>${esc(g.name)} <span class="tag">[${esc(g.tag)}]</span></h3>
         <small class="empty-note">${g.members.length} / ${GUILD_MAX} members · Guildmaster ${esc(gm ? gm.name : '?')} · ${g.open ? 'open to new members' : 'closed'} · you: ${ROLE_NAME[me]}</small>
         ${info}</div></section>
       <div class="g-tiles">
@@ -1589,8 +1595,8 @@
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
       ${me === 'leader' || me === 'officer' ? guildInviteHtml(g) : ''}
-      <section class="fr-sec"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section>
-      <div class="row g-leave"><button class="btn small danger" data-act="gleave">Leave guild</button></div>`;
+      <div class="row g-leave"><button class="btn small danger" data-act="gleave">Leave guild</button></div></div>
+      <section class="fr-sec g-mem"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section></div>`;
   }
   // Guildmaster and officers: invite by friend code, or one of your friends who is not in this guild yet
   const friendCode = uid => String(uid).replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -1875,7 +1881,10 @@
     const slots = sel ? K.SLOTS.map(slot => { const it = itemsFor(sel.id).find(x => x.slot === slot); return it
       ? `<div class="pf-item rar-${it.rar}">${gearIcon(it)}<div><b class="rartxt">${itemNameH(it)}</b><small>${esc(K.SETS[it.set] ? K.SETS[it.set].name : '')}</small>${itemStatsHtml(it)}</div></div>`
       : `<div class="pf-item empty"><span class="pf-slot">${SLOT_GLYPH[slot] || ''}</span><div><b>${K.SLOT_NAMES[slot]}</b><small>Empty</small></div></div>`; }).join('') : '';
-    return `${close}<header class="pf-head">${p.avatar && C[p.avatar] ? por(p.avatar) : ''}<div><h2>${esc(p.name)}</h2><span class="empty-note">Player level ${p.lvl || 1}${p.guild ? ` · ${esc(p.guild)}` : ''}</span></div></header>
+    // a friend: their friend code and Remove (the friends list shows only portrait, name and level)
+    const isFriend = (SO.friends || []).some(f => f.kind === 'friend' && f.user_id === PF.id);
+    const frBits = isFriend ? `<small class="fr-fc pf-fc">Friend code ${friendCode(PF.id).replace(/^(.{4})/, '$1 ')}</small><button class="btn small pf-rm" data-act="frremove" data-id="${PF.id}" data-name="${esc(p.name)}">Remove friend</button>` : '';
+    return `${close}<header class="pf-head">${p.avatar && C[p.avatar] ? por(p.avatar) : ''}<div><h2>${esc(p.name)}</h2><span class="empty-note">Player level ${p.lvl || 1}${p.guild ? ` · ${esc(p.guild)}` : ''}</span>${frBits}</div></header>
       <div class="pf-stats">
         ${card('Arena', tier ? `<b>${p.rating} · ${esc(tier.name)}</b><span>Rank #${p.rank}</span>` : '<b>Unranked</b><span>No arena fights yet</span>', 'arena')}
         ${card('Campaign', camp, 'camp')}
@@ -2578,6 +2587,9 @@
     for (const k of RW_KEYS) if (r.fs && +r.fs[k] > 0) S.fs[k] = (S.fs[k] || 0) + Math.floor(+r.fs[k]);
   }
   const progressText = f => f.cleared != null && f.cleared >= 0 && K.STAGES[f.cleared] ? stageName(f.cleared) : 'Just started';
+  // a friend as a small tile: portrait, name and player level; everything else (progress, arena, friend code, Remove)
+  // is in their profile, which a tap opens
+  const friendTile = f => `<li class="fr-tile pf-open" data-act="profile" data-id="${f.user_id}" title="${esc(f.name)}: view profile"><span class="fr-av">${f.avatar && C[f.avatar] ? por(f.avatar) : ''}</span><b>${esc(f.name)}</b><small>Lv ${f.lvl || 1}</small></li>`;
   // a friend row opens their profile (buttons inside keep their own action)
   const personRow = (f, acts) => `<li${f.kind === 'friend' ? ` class="pf-open" data-act="profile" data-id="${f.user_id}" title="View profile"` : ''}><span class="fr-av">${f.avatar && C[f.avatar] ? por(f.avatar) : ''}</span><span class="fr-main"><b>${esc(f.name)}${f.user_id ? ` <small class="fr-fc" title="Friend code">(${friendCode(f.user_id).replace(/^(.{4})/, '$1 ')})</small>` : ''}</b><small class="empty-note">${f.lvl ? `Player level ${f.lvl} · ` : ''}${esc(progressText(f))}${f.rating ? ` · Arena ${f.rating}` : ''}</small></span><span class="fr-acts">${acts}</span></li>`;
   function needAccount(title) {
@@ -2600,7 +2612,7 @@
         <section class="soc-card"><span class="tag">Your friend code</span><div class="fr-code"><b>${code}</b><button class="btn small" data-act="copycode">Copy</button></div><small class="empty-note">Share it with a friend so they can add you.</small></section>
         <section class="soc-card"><span class="tag">Add a friend</span><form class="fr-add" data-form="addfriend"><input name="fcode" maxlength="9" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Friend code, e.g. 1A2B 3C4D" aria-label="Friend code"><button class="btn primary small" type="submit">Send request</button></form></section></div>
       ${incoming.length ? `<section class="fr-sec"><h3>Friend requests</h3><ul class="fr-list">${incoming.map(f => personRow(f, `<button class="btn primary small" data-act="fraccept" data-id="${f.user_id}">Accept</button><button class="btn small" data-act="frdecline" data-id="${f.user_id}">Decline</button>`)).join('')}</ul></section>` : ''}
-      <section class="fr-sec"><h3>Friends <small class="empty-note">${friends.length}</small></h3>${friends.length ? `<ul class="fr-list">${friends.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="${esc(f.name)}">Remove</button>`)).join('')}</ul>` : '<p class="empty-note">No friends yet. Send your friend code to someone, or add theirs above.</p>'}</section>
+      <section class="fr-sec"><h3>Friends <small class="empty-note">${friends.length}</small></h3>${friends.length ? `<ul class="fr-grid">${friends.map(friendTile).join('')}</ul>` : '<p class="empty-note">No friends yet. Send your friend code to someone, or add theirs above.</p>'}</section>
       ${out.length ? `<section class="fr-sec"><h3>Sent requests</h3><ul class="fr-list">${out.map(f => personRow(f, `<button class="btn small" data-act="frremove" data-id="${f.user_id}" data-name="">Cancel</button>`)).join('')}</ul></section>` : ''}`;
   }
   // ---------- chat (0011_chat.sql): World (write from player level 10) and one chat per guild ----------
@@ -3129,11 +3141,10 @@
       if (tab !== 'team') setTab('team'); else render();
     }
     else if (act === 'fgupms' && item) {
-      const target = [4, 8, 12, 16].find(m => m > item.lvl), r = upgradeTo(item, target), rect = a.getBoundingClientRect();
+      const target = [4, 8, 12, 16].find(m => m > item.lvl), r = upgradeTo(item, target);
       if (!r.ok && !r.fail) { toast('Not enough Sigils.', true); return; }
-      (item.lvl >= target ? SFX.up : SFX.fail)(); upgFx(rect, item.lvl >= target, item.lvl >= target ? `+${item.lvl}` : `+${item.lvl}`);
-      toast(`${r.ok + r.fail} ${r.ok + r.fail === 1 ? 'try' : 'tries'}: ${r.ok} succeeded, ${r.fail} failed · −${r.spent.toLocaleString('en-US')} Sigils · now +${item.lvl}.`, item.lvl < target, 3600);
-      save(); render();
+      (item.lvl >= target ? SFX.up : SFX.fail)();
+      save(); render(); upgGlow('fgupms', item, item.lvl >= target ? 'ok' : 'fail'); // gold when it got there, red when the Sigils ran out first
     }
     else if (act === 'icat') { FG.cat = a.dataset.k; FG.mat = null; if (FG.cat !== 'all' && FG.cat !== 'gear') { VT.sell = false; VT.sel.clear(); } VT.open = null; render(); }
     else if (act === 'imat') { FG.mat = FG.mat === a.dataset.id.replace(':', '') ? null : a.dataset.id.replace(':', ''); VT.open = null; render(); }
@@ -3167,8 +3178,8 @@
     else if (act === 'rselall') { RSUM.arm = null; if (lastRep) lastRep.sum.items.map(i => S.inv.find(x => x.id === i)).filter(it => it && sellable(it)).forEach(it => RSUM.sel.add(it.id)); repRefresh(); }
     else if (act === 'rupg' && item) {
       RSUM.arm = null;
-      if (!tryUpgrade(item, a)) return;
-      save(); repRefresh();
+      const res = tryUpgrade(item); if (!res) return;
+      save(); repRefresh(); upgGlow('rupg', item, res);
     }
     else if (act === 'rlock' && item) { item.lock = !item.lock; if (!item.lock) delete item.lock; RSUM.arm = null; save(); repRefresh(); }
     else if (act === 'rsell1' && item && sellable(item)) {
@@ -3216,8 +3227,8 @@
       if (rare) confirmBox('Sell this gear?', `You are selling ${list.length} pieces, <b>${rare} of them Epic or better</b>, for ${v.toLocaleString('en-US')} Sigils.`, 'Sell', doSell); else doSell();
     }
     else if (act === 'up' && item) {
-      if (!tryUpgrade(item, a)) return;
-      save(); render();
+      const res = tryUpgrade(item); if (!res) return;
+      save(); render(); upgGlow('up', item, res);
     } else if (act === 'bestgear') {
       // slot by slot, repeated until nothing improves: a swap can complete or break a set and so change what is best
       // for the other slots (one pass used to leave work for a second click)
@@ -4895,6 +4906,19 @@
     else setTab(cfg.type === 'stage' ? 'campagne' : cfg.type === 'tower' ? 'tower' : 'kerkers');
   }
 
+  // ---------- on a computer: every time the game opens, a notice that it is made for phones (some screens may be laid
+  // out wrong in a desktop browser); "I Understand" closes it. Above every other popup (.pc-pop), so the daily reward
+  // and the like wait underneath. A computer: a mouse or trackpad that can hover (no touch screen as the main input). ----------
+  function showPcNotice() {
+    if (!matchMedia('(hover: hover) and (pointer: fine)').matches || document.querySelector('.pc-pop')) return;
+    const el = document.createElement('div');
+    el.className = 'pc-pop'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'pc-pop-h');
+    el.innerHTML = `<div class="unlock-card pc-card"><svg class="pc-ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="2"/><path d="M10.5 5h3M11 18.5h2"/></svg><span class="tag">Made for mobile</span><h2 id="pc-pop-h">Best played on your phone</h2>
+      <p>Fate Forged Heroes is optimised for mobile gaming, not for playing in a desktop browser. On a computer some screens may not be laid out correctly.</p>
+      <button class="btn primary" type="button">I Understand</button></div>`;
+    document.body.appendChild(el);
+    const b = el.querySelector('button'); b.addEventListener('click', () => { SFX.click(); el.remove(); }); b.focus();
+  }
   // ---------- boot ----------
   function announceReset() {
     if (!S.wasReset) return false;
@@ -4950,6 +4974,7 @@
     $('#logo').src = LOGO_URL;
     $('#ic-coin').src = SIGIL_ART; $('#ic-coin').className = 'sigil-ic'; $('#ic-shard').src = SHARD_ART.fate0; $('#ic-shard').className = 'shard-ic'; $('#ic-stone').src = STONE_ART; $('#ic-stone').className = 'shard-ic'; if (typeof CRYSTAL_ART !== 'undefined') $('#ic-crystal').src = CRYSTAL_ART; if (typeof ENERGY_ART !== 'undefined') $('#ic-energy').src = ENERGY_ART;
     render();
+    showPcNotice(); // on a computer: the game is made for phones
     // new mail (gifts, friend requests, arena rewards) is checked every 2 minutes while the game is open
     paintMail(); setInterval(() => { if (!B && document.visibilityState === 'visible') socialLoad(); }, 120000);
     // a newer build on the server: checked every 5 minutes and whenever the tab is shown again
