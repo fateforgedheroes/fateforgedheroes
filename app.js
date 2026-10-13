@@ -940,25 +940,21 @@
     if (BV.view === 'bosses' || !bossOpen(ci)) return bossListHtml();
     const B0 = K.BOSSES[cur], best = S.bh[cur] || 0, col = AFF_COL[B0.aff], icon = (svg, c) => `<span class="bhv-ic" style="--c:${c}">${svg}</span>`;
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === B0.aff);
-    const own = S.bossTeam && S.bossTeam[B0.aff] != null && S.bossTeam[B0.aff] < S.teams.length, ti = bossTeamIdx(B0.aff), ids = S.teams[ti].ids;
+    const ids = S.teams[bossTeamIdx(B0.aff)].ids;
     const tr = K.bossTrait(ci), tef = K.EFFECTS[tr], canAnswer = ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]));
-    // its own six-piece set: the bonus at 2, 4 and 6 pieces, and the essence family bonus it counts towards
+    // its own six-piece set: the bonus at 2, 4 and 6 pieces (and the Ascended one), and the essence family bonus
     const SS = K.SETS[K.bossSets(ci)[0]], fam = K.SET_FAMILY[SS.ess];
-    const sets = `<li class="bhv-sethead">${icon(BH_GLYPH.set, '#e3c06a')}<b>${esc(SS.name)}</b><span>${esc(SS.role)} · six-piece set</span></li>`
-      + SS.tiers.map(t => t.asc ? `<li class="bhv-ascl"><span class="bhv-pc asc">★</span><b>Ascended</b><span>${esc(t.d)} (all six pieces at <span class="asc-st">★★★</span>)</span></li>` : `<li><span class="bhv-pc">${t.n}</span><b>${t.n} pieces</b><span>${esc(t.d)}</span></li>`).join('')
-      + (fam ? `<li class="bhv-fam"><span class="bhv-pc">✦</span><b>${SS.ess} family</b><span>${esc(fam.d)} (4+ pieces from two different ${SS.ess} boss sets)</span></li>` : '');
-    const opts = `<option value="" ${own ? '' : 'selected'}>Boss Hall team (${esc(S.teams[S.modeTeam.boss || 0].name)})</option>` + S.teams.map((t, i) => `<option value="${i}" ${own && i === ti ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+    const tiers = SS.tiers.map(t => `<li${t.asc ? ' class="asc"' : ''} title="${esc(t.d)}"><i>${t.asc ? '★' : t.n}</i><span>${esc(t.d)}${t.asc ? ' (all six at <span class="asc-st">★★★</span>)' : ''}</span></li>`).join('')
+      + (fam ? `<li class="fam"><i>✦</i><span>${SS.ess} family: ${esc(fam.d)} (4+ pieces from two ${SS.ess} boss sets)</span></li>` : '');
+    // the boss on the left, kept small: who it is, what it does, what beats it, its trait, the set it drops (the team is
+    // picked on the team screen that Fight opens)
     const side = `<aside class="sv-side bs-side">
-      <div class="sv-ch bs-ch" style="--art:url(${bhArt(ci)});--c:${col}"><img class="bs-boss" src="${bossBig(cur)}" alt=""><small>Boss ${ci + 1} · ${B0.aff}</small><h3>${esc(B0.name)}</h3></div>
-      <section class="sv-box"><h4>The boss</h4>
-        <div class="bhv-row">${icon(essIcon(B0.aff), col)}<div><b><span style="color:${col}">${B0.aff}</span> · ${esc(B0.arch)} · Break ${B0.breakMax}</b><small>${K.PHASES - 1} phases of ${K.bossPhases(cur, 1)[0].length} minions, then the boss (${B0.nPhases} boss phases).</small></div></div>
-        <div class="bhv-row">${icon(BH_GLYPH.passive, col)}<div><b>${esc(B0.passiveName)}</b><small>${esc(B0.passiveDesc)}</small></div></div>
-        <div class="bhv-row">${beaten.length ? icon(essIcon(beaten[0]), AFF_COL[beaten[0]]) : icon(essIcon('Aether'), AFF_COL.Aether)}<div><b>${beaten.length ? `Strong against it: ${beaten.map(e => `<span style="color:${AFF_COL[e]}">${e}</span>`).join(', ')}` : 'No essence has the advantage here'}</b></div></div>
-        <div class="bhv-row trait">${fxBadge(tr)}<div><b>${tef.n}</b> <small class="tag">level ${K.BTRAIT.from} and up</small><small>${esc(tef.d)}. ${canAnswer ? 'Your team can do this.' : '<b class="warn">Nobody in your team can.</b>'}</small></div></div></section>
-      <section class="sv-box"><h4>Gear drops</h4><ul class="bhv-sets">${sets}</ul></section>
-      <section class="sv-box sv-team"><h4>Team against ${B0.aff} bosses</h4><select id="bh-team" data-aff="${B0.aff}" aria-label="Team against ${B0.aff} bosses">${opts}</select>
-        <div class="cv-heroes">${ids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('')}</div>
-        <div class="sv-pw"><span>Power <b>${teamPower(ids).toLocaleString('en-US')}</b></span><button class="btn small" data-act="editbteam" data-aff="${B0.aff}">Edit team</button></div></section></aside>`;
+      <div class="sv-ch bs-ch" style="--art:url(${bhArt(ci)});--c:${col}"><img class="bs-boss" src="${bossBig(cur)}" alt=""><small>Boss ${ci + 1} · <span style="color:${col}">${B0.aff}</span> · ${esc(B0.arch)}</small><h3>${esc(B0.name)}</h3></div>
+      <section class="sv-box bs-info">
+        <p title="${esc(B0.passiveDesc)}"><b>${esc(B0.passiveName)}</b> ${esc(B0.passiveDesc)}</p>
+        <p><b>Strong against it</b> ${beaten.length ? beaten.map(e => `<span style="color:${AFF_COL[e]}">${e}</span>`).join(', ') : 'nobody: no essence has the edge'} · Break ${B0.breakMax}</p>
+        <p title="${esc(tef.d)}"><b>${tef.n}</b> from level ${K.BTRAIT.from}: ${esc(tef.d)}. ${canAnswer ? '<span class="ok">Your team can answer it.</span>' : '<span class="warn">Nobody in your team can.</span>'}</p></section>
+      <section class="sv-box bs-set"><h4>Gear drops</h4><div class="bs-sn">${setDot(K.bossSets(ci)[0])}<b>${esc(SS.name)}</b><small>${esc(SS.role)}</small></div><ul class="bs-tiers">${tiers}</ul></section></aside>`;
     // a row per level: its drops, difficulty, state and enemy level, the boss, Auto ×10 (once beaten) and Fight; tap a
     // row for its phases
     const rows = Array.from({ length: K.BOSS_LEVELS }, (_, k) => k + 1).map(n => {
@@ -3098,7 +3094,7 @@
     else if (act === 'artab') { AR.tab = a.dataset.t; render(); }
     else if (act === 'twsel') { S.tw.cur = a.dataset.e; TV.view = 'floors'; TV.open = 0; save(); render(); window.scrollTo({ top: 0 }); }
     else if (act === 'twlist') { TV.view = 'towers'; render(); window.scrollTo({ top: 0 }); }
-    else if (act === 'twrow') { TV.open = (TV.open || twProg(S.tw.cur || 'Ember') + 1) === +a.dataset.n ? -1 : +a.dataset.n; render(); } // a floor row opens and closes
+    else if (act === 'twrow') { TV.open = TV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); } // a floor row opens and closes
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
     else if (act === 'twgo') openTowerPrep(S.tw.cur || 'Ember'); // Fight opens the team screen first
@@ -4459,8 +4455,8 @@
         <div class="sv-pw"><span>Power <b>${teamPower(team).toLocaleString('en-US')}</b></span><button class="btn small" data-act="twteam">Edit team</button></div></section>
       ${ms ? `<section class="sv-box"><h4>Milestones ahead</h4><ul class="tw-mss">${ms}</ul></section>` : ''}
       <section class="sv-box"><h4>The rules</h4><small class="sv-note">One fight per floor. Each floor pays once, on its first clear; a defeat costs nothing. ${e === 'All' ? 'Every hero may climb, but the foes are twice as strong.' : `Only ${e} heroes (and your own hero) may climb.`} A team of fewer than four meets tougher foes.</small></section></aside>`;
-    // a row per floor: two cleared ones above the next, then the floors ahead
-    const from = Math.max(1, next - 2), to = Math.min(K.TOWER.floors, from + 11), open = TV.open || next;
+    // a row per floor: the last one cleared above the next, then the floors ahead
+    const from = Math.max(1, next - 1), to = Math.min(K.TOWER.floors, from + 9), open = TV.open;
     const rows = Array.from({ length: to - from + 1 }, (_, k) => from + k).map(f => {
       const F = K.towerFloor(f), st = f <= prog ? 'cleared' : f === next ? 'next' : 'locked', foes = K.towerFoes(e, f), rw = K.towerReward(f), isOpen = f === open;
       const go = st === 'next' ? `<button class="btn primary" data-act="twgo" ${team.length ? '' : 'disabled title="Pick heroes first"'}>Fight</button>` : st === 'locked' ? `<button class="btn" disabled>${LOCK_SVG} Locked</button>` : '';
