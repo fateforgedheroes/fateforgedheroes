@@ -762,6 +762,7 @@ button, a, input { touch-action: manipulation; }
 /* arena */
 .arena { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px; margin-bottom: 12px; }
 .ar-me, .ar-def, .ar-opps, .ar-board { background: var(--panel); border: 2px solid var(--line); padding: 12px 14px; }
+.ar-tabs { display: none; }
 .ar-opps, .ar-board { margin-bottom: 12px; }
 .ar-me { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; align-items: center; }
 .ar-me > p, .ar-me > .btn { grid-column: 1 / -1; margin: 0; }
@@ -3023,7 +3024,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .sv-go { display: flex; align-items: center; gap: 6px; } .sv-go .btn.primary { min-width: 128px; }
 .sv-go:has(.spot-wrap) { z-index: 22 !important; } /* the first battle's Fight button stays above the spotlight shade */
 .sv-more { grid-column: 1 / -1; display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid rgba(217, 180, 90, .2); }
-@media (max-width: 760px) {
+@media (max-width: 760px) and (min-height: 501px), (max-width: 760px) and (orientation: portrait) {
   .sv-wrap { grid-template-columns: minmax(0, 1fr); } .sv-side { position: static; }
   .sv-row { grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; } .sv-foes { grid-column: 1 / -1; grid-row: 2; } .sv-foes .cv-foe img, .sv-foes .cv-foe canvas { width: 38px; height: 38px; }
   .sv-go .btn.primary { min-width: 0; }
@@ -3067,7 +3068,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .pp-roster .pp-c.in { outline: 2px solid #6eaaff; outline-offset: 1px; } .pp-roster .pp-c.in::after { content: '✓'; position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: #3a78d8; color: #fff; font-weight: 800; font-size: .8rem; box-shadow: 0 0 0 2px #0b080d; }
 .pp-roster .pp-c.away { filter: grayscale(.8) brightness(.5); }
 .pp-go { display: grid; gap: 6px; } .pp-fight { min-width: 170px; min-height: 54px; font-size: 1.25rem; }
-@media (max-width: 760px) {
+@media (max-width: 760px) and (min-height: 501px), (max-width: 760px) and (orientation: portrait) {
   .pp-field { grid-template-columns: minmax(0, 1fr); } .pp-vs { grid-template-columns: auto minmax(0, 1fr); justify-items: start; } .pp-vsb { font-size: 2rem; grid-row: span 2; }
   .pp-bottom { grid-template-columns: minmax(0, 1fr); } .pp-fight { width: 100%; }
 }
@@ -3289,12 +3290,179 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .hx { grid-template-columns: 132px minmax(0, 1fr) 250px; } .hx-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .hx.bag { grid-template-columns: minmax(130px, .5fr) minmax(0, 1.5fr); } .hx.bag .hx-ros { display: none; }
 }
+/* ===== phones: the Menu button top left opens Home and every building in a panel over the screen (app.js navDropHtml,
+   setNav); the icon column on the left (.snav) is left out, so screens get its width ===== */
+.navdrop { display: none; }
+@media (max-width: 760px), (max-height: 500px) and (orientation: landscape) {
+  .snav { display: none; } .navwrap { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .homebtn .nd-caret { font-style: normal; font-size: 11px; margin-left: 1px; transition: transform .2s; } .homebtn.open .nd-caret { transform: rotate(180deg); }
+  .navdrop:not([hidden]) { display: block; position: fixed; z-index: 30; left: 8px; top: calc(50px + env(safe-area-inset-top, 0px)); width: min(640px, calc(100vw - 16px)); max-height: calc(100dvh - 58px - env(safe-area-inset-top, 0px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; border-radius: 12px; animation: ndopen .16s ease-out; }
+  .nd-box { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; padding: 8px; border-radius: 12px; border: 1px solid #6e5528; background: linear-gradient(180deg, #261e2b, #140f17); box-shadow: 0 0 0 1px #000, 0 14px 30px rgba(0, 0, 0, .7); }
+  .nd-it { position: relative; display: flex; align-items: center; gap: 9px; min-width: 0; padding: 6px 8px; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
+  .nd-it:hover, .nd-it:focus-visible { background: rgba(217, 180, 90, .12); }
+  .nd-it.on { border-color: rgba(217, 180, 90, .55); background: rgba(217, 180, 90, .14); }
+  .nd-it.locked .nd-ic { filter: grayscale(.7) brightness(.65); } .nd-it.locked b { color: var(--muted); }
+  .nd-ic { flex: none; width: 36px; height: 36px; border-radius: 50%; background-size: auto 40px; background-position: -3.6px -2px; }
+  .nd-ic.market, .nd-ic.forge { background-position: -8px -2px; }
+  .nd-ic.nd-home { display: grid; place-items: center; background: linear-gradient(180deg, #fbe4a0, #e2b452 45%, #b78130); color: #2b1905; box-shadow: 0 0 0 1px #d9b45a; } .nd-ic.nd-home svg { width: 18px; height: 18px; fill: currentColor; }
+  .nd-t { display: grid; min-width: 0; } .nd-t b { font: 700 .92rem var(--font-display); color: #f6dc94; }
+  .nd-t small { overflow: hidden; color: var(--muted); font-size: .72rem; white-space: nowrap; text-overflow: ellipsis; } .nd-t small svg { width: 10px; height: 10px; vertical-align: -1px; }
+  .nd-it .sn-dot { top: 4px; left: 34px; right: auto; width: 9px; height: 9px; }
+}
+@keyframes ndopen { from { opacity: 0; transform: translateY(-6px); } }
+@media (prefers-reduced-motion: reduce) { .navdrop:not([hidden]) { animation: none; } }
+/* ===== Boss Hall like the Campaign (app.js bossListHtml / dungeonsHtml): the boss list as chapter-style banners, a
+   boss's levels as rows next to its info, set and team; on a phone on its side both columns scroll on their own ===== */
+.bl-por { overflow: hidden; padding: 0; border-color: var(--c, var(--gold)); box-shadow: 0 0 10px color-mix(in srgb, var(--c, #d9b45a) 50%, transparent); }
+.bl-por .spr, .bl-por img, .bl-por canvas { width: 100%; height: 100%; object-fit: cover; object-position: top; border-radius: 0; } .bl-por svg { width: 18px; height: 18px; }
+.bl-ch .cl-desc b { color: #f3d891; }
+.bs-ch { min-height: 150px; align-content: end; } .bs-ch > small, .bs-ch > h3 { position: relative; z-index: 1; }
+.bs-boss { position: absolute; right: 2px; bottom: 0; height: 94%; max-width: 62%; object-fit: contain; object-position: bottom right; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .8)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 45%, transparent)); }
+.bs-side .bhv-row { gap: 8px; padding: 5px 0; } .bs-side .bhv-row:last-child { border-bottom: 0; }
+.bs-side .bhv-ic { width: 30px; height: 30px; border-radius: 6px; } .bs-side .bhv-ic svg { width: 16px; height: 16px; } .bs-side .bhv-row.trait > .fxi { transform: none; margin: 0 4px; }
+.bs-side .bhv-row b { font-size: .86rem; } .bs-side .bhv-row small { font-size: .78rem; }
+.bs-side .bhv-sets { margin: 0; font-size: .8rem; } .bs-side .bhv-sets li { padding: 3px 0; }
+.bs-side #bh-team { width: 100%; padding: 4px 6px; background: #120d15; color: var(--fg); border: 1px solid #5a4523; border-radius: 4px; font-size: .82rem; }
+.bhs .sv-row.boss:not(.locked) .sv-boss { color: #ff9a7a; } .bhs .sv-row:not(.boss) .sv-boss { color: #9fd0ff; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .sv-wrap.lfit { align-items: stretch; } .sv-wrap.lfit .sv-side { height: 100%; max-height: none; align-content: start; grid-auto-rows: max-content; }
+  .cv.sv .camp-info { display: none; } .cl-back { white-space: nowrap; }
+  .sv-wrap.lfit .sv-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; align-content: start; padding-right: 2px; }
+  .bs-ch { min-height: 92px; } .bs-boss { height: 96%; } .bs-side .bhv-row small { font-size: .7rem; } .bs-side .bhv-row b { font-size: .78rem; }
+  .bs-side .bhv-sets { font-size: .7rem; } .bs-side .bhv-sets li span { display: none; } .bs-side .bhv-sets li.bhv-sethead span { display: inline; }
+  .bl-ch .cl-desc { -webkit-line-clamp: 2; }
+  .bhs .sv-t { grid-template-columns: auto minmax(0, 1fr); column-gap: 6px; align-items: baseline; } .bhs .sv-t small { grid-column: 1 / -1; } .bhs .sv-row { padding-block: 4px; }
+  .bhl .cv-ht, .bhs .cv-ht { display: block; } .bhl .cv-ht h2, .bhs .cv-ht h2 { font-size: 1.15rem; } .bhl .cv-ht p, .bhs .cv-ht p { display: none; }
+}
+/* the team screen before a fight on a short phone on its side: the phase tabs on one line, smaller cards, so it fits */
+@media (max-height: 500px) and (orientation: landscape) {
+  .pp-h .pp-ph { flex-wrap: nowrap; } .pp-h .pp-ph button { padding: 3px 6px; font-size: .6rem; }
+  .pp-top { gap: 8px; } .pp-top .btn { padding: 3px 8px; min-height: 0; }
+  .pp-vsb { font-size: 1.8rem; } .pp-info { gap: 2px; } .pp-edge { font-size: .64rem; }
+  .pp-c { aspect-ratio: 1 / 1; } .pp-h select { min-height: 26px; font-size: .8rem; }
+  .cv.sv .m-act { display: none; } #screen:has(.cv.sv .m-act) { padding-bottom: 0; } /* every stage row has its own Fight */
+  .pp-roster { padding-bottom: 3px; } .pp-roster .pp-c { flex-basis: 40px; } .pp-fight { min-height: 34px; font-size: .95rem; } .pp-go .btn { min-height: 34px; }
+}
+/* ===== Tower of Essence like the Campaign (app.js towerListHtml / towerHtml): the towers as banners, a tower's floors as
+   rows next to its team and milestones; on a phone on its side both columns scroll on their own ===== */
+.tl-ess { border-color: var(--c, var(--gold)); font-size: 1.5rem; box-shadow: 0 0 12px color-mix(in srgb, var(--c, #d9b45a) 55%, transparent); } .tl-ess svg { width: 28px; height: 28px; }
+.tl-bar { display: block; width: min(220px, 100%); height: 6px; border-radius: 3px; background: rgba(0, 0, 0, .55); box-shadow: inset 0 0 0 1px rgba(217, 180, 90, .35); overflow: hidden; }
+.tl-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b78130, #fbe4a0); }
+.tl-ch .cl-prog { display: flex; align-items: center; gap: 8px; }
+.tl-next { display: grid; gap: 4px; justify-items: start; align-content: center; } .tl-next small { color: var(--muted); }
+.tw-sidec .sv-ch { gap: 3px; } .tw-sidec .sv-ch .tl-bar { width: 100%; position: relative; z-index: 1; } .tw-sidec .sv-ch small:last-child { color: #e8dcc6; letter-spacing: .04em; }
+.tw-sidec .tw-ms { padding: 4px 6px; } .tw-sidec .tw-msf { height: 28px; font-size: 13px; } .tw-sidec .tw-warn { margin: 0; font-size: .78rem; }
+.tw-rfl { display: grid; place-items: center; min-width: 46px; height: 40px; padding: 0 6px; border-radius: 8px; font: 900 1.05rem var(--font-display); color: #f7dfa4; background: radial-gradient(circle, #3a2a14, #120c08 75%); border: 1px solid var(--gold); }
+.tws .sv-row.boss .tw-rfl { border-color: #ff6a4a; color: #ffc0a8; box-shadow: 0 0 10px rgba(255, 90, 60, .45); }
+.tws .sv-row.cleared .tw-rfl { border-color: #9fe08a; color: #d8f5c6; }
+.tw-rw img { width: 24px; height: 24px; } .tws .sv-go { gap: 8px; }
+.tws .sv-more .tw-foe { width: 70px; } .tws .sv-more .tw-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-tn { font: 700 .8rem var(--font-tag); letter-spacing: .08em; text-transform: uppercase; color: #d9ccb6; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .twl .cv-ht, .tws .cv-ht { display: block; } .twl .cv-ht h2, .tws .cv-ht h2 { font-size: 1.15rem; } .twl .cv-ht p, .tws .cv-ht p { display: none; }
+  .tws .sv-row { padding-block: 4px; } .tw-rfl { min-width: 38px; height: 32px; font-size: .9rem; } .tw-rw img { width: 20px; height: 20px; }
+  .tws .sv-more .tw-foe { width: 56px; } .tws .sv-more .tw-foe small { font-size: .6rem; } .tws .sv-more .tw-tile { padding: 3px 6px; } .tws .sv-more .tw-tile small { display: none; }
+  .tw-sidec .sv-note { display: block; font-size: .66rem; } .sv-pw .btn { white-space: nowrap; padding: 4px 8px; min-height: 0; } .tl-ess { font-size: 1.2rem; } .tl-ess svg { width: 22px; height: 22px; }
+}
+/* ===== landscape phones, step 4: Fate Altar, Market, Expeditions, Arena, Social and Town Hall fit the screen; smaller
+   icons and text (a gacha-game look: dense cards, short labels, details in tooltips) ===== */
+@media (max-height: 500px) and (orientation: landscape) {
+  /* Fate Altar: the altar a narrow column, the five shards side by side */
+  .altar { grid-template-columns: 150px minmax(0, 1fr) !important; gap: 6px; }
+  .altar-stage { padding: 6px !important; gap: 6px; } .altar-stage .fs-anim.big { width: 76px !important; height: 76px !important; }
+  .altar-actions .btn { font-size: .7rem; padding: 4px 6px; min-height: 0; } .altar-stage > .empty-note, .pity small { display: none; } .pity .tag { font-size: .58rem; }
+  .fs-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; gap: 5px; }
+  .fs-card { padding: 6px !important; gap: 4px !important; text-align: center; } .fs-top { flex-direction: column; gap: 2px; } .fs-top .fs-anim { width: 42px; height: 42px; }
+  .fs-card h3 { font-size: .72rem; line-height: 1.15; } .fs-card .tag { font-size: .58rem; } .fs-rates { font-size: .62rem; gap: 0 5px; justify-content: center; } .fs-card > small { display: none; }
+  .fs-act { flex-direction: column; gap: 3px; } .fs-act .btn { padding: 3px 4px; font-size: .68rem; min-height: 0; }
+  /* Market: every offer a tile in one grid, the balance in the title row */
+  .mk-wrap { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 6px; } .mk-wrap .mk-sec, .mk-wrap .mk-list { display: contents; } .mk-wrap .mk-sec h3, .mk-soon, .mk-how { display: none; }
+  .mk-wrap .mk-card { flex-direction: column; justify-content: space-between; gap: 4px; padding: 6px; text-align: center; border-radius: 8px; border-color: rgba(217, 180, 90, .4); background: linear-gradient(180deg, rgba(40, 30, 48, .95), rgba(16, 12, 20, .96)); }
+  .mk-wrap .mk-ic { width: 32px; height: 32px; border-radius: 7px; } .mk-wrap .mk-ic img { width: 24px; height: 24px; } .mk-wrap .mk-ic .en-ic { width: 20px; height: 20px; }
+  .mk-wrap .mk-main { align-items: center; gap: 1px; } .mk-wrap .mk-main b { font-size: .74rem; line-height: 1.15; } .mk-wrap .mk-left { font-size: .58rem; }
+  .mk-wrap .mk-card { min-width: 0; overflow: hidden; } .mk-wrap .mk-main { width: 100%; }
+  /* Town Hall: slim tabs; each tab's content scrolls in its own box (.th-body.lfit), smaller text and cards */
+  .th-tabs { margin-bottom: 4px !important; } .th-tabs button { min-height: 28px !important; padding: 0 9px !important; font-size: .72rem !important; }
+  .th-body { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 2px; font-size: .86rem; }
+  .th-body .th-sec { padding: 6px 10px !important; margin-bottom: 6px; gap: 5px; } .th-body h3 { font-size: .86rem; margin: 0; } .th-body .btn { padding: 3px 9px; min-height: 0; font-size: .74rem; }
+  .th-body .profile > section, .th-body .prof-cols > section { padding: 6px 10px !important; } .prof-av img { width: 64px; height: 64px; } .th-body .pname { font-size: 1.05rem; } .prof-cols { gap: 6px; }
+  .th-body .stats { font-size: .78rem; } .th-body .empty-note { font-size: .74rem; }
+  .th-body .th-track { padding: 8px 0 30px; margin: 0 60px 0 22px; } .th-body { overflow-x: hidden; } .th-body .th-chest-b { width: 28px; height: 28px; } .th-body .th-chest-b svg { width: 18px; height: 18px; } .th-body .th-chest > b { font-size: .6rem; }
+  .th-body .th-chest .rws { flex-wrap: nowrap; max-width: none; gap: 2px; } .th-body .th-chest .rw { padding: 0 3px; font-size: .6rem; } .th-body .th-chest .rw img { width: 11px; height: 11px; }
+  .th-body .th-score b { font-size: .95rem; } .th-body .th-score { font-size: .72rem; }
+  .th-body .th-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; } .th-body .th-row { padding: 4px 8px; gap: 6px; } .th-body .th-main b { font-size: .78rem; } .th-body .th-main small, .th-body .th-pts { font-size: .68rem; }
+  /* Social · Guild: the guild, its tiles and invites on the left, the members on the right (their own scroll) */
+  .navmain:has(> .g-card) { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 6px; align-content: start; }
+  .navmain:has(> .g-card) > * { grid-column: 1 / -1; } .navmain:has(> .g-card) > .g-card, .navmain:has(> .g-card) > .g-tiles, .navmain:has(> .g-card) > .g-invite, .navmain:has(> .g-card) > .g-leave { grid-column: 1; }
+  .navmain:has(> .g-card) > .fr-sec:not(.g-invite) { grid-column: 2; grid-row: 4 / span 4; align-self: stretch; margin: 0; display: flex; flex-direction: column; min-height: 0; }
+  .navmain:has(> .g-card) > .fr-sec:not(.g-invite) .fr-list { flex: 1; max-height: calc(100dvh - var(--nav-top, 60px) - 180px); }
+  .g-card { gap: 8px; padding: 6px 10px !important; margin-bottom: 4px; } .g-card .g-emb { width: 40px; height: 46px; } .g-card .g-emb b { font-size: .74rem; } .g-card h3 { font-size: .95rem; } .g-card p, .g-card small { font-size: .7rem; margin: 0; }
+  .g-tiles { gap: 4px; margin-bottom: 4px; } .g-tile { padding: 5px 4px !important; gap: 2px !important; } .g-tile > img, .g-tile > .g-chest-ic, .g-tile > .lock-ic { width: 34px; height: 34px; } .g-tile > .lock-ic { padding: 9px; } .g-tile > .g-chest-ic svg { width: 20px; height: 20px; }
+  .g-tile b { font-size: .74rem; } .g-tile small { font-size: .6rem; }
+  .g-invite { padding: 5px 8px !important; } .g-invite > p, .g-invite > small { display: none; } .g-leave { margin-top: 2px; } .g-leave .btn { padding: 3px 8px; min-height: 0; font-size: .72rem; }
+  .navmain:has(> .g-card) > .fr-sec:not(.g-invite) { max-height: calc(100dvh - var(--nav-top, 60px) - 128px); overflow: hidden; } .navmain:has(> .g-card) > .fr-sec:not(.g-invite) .fr-list { max-height: none; min-height: 0; }
+  .navmain:has(> .g-card) > .dc-banner { display: none; } .g-info .empty-note { font-size: inherit; } .g-head h3 { font-size: .95rem !important; }
+  .g-info { font-size: .72rem; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } .g-head > small { font-size: .64rem; line-height: 1.25; } .g-head { gap: 1px; }
+  .g-tile { flex-direction: row; justify-content: flex-start; text-align: left; } .g-tile > img.spr, .g-tile > .g-chest-ic, .g-tile > .lock-ic { width: 28px !important; height: 28px !important; padding: 2px; } .g-tile { min-height: 0; padding: 3px 5px !important; } .g-tile > .lock-ic { padding: 6px !important; } .g-tile > b { font-size: .72rem; } .g-tile small { display: none; }
+  .section-head:has(+ .dc-banner) { padding-block: 2px !important; margin-bottom: 3px; } .soc-tabs { margin-bottom: 3px !important; } .soc-tabs button { min-height: 28px !important; }
+  .g-invite > h3 { display: none; } .navmain:has(> .g-card) > .fr-sec:not(.g-invite) { grid-row: 3 / span 5; }
+  .fr-list li.gm-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "av id acts" "av stats stats"; column-gap: 8px; row-gap: 2px; padding: 4px 6px; }
+  .gm-av, .gm-av img.spr { width: 32px; height: 32px; } .gm-lv { min-width: 16px; height: 16px; font-size: .56rem; right: -4px; bottom: -4px; } .gm-id { gap: 1px; } .gm-id b { font-size: .8rem; } .gm-id .g-role { font-size: .55rem; padding: 0 4px; }
+  .gm-stats { grid-template-columns: repeat(4, minmax(0, auto)); gap: 2px; justify-self: start; max-width: 100%; overflow: hidden; } .gm-stat small { letter-spacing: 0; } .fr-list { overflow-x: hidden; } .gm-stat { flex-direction: row; gap: 3px; padding: 1px 5px; } .gm-stat small { font-size: .48rem; } .gm-stat b { font-size: .7rem; }
+  .gm-acts .btn { padding: 2px 6px; min-height: 0; font-size: .64rem; }
+  /* Social: a slim Discord strip and tabs, the friend code and Add a friend side by side, lists in their own scroll */
+  .dc-banner { gap: 8px; margin: 0 0 4px; padding: 4px 10px; } .dc-banner > .dc-ic { width: 24px; height: 24px; } .dc-bt small { display: none; } .dc-bt b { font-size: .86rem; } .dc-banner .dc-btn { padding: 3px 14px; min-height: 0; font-size: .78rem; }
+  .soc-tabs { margin: 0 0 4px; } .soc-tabs button { min-height: 30px; padding: 2px 8px; font-size: .78rem; }
+  .soc-top { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 6px; } .soc-card { padding: 6px 10px !important; gap: 3px; } .soc-card > small, .soc-card > .empty-note { display: none; }
+  .soc-card > .tag { font-size: .62rem !important; } .fr-code b { font-size: 1rem; } .fr-code .btn, .fr-add .btn { padding: 3px 8px; min-height: 0; font-size: .74rem; } .fr-add input { padding: 3px 6px; font-size: .8rem; min-height: 0; }
+  .fr-sec { padding: 6px 10px !important; margin-bottom: 6px; } .fr-sec > h3 { font-size: .85rem; margin-bottom: 4px; }
+  .fr-list { max-height: calc(100dvh - var(--nav-top, 60px) - 210px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; gap: 4px; }
+  .fr-list li, .ml-item { padding: 4px 8px; gap: 8px; font-size: .8rem; } .fr-av { width: 32px; height: 32px; } .fr-acts .btn { padding: 3px 8px; min-height: 0; font-size: .72rem; }
+  /* Arena: four tabs (Battle, Defense, Rewards, Rankings), one section at a time */
+  .ar-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+  .ar-tabs button { position: relative; flex: 1; padding: 5px 6px; border-radius: 8px; border: 1px solid rgba(217, 180, 90, .35); background: rgba(13, 10, 17, .92); color: #e8dcc6; font: 700 .72rem var(--font-tag); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .ar-tabs button[aria-selected="true"] { background: linear-gradient(180deg, #fbe4a0, #e2b452 45%, #b78130); color: #2b1905; border-color: #1a0f04; }
+  .ar-tabs .dot { position: absolute; top: 3px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ff4a2a; box-shadow: 0 0 6px #ff4a2a; }
+  .ar-wrap .arena { display: block; margin: 0; }
+  .ar-wrap:not([data-t="fight"]) .ar-opps, .ar-wrap:not([data-t="def"]) .ar-def, .ar-wrap:not([data-t="board"]) .ar-board, .ar-wrap[data-t="def"] .ar-me, .ar-wrap[data-t="board"] .ar-me { display: none !important; }
+  .ar-wrap[data-t="fight"] .ar-me > p, .ar-wrap[data-t="fight"] .ar-top5, .ar-wrap[data-t="fight"] .ar-me > .btn, .ar-wrap[data-t="week"] .ar-me .stats { display: none; }
+  .ar-wrap .ar-me { gap: 4px 10px; margin-bottom: 6px; } .ar-wrap .ar-rating { flex-direction: row; align-items: baseline; gap: 6px; padding: 3px 10px; } .ar-wrap .ar-rating b { font-size: 1.15rem; } .ar-wrap .ar-rating small { display: none; }
+  .ar-wrap[data-t="fight"] .ar-me .stats { display: grid; grid-template-columns: repeat(3, auto minmax(0, auto)); gap: 0 8px; font-size: .72rem; } .ar-wrap .ar-me .stats dt { color: var(--muted); }
+  .ar-wrap .ar-top5 ol { font-size: .74rem; gap: 2px 10px; } .ar-wrap .ar-me > p { font-size: .76rem; }
+  .ar-wrap .ar-opp { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 4px 8px; padding: 6px; text-align: left; font-size: .76rem; }
+  .ar-wrap .ar-opp > img.spr { width: 38px; height: 38px; align-self: start; } .ar-wrap .ar-opp-main { gap: 1px; } .ar-wrap .ar-opp-main > b { font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ar-wrap .ar-opp-main .tag { display: none; }
+  .ar-wrap .ar-opp-main small { font-size: .66rem; } .ar-wrap .ar-team { gap: 3px; margin-top: 2px; } .ar-wrap .ar-h { width: 28px; height: 28px; }
+  .ar-wrap .ar-opp > .btn { grid-column: 1 / -1; padding: 4px 8px; min-height: 0; font-size: .78rem; }
+  .ar-wrap .ar-opps .section-head { padding: 0 !important; } .ar-wrap .ar-opps .section-head h3, .ar-wrap .ar-board .section-head h3 { font-size: .85rem; }
+  .section-head:has(+ .ar-wrap) { padding-block: 3px !important; margin-bottom: 4px; } .ar-wrap .section-head .btn, .ar-wrap .ar-board .seg button { padding: 3px 8px; min-height: 0; font-size: .72rem; } .ar-wrap .ar-opps { padding-block: 5px; }
+  .ar-wrap .ar-board .lb { max-height: calc(100dvh - var(--nav-top, 60px) - 165px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; } .ar-wrap .lb li { padding-block: 3px; font-size: .78rem; }
+  /* Expeditions: the crew on the left (its own scroll), the three voyages stacked on the right */
+  .exp-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 6px; align-items: stretch; } .exp-note { display: none; }
+  .exp-crewcol { display: flex; flex-direction: column; gap: 4px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .exp-crewcol .section-head { padding: 4px 8px !important; margin: 0; } .exp-crewcol .section-head h3 { font-size: .85rem; }
+  .exp-crewcol .exp-pick { grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 4px; margin: 0; } .exp-pick .card .nm { font-size: .6rem; }
+  .exp-wrap .exp-trips { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 4px; margin: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+  .exp-wrap .exp-trip { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 2px 6px; padding: 6px 8px; }
+  .exp-wrap .exp-trip > p { display: none; } .exp-wrap .exp-th { grid-column: 1 / -1; } .exp-wrap .exp-th h3 { font-size: .82rem; } .exp-wrap .exp-th .tag { font-size: .58rem; }
+  .exp-wrap .exp-rw { font-size: .62rem; gap: 0 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); } .exp-wrap .exp-rw li { line-height: 1.25; } .exp-wrap .exp-rw .shard-ic, .exp-wrap .exp-rw .sigil-ic, .exp-wrap .exp-rw img { width: 13px; height: 13px; }
+  .exp-wrap .exp-trip .btn { margin: 0; align-self: center; padding: 4px 10px; font-size: .74rem; min-height: 0; }
+  .exp-out { padding: 8px; gap: 5px; } .exp-out h3 { font-size: .95rem; } .exp-out p { display: none; } .exp-hero { width: 48px; } .exp-hero img { width: 42px; height: 42px; } .exp-out .exp-rw { grid-template-columns: repeat(2, minmax(0, 1fr)); font-size: .7rem; }
+  .mk-wrap .mk-main b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; } .mk-wrap .mk-left { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .mk-wrap .mk-buy { width: 100%; min-width: 0; min-height: 0; padding: 3px 6px; font-size: .78rem; } .mk-wrap .mk-buy .gem-ic { width: 14px; height: 14px; }
+  .section-head:has(.mk-bal) { align-items: center; } .mk-bal { padding: 3px 10px; } .mk-bal b { font-size: 1rem; } .mk-bal .gem-ic { width: 18px; height: 18px; }
+}
+/* very short phones on their side (status bar showing): the screen title gives way where tabs already say where you are */
+@media (max-height: 360px) and (orientation: landscape) {
+  .section-head:has(+ .ar-wrap), .section-head:has(+ .dc-banner) { display: none; }
+  .mk-wrap .mk-card { padding: 4px 5px; gap: 2px; } .mk-wrap .mk-ic { width: 26px; height: 26px; } .mk-wrap .mk-ic img { width: 20px; height: 20px; } .mk-wrap .mk-buy { padding: 2px 6px; }
+  .g-card { padding: 4px 8px !important; } .g-invite { padding: 3px 8px !important; } .g-leave { margin-top: 0; }
+}
 </style>
 
 <div id="app">
   <header class="top">
     <div class="brand"><h1 class="logo-img"><img id="logo" alt="Fate Forged Heroes"></h1></div>
-    <button class="homebtn" id="homebtn" type="button" aria-label="Back to your homebase"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg><span>Home</span></button>
+    <button class="homebtn" id="homebtn" type="button" aria-label="Menu: go to a building" aria-expanded="false" aria-controls="navdrop"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z"/></svg><span>Menu</span><i class="nd-caret" aria-hidden="true">▾</i></button>
     <div class="wallet">
       <div class="res en" title="Energy"><img id="ic-energy" class="en-ic" alt="Energy"><b id="energy">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
       <div class="res" title="Sigils: for upgrading gear, ascending and buying Fate Shards"><img id="ic-coin" class="sigil-ic" alt="Sigils"><b id="silver">0</b><button class="res-plus" type="button" aria-label="Get more in the Market" title="Get more in the Market">+</button></div>
@@ -3310,6 +3478,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
     </div>
   </header>
   <div class="mmenu" id="mmenu" hidden></div>
+  <div class="navdrop" id="navdrop" hidden></div>
   <nav class="tabs" id="tabs" role="tablist" aria-label="Main">
     <button role="tab" data-tab="campagne" aria-selected="true"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 14.5v-13M3.5 2h9l-2 3 2 3h-9"/></svg><span class="tl-l">Campaign</span><span class="tl-s">Campaign</span></button>
     <button role="tab" data-tab="kerkers" aria-selected="false"><svg class="ti" viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.5a5.5 5.5 0 0 1 11 0v3h-2v3h-7v-3h-2z"/><path d="M5.5 7.5h1.5v1.5h-1.5zM9 7.5h1.5v1.5h-1.5z" fill="currentColor"/><path d="M7 13.5v-2M9 13.5v-2"/></svg><span class="tl-l">Boss Hall</span><span class="tl-s">Bosses</span></button>
