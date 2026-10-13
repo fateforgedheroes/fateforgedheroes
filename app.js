@@ -1241,6 +1241,143 @@
       <p class="empty-note">Each elixir gives ${esc(C[id].short)} the XP of ${K.ELIXIR.wins} campaign wins at its level${atCap ? '. Max level for this star: ascend first.' : '.'} They drop now and then from campaign and Boss Hall wins and every 10th Tower floor.</p>
       <div class="fodder-list">${kinds.map(row).join('')}</div></div>`;
   }
+  // ----- Level up: one popup that fills the screen (the hero's Level up tab opens it) -----
+  // Left the hero (level now → after, the XP bar with the gain lit, the cap for its stars, Level up); right the Essence
+  // Elixirs that fit it (− count + Max) and every possible food as tiles: spare copies (tap again for another copy) and
+  // heroes outside every team (not locked, not away). Tapping only selects; Level up feeds the selection first (fixed XP
+  // per food) and then drinks the elixirs (each at the level the hero has by then, so after feeding they give more).
+  // Auto-fill takes Common and Uncommon food, cheapest first, until the level cap. Rare or better food asks for a
+  // second tap on Level up. Copies of the hero itself raise a skill instead (Skill up); spare copies can be broken down
+  // into Ascension Stones from here too (Break down, the selected copies).
+  const LU = { id: null, copies: {}, heroes: new Set(), elx: {}, arm: false };
+  function openLevelUp(id) {
+    Object.assign(LU, { id, copies: {}, heroes: new Set(), elx: {}, arm: false });
+    luPaint();
+  }
+  const luFoodCopies = id => Object.keys(S.fodder).filter(f => S.fodder[f] > 0 && C[f] && f !== id).sort((a, b) => C[a].rar - C[b].rar || K.feedXp(a, 1) - K.feedXp(b, 1));
+  const luFoodHeroes = id => Object.keys(S.roster).filter(x => x !== id && C[x] && !C[x].pc && !inAnyTeam(x) && !onExp(x) && !S.roster[x].lock).sort((a, b) => C[a].rar - C[b].rar || S.roster[a].lvl - S.roster[b].lvl);
+  // XP from the chosen food (it does not depend on the hero's level)
+  function luFeedXp(id) {
+    let xp = 0;
+    for (const f in LU.copies) xp += K.feedXp(f, 1) * LU.copies[f];
+    for (const x of LU.heroes) if (S.roster[x]) xp += K.feedXp(x, 1, S.roster[x].lvl);
+    return xp;
+  }
+  // what the hero ends up at: the food first, then the elixirs one by one at the level it has by then
+  function luSim(id, elx) {
+    const h = S.roster[id], cap = K.maxLvl(h.stars, id);
+    let lvl = h.lvl, xp = h.xp, wasted = 0, elxXp = 0; const used = {};
+    const add = g => { if (lvl >= cap) { wasted += g; return; } xp += g; while (lvl < cap && xp >= K.xpNeed(lvl)) { xp -= K.xpNeed(lvl); lvl++; } if (lvl >= cap) { wasted += xp; xp = 0; } };
+    const feed = luFeedXp(id); add(feed);
+    for (const e in (elx || LU.elx)) { used[e] = 0; for (let n = (elx || LU.elx)[e]; n > 0 && lvl < cap; n--) { const g = K.elixirXp(lvl); elxXp += g; add(g); used[e]++; } }
+    return { lvl, xp, cap, wasted, feed, elxXp, used };
+  }
+  // the most elixirs of one kind that still help (up to the cap), with the food chosen now
+  function luElxMax(id, e) {
+    const have = S.elx[e] || 0; let n = 0;
+    while (n < have) { const r = luSim(id, { ...LU.elx, [e]: n }); if (r.lvl >= r.cap) break; n++; }
+    return n;
+  }
+  function luPaint() {
+    const id = LU.id, c = C[id], h = id && S.roster[id];
+    if (!c || !h) return;
+    const r = luSim(id), cap = r.cap, atCap = h.lvl >= cap, need = K.xpNeed(h.lvl);
+    const copies = luFoodCopies(id), heroes = luFoodHeroes(id), own = S.fodder[id] || 0;
+    const kinds = [...new Set([c.aff, 'Aether'])].filter(e => K.elixirFits(e, id));
+    const nSel = Object.values(LU.copies).reduce((a, b) => a + b, 0) + LU.heroes.size, nElx = Object.values(LU.elx).reduce((a, b) => a + b, 0);
+    const rare = Object.keys(LU.copies).filter(f => LU.copies[f] && C[f].rar >= 2).reduce((a, f) => a + LU.copies[f], 0) + [...LU.heroes].filter(x => C[x].rar >= 2).length;
+    // the XP bar: now (gold) and, on the same level, what the choice adds (bright); a new level shows the bar of the level it reaches
+    const pctNow = atCap ? 100 : h.xp / need * 100, pctNew = r.lvl >= cap ? 100 : r.xp / K.xpNeed(r.lvl) * 100;
+    const bar = r.lvl > h.lvl ? `<i class="lu-bar up"><b style="width:${pctNew}%"></b></i>` : `<i class="lu-bar"><b style="width:${pctNow}%"></b><em style="left:${pctNow}%;width:${Math.max(0, pctNew - pctNow)}%"></em></i>`;
+    const gain = r.feed + r.elxXp;
+    const elxRow = e => { const n = S.elx[e] || 0, k = LU.elx[e] || 0; return `<div class="lu-elx" style="--c:${AFF_COL[e]}">${elxIc(e)}<div class="lu-elx-t"><b>${elxName(e, 2)}</b><small>×${n} · +${K.elixirXp(h.lvl).toLocaleString('en-US')} XP each now</small></div>
+        <div class="lu-step"><button type="button" class="btn small" data-act="luelx" data-e="${e}" data-d="-1" ${k ? '' : 'disabled'} aria-label="One less">−</button><b>${k}</b><button type="button" class="btn small" data-act="luelx" data-e="${e}" data-d="1" ${k < n && r.lvl < cap ? '' : 'disabled'} aria-label="One more">+</button><button type="button" class="btn small" data-act="luelx" data-e="${e}" data-d="max" ${n && !atCap ? '' : 'disabled'}>Max</button></div></div>`; };
+    const tile = (k, f, sub, xp, n, of) => `<button type="button" class="lu-t rar-${C[f].rar} ${n ? 'on' : ''}" style="--rc:var(--r${C[f].rar})" data-act="lutile" data-k="${k}" title="${esc(C[f].name)} · ${K.RARITIES[C[f].rar]} · +${xp.toLocaleString('en-US')} XP">
+        ${por(f)}<span class="lu-tn">${esc(C[f].short || C[f].name)}</span><span class="lu-ts">${sub}</span><span class="lu-tx">+${xp >= 1000 ? (xp / 1000).toFixed(xp >= 10000 ? 0 : 1) + 'k' : xp}</span>${n ? `<span class="lu-ck">${of > 1 ? `${n}/${of}` : '✓'}</span>` : ''}</button>`;
+    const tiles = copies.map(f => tile('c:' + f, f, `×${S.fodder[f]}`, K.feedXp(f, 1), LU.copies[f] || 0, S.fodder[f]))
+      .concat(heroes.map(x => tile('h:' + x, x, `Lv ${S.roster[x].lvl}`, K.feedXp(x, 1, S.roster[x].lvl), LU.heroes.has(x) ? 1 : 0, 1))).join('');
+    const skills = own ? `<button type="button" class="btn small violet lu-sk" data-act="luskill" ${h.sk.every(v => v >= K.SKILL_MAX) ? 'disabled title="All skills are at the maximum level"' : ''} title="Use a spare copy of ${esc(c.short)} to raise one of its skills">Skill up · ${own}× copy</button>` : '';
+    const brk = Object.keys(LU.copies).filter(f => LU.copies[f]).reduce((a, f) => a + K.breakStones(f) * LU.copies[f], 0);
+    const goTxt = atCap ? `Max level for ${h.stars}★` : !nSel && !nElx ? 'Pick food or elixirs' : LU.arm ? `Includes ${rare} Rare or better · tap to feed` : `Level up${r.lvl > h.lvl ? ` to ${r.lvl}` : ''}`;
+    const m = $('#modal');
+    m.innerHTML = `<div class="modal-box lu" role="dialog" aria-modal="true" aria-labelledby="lu-h">
+      <div class="lu-top"><h2 id="lu-h">Level up · ${esc(c.short)}</h2><button type="button" class="lu-x" data-act="luclose" aria-label="Close">✕</button></div>
+      <div class="lu-body">
+        <section class="lu-hero rar-${c.rar}" style="--ec:${AFF_COL[c.aff]}">
+          <img class="lu-art" src="${SPR.url(id, 2)}" alt="">
+          <div class="lu-lv"><span class="lu-stars">${'★'.repeat(h.stars)}</span><b>Lv ${h.lvl}${r.lvl > h.lvl ? ` <span class="lu-arrow">→</span> <span class="lu-new">${r.lvl}</span>` : ''}</b><small>/ ${cap}</small></div>
+          ${bar}
+          <p class="lu-gain">${gain ? `+${gain.toLocaleString('en-US')} XP` : atCap ? 'Ascend for a higher cap' : `${(need - h.xp).toLocaleString('en-US')} XP to level ${h.lvl + 1}`}${r.wasted > 0 ? ` <span class="warn">· ${r.wasted.toLocaleString('en-US')} past the cap</span>` : ''}</p>
+          ${skills}
+          <button type="button" class="btn primary lu-go ${LU.arm ? 'armed' : ''}" data-act="lugo" ${atCap || (!nSel && !nElx) ? 'disabled' : ''}>${goTxt}</button>
+        </section>
+        <section class="lu-main">
+          ${kinds.length ? `<div class="lu-elxs">${kinds.map(elxRow).join('')}</div>` : ''}
+          <div class="lu-tools"><b>Feed</b><small class="empty-note">${nSel ? `${nSel} selected · +${r.feed.toLocaleString('en-US')} XP` : 'Tap heroes and spare copies to feed them'}</small>
+            <button type="button" class="btn small" data-act="luauto" ${atCap || !tiles ? 'disabled' : ''} title="Common and Uncommon food, cheapest first, up to the level cap">Auto-fill</button>
+            <button type="button" class="btn small" data-act="luclear" ${nSel || nElx ? '' : 'disabled'}>Clear</button>
+            ${brk ? `<button type="button" class="btn small" data-act="lubreak" title="Break the selected spare copies down into Ascension Stones">Break down · +${brk} ${ic('stone')}</button>` : ''}</div>
+          <div class="lu-grid">${tiles || '<p class="empty-note">Nothing to feed yet. Summon at the Fate Altar or capture enemies in the campaign; heroes outside your teams can be fed too.</p>'}</div>
+        </section>
+      </div></div>`;
+    m.hidden = false;
+  }
+  // the popup's taps (called from the click handler)
+  function luAct(act, a) {
+    const id = LU.id, h = S.roster[id]; if (!h) return;
+    const cap = K.maxLvl(h.stars, id);
+    if (act === 'luclose') { $('#modal').hidden = true; render(); return; }
+    if (act !== 'lugo') LU.arm = false;
+    if (act === 'lutile') {
+      const [t, k] = a.dataset.k.split(':');
+      if (t === 'c') { const n = LU.copies[k] || 0; LU.copies[k] = n < S.fodder[k] && luSim(id).lvl < cap ? n + 1 : 0; if (!LU.copies[k]) delete LU.copies[k]; }
+      else if (LU.heroes.has(k)) LU.heroes.delete(k); else if (luSim(id).lvl < cap) LU.heroes.add(k);
+      // the elixirs never go past the cap: trim them when the food got bigger
+      for (const e in LU.elx) LU.elx[e] = Math.min(LU.elx[e], luElxMax(id, e));
+    } else if (act === 'luelx') {
+      const e = a.dataset.e, d = a.dataset.d, n = LU.elx[e] || 0;
+      LU.elx[e] = d === 'max' ? luElxMax(id, e) : Math.max(0, Math.min(S.elx[e] || 0, n + +d));
+      if (d === '1' && luSim(id).lvl >= cap && luSim(id, { ...LU.elx, [e]: n }).lvl >= cap) LU.elx[e] = n;
+    } else if (act === 'luclear') { LU.copies = {}; LU.heroes = new Set(); LU.elx = {}; }
+    else if (act === 'luauto') {
+      // Common and Uncommon food, cheapest first (spare copies before heroes), until the cap
+      const pool = [...luFoodCopies(id).filter(f => C[f].rar <= 1).flatMap(f => Array.from({ length: S.fodder[f] - (LU.copies[f] || 0) }, () => ['c', f])),
+        ...luFoodHeroes(id).filter(x => C[x].rar <= 1 && !LU.heroes.has(x)).map(x => ['h', x])];
+      for (const [t, k] of pool) { if (luSim(id).lvl >= cap) break; if (t === 'c') LU.copies[k] = (LU.copies[k] || 0) + 1; else LU.heroes.add(k); }
+    } else if (act === 'luskill') {
+      if (!(S.fodder[id] > 0)) return;
+      const i = K.skillUp(h, id); if (i < 0) return;
+      S.fodder[id]--; track('feed'); SFX.summon(3); save();
+      toast(`${C[id].skills[i].name} is now skill level ${h.sk[i]}/${K.SKILL_MAX}.`);
+    } else if (act === 'lubreak') {
+      let st = 0; for (const f in LU.copies) { const n = Math.min(LU.copies[f], S.fodder[f] || 0); S.fodder[f] -= n; st += K.breakStones(f) * n; }
+      S.stones += st; LU.copies = {}; save(); hud(); toast(`Broken down into ${st} Ascension ${st === 1 ? 'Stone' : 'Stones'}.`);
+    } else if (act === 'lugo') {
+      const rare = Object.keys(LU.copies).some(f => C[f].rar >= 2) || [...LU.heroes].some(x => C[x].rar >= 2);
+      if (rare && !LU.arm) { LU.arm = true; luPaint(); return; }
+      LU.arm = false;
+      const l0 = h.lvl, before = luFeedXp(id); let fed = 0, gear = 0;
+      // the food first (selChamp is the hero being raised: giveXp works on it)
+      const keep = selChamp; selChamp = id;
+      for (const f in LU.copies) { const n = Math.min(LU.copies[f], S.fodder[f] || 0); for (let i = 0; i < n && h.lvl < cap; i++) { S.fodder[f]--; giveXp(K.feedXp(f, 1)); fed++; } }
+      for (const x of LU.heroes) {
+        if (!S.roster[x] || h.lvl >= cap || inAnyTeam(x) || S.roster[x].lock) continue;
+        const g = K.feedXp(x, 1, S.roster[x].lvl), worn = itemsOf(x); gear += worn.length;
+        delete S.roster[x]; worn.forEach(it => (it.owner = null)); if (S.p.avatar === x) S.p.avatar = null;
+        giveXp(g); fed++;
+      }
+      // then the elixirs, each at the level reached by then
+      let drank = 0;
+      for (const e in LU.elx) for (let n = LU.elx[e]; n > 0 && (S.elx[e] || 0) > 0 && h.lvl < cap; n--) { S.elx[e]--; giveXp(K.elixirXp(h.lvl)); drank++; }
+      selChamp = keep;
+      if (fed || drank) track('feed', fed + drank);
+      LU.copies = {}; LU.heroes = new Set(); LU.elx = {};
+      SFX.up(); save(); hud();
+      toast(`${C[id].short}: ${h.lvl > l0 ? `level ${l0} → ${h.lvl}` : `+${before.toLocaleString('en-US')} XP`}${fed ? ` · ${fed} fed` : ''}${drank ? ` · ${drank} ${drank === 1 ? 'elixir' : 'elixirs'}` : ''}${gear ? ' · their gear went back to your Vault' : ''}.`);
+      render();
+    }
+    luPaint();
+  }
   function fodderHtml(id) {
     const h = S.roster[id], cap = K.maxLvl(h.stars, id), atCap = h.lvl >= cap;
     const skillsMaxed = h.sk.every(v => v >= K.SKILL_MAX);
@@ -3257,7 +3394,8 @@
     else if (act === 'hlock') { const h = S.roster[id]; if (!h) return; h.lock = !h.lock; if (!h.lock) delete h.lock; save(); render(); toast(h.lock ? `${C[id].short} is locked: it will never be offered as food.` : `${C[id].short} is unlocked.`); }
     else if (act === 'hinfo') heroInfo(id);
     else if (act === 'hteam') { $('#modal').hidden = true; selChamp = id; champTab = 'gear'; HX.view = 'hero'; setTab('team'); }
-    else if (act === 'ctab') { champTab = a.dataset.t; render(); }
+    else if (act === 'ctab') { if (a.dataset.t === 'level') { openLevelUp(selChamp); return; } champTab = a.dataset.t; render(); } // Level up opens its own popup
+    else if (['luclose', 'lutile', 'luelx', 'luclear', 'luauto', 'luskill', 'lubreak', 'lugo'].includes(act)) luAct(act, a);
     else if (act === 'hxfilt') { HX.filt = !HX.filt; render(); }
     else if (act === 'hxview') { HX.view = a.dataset.v; render(); }
     // ----- the gear bag on the Heroes screen (HB) -----
@@ -3620,6 +3758,7 @@
       const rs = u._rs; if (!rs || !rs.el) continue;
       rs.el.classList.toggle('dead', !u.alive);
       rs.el.classList.toggle('focus', !!(canFocus() && B.b.focus === u && u.alive));
+      rs.el.classList.toggle('turn', R.active === u && u.side === 'hero' && u.alive); // a green arrow above it: its turn
       rs.el.style.left = pctX(rs.x + rs.ox);
       const w = Math.max(0, u.hp / u.maxHp * 100) + '%';
       rs.el.querySelector('.hp i').style.width = w; rs.el.querySelector('.hp b').style.width = w;
@@ -4196,6 +4335,19 @@
   let bannerQ = Promise.resolve();
   function queueBanner(title, sub, cls, ms) { bannerQ = bannerQ.then(() => { R.dim = 0.3; return showBanner(title, sub, cls, ms); }).then(() => { R.dim = 0; }); return bannerQ; }
 
+  // the skill column shows every skill whole: when the texts do not fit, all of them shrink together a step at a time
+  // (--fs, down to 60%); again when the window changes size
+  function fitSkills() {
+    const box = $('#b-skills'); if (!box || !box.children.length || $('#battle').hidden) return;
+    let fs = 1; box.style.setProperty('--fs', fs);
+    for (const b of box.querySelectorAll('.sk > b')) b.style.fontSize = '';
+    while (fs > 0.6 && box.scrollHeight > box.clientHeight + 1) { fs = Math.round((fs - 0.04) * 100) / 100; box.style.setProperty('--fs', fs); }
+    // a name with a word too long for the column (Thunderstrike) shrinks on its own, the rest keeps its size
+    for (const b of box.querySelectorAll('.sk > b')) { let px = parseFloat(getComputedStyle(b).fontSize); while (px > 8 && b.scrollWidth > b.clientWidth + 1) { px -= 0.5; b.style.fontSize = px + 'px'; } }
+  }
+  // measured on the next frame and once more a moment later (the column only gets its final width when the battle view settles)
+  const fitSoon = () => { requestAnimationFrame(fitSkills); setTimeout(fitSkills, 300); };
+  addEventListener('resize', fitSoon);
   function renderBar(u) {
     const isHero = u.side === 'hero';
     $('#b-por').src = SPR.url(u.id, 1, !isHero);
@@ -4203,7 +4355,7 @@
     const box = $('#b-skills');
     if (!isHero) { box.innerHTML = ''; $('#b-hint').textContent = 'Enemy turn…'; return; }
     if (!pending || pending.u !== u) {
-      box.innerHTML = u.skills.map((s, i) => skillBtn(u, s, i, false)).join('');
+      box.innerHTML = u.skills.map((s, i) => skillBtn(u, s, i, false)).join(''); fitSoon();
       $('#b-hint').textContent = B && B.b.auto ? 'Auto is playing this turn.' : ' ';
     }
   }
@@ -4251,7 +4403,7 @@
   function refreshChoice() {
     if (!pending) { R.hl = new Set(); updateOverlay(); return; }
     const { u, b } = pending, s = u.skills[selSkill];
-    $('#b-skills').innerHTML = u.skills.map((sk, i) => skillBtn(u, sk, i, i === selSkill)).join('') + `<p class="b-desc">${esc(s.desc)}</p>`;
+    $('#b-skills').innerHTML = u.skills.map((sk, i) => skillBtn(u, sk, i, i === selSkill)).join('') + `<p class="b-desc">${esc(s.desc)}</p>`; fitSoon();
     R.hl = new Set(b.validTargets(u, s));
     R.hlKind = ['ally', 'allies', 'self', 'deadAlly', 'lowestAlly'].includes(s.target) ? 'good' : 'bad';
     const taunted = s.target === 'enemy' && b.tauntTarget(u);
