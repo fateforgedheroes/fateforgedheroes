@@ -1757,6 +1757,69 @@
   const fmtDelta = (k, v) => `${v > 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString('en-US')}${K.PCT_STATS && K.PCT_STATS.includes(k) ? '%' : ''}`;
   const fmtVal = (k, v) => K.fmtStat(k, v).replace(/^[^+]*\+/, '+');
   // power change for hero `id` when it wears `it` in that slot instead of what it wears now
+  // ----- gear that suits the hero's role (Equip best, the ▲ and "Best first" in the gear bag, "Equip on" after an
+  // Auto ×10 run). Power (the number shown everywhere) weighs every stat the same for every hero; this instead asks what
+  // the hero's job needs, the way the battle works:
+  //   damage    = Attack × (1 + Crit Rate × Crit Damage), Crit Rate counted up to its cap (every hit scales with Attack)
+  //   toughness = HP × (100 + Defense) / 100 (Defense cuts the damage taken to 100 / (100 + Defense))
+  //   Speed     = how often the hero acts: more hits, heals, shields and taunts
+  //   Accuracy  = how often its debuffs land (chance × (1 + (Accuracy − the foe's Resistance) / 100))
+  //   Resistance= how often the foe's stuns, freezes and debuffs miss it
+  // The score multiplies these, each raised to the role's weight (ROLE_W; a log sum), so a stat that is already high is
+  // worth less than one that is low, and Crit Rate past the cap is worth nothing. The hero's own kit adjusts it: without
+  // debuffs Accuracy hardly counts; shields scale with the caster's HP, so a shielder values HP; heals scale with the
+  // healed hero's max HP, not the healer's Attack, so a healer barely values Attack. A second role (role2) counts 30%.
+  // Set mechanics without a stat (lifesteal, counter, the 4- and 6-piece effects of boss sets) add a little for the
+  // roles they suit (SET_FIT, by the set's own role).
+  const ROLE_W = {
+    Tank:       { off: 0.2,  tough: 1.0,  spd: 0.5,  acc: 0.25, res: 0.5 },
+    Warrior:    { off: 1.0,  tough: 0.65, spd: 0.8,  acc: 0.2,  res: 0.2 },
+    Mage:       { off: 0.9,  tough: 0.42, spd: 0.8,  acc: 0.55, res: 0.15 },
+    Ranger:     { off: 1.0,  tough: 0.38, spd: 0.85,  acc: 0.25, res: 0.1 },
+    Assassin:   { off: 1.1,  tough: 0.33, spd: 0.9,  acc: 0.15, res: 0.1 },
+    Support:    { off: 0.05, tough: 0.65, spd: 1.0,  acc: 0.15, res: 0.55 },
+    Controller: { off: 0.35, tough: 0.45, spd: 0.9,  acc: 0.9,  res: 0.25 },
+  };
+  // which hero roles a set mechanic helps: campaign set flags, and boss sets by their role
+  const SET_FIT = {
+    lifesteal: ['Warrior', 'Assassin', 'Ranger'], pierce: ['Warrior', 'Assassin', 'Ranger', 'Mage'], counter: ['Tank', 'Warrior'], curse: ['Mage', 'Controller'],
+    Bruiser: ['Warrior'], Berserker: ['Warrior'], Lifesteal: ['Warrior', 'Assassin'], Breaker: ['Warrior', 'Assassin', 'Ranger'],
+    Assassin: ['Assassin'], Executioner: ['Assassin', 'Ranger'], Marker: ['Ranger', 'Assassin'],
+    'Area damage': ['Mage'], Waves: ['Mage'], Poison: ['Mage', 'Controller', 'Ranger'], Debuffer: ['Mage', 'Controller'], Control: ['Controller', 'Mage'], Chaos: ['Controller', 'Mage'],
+    Tank: ['Tank'], Protector: ['Tank'], Reflect: ['Tank'], Evasion: ['Tank', 'Assassin'], Rebirth: ['Tank', 'Support', 'Warrior'],
+    Guardian: ['Support', 'Tank'], Healer: ['Support'], Speed: ['Support', 'Controller'],
+  };
+  const FIT = {};
+  function roleW(id) {
+    if (FIT[id]) return FIT[id];
+    const c = C[id], a = ROLE_W[c.role] || ROLE_W.Warrior, b = c.role2 && ROLE_W[c.role2];
+    const w = {}; for (const k in a) w[k] = b ? a[k] * 0.7 + b[k] * 0.3 : a[k];
+    const fx = (c.skills || []).flatMap(s => s.fx || []);
+    const debuffs = fx.filter(f => f.t === 'debuff' || f.t === 'randomDebuff').length;
+    if (!debuffs) w.acc *= 0.1; else if (debuffs >= 3) w.acc = Math.max(w.acc, 0.45);
+    w.hp = fx.some(f => f.t === 'shield') ? 0.25 : 0;
+    if (fx.some(f => f.t === 'heal' || f.t === 'revive')) w.off = Math.min(w.off, 0.15);
+    if (!fx.some(f => f.t === 'dmg' || f.m)) w.off = Math.min(w.off, 0.05);
+    w.roles = [c.role, c.role2].filter(Boolean);
+    return (FIT[id] = w);
+  }
+  function gearFit(id, h, items) {
+    const s = K.heroStats(id, h, items), w = roleW(id), L = Math.log;
+    const off = s.atk * (1 + Math.min(s.crit, K.CRIT_CAP) / 100 * s.cdmg / 100), tough = s.hp * (100 + s.def) / 100;
+    let v = w.off * L(off) + w.tough * L(tough) + w.hp * L(s.hp) + w.spd * L(s.spd) + w.acc * L(1 + Math.max(0, s.acc) / 100) + w.res * L(1 + Math.max(0, s.res) / 100);
+    for (const t of K.setTiers(items)) {
+      if (!t.flag) continue;
+      const S = K.SETS[t.k] || {}, fits = SET_FIT[S.role] || SET_FIT[t.flag] || []; // (a family bonus is no set of its own)
+      v += (fits.some(r => w.roles.includes(r)) ? (t.n >= 6 ? 0.07 : 0.05) * (t.asc ? 1.4 : 1) : t.flag === 'fate' ? 0.04 : 0.01);
+    }
+    return v;
+  }
+  // how much a piece would suit a hero in its slot (0 = no better, > 0 = better for its role)
+  function fitGain(id, it) {
+    const r = S.roster[id]; if (!r || it.owner === id || !wearOk(id, it)) return 0;
+    const now = itemsOf(id), next = [...now.filter(x => x.slot !== it.slot), it];
+    return gearFit(id, r, next) - gearFit(id, r, now);
+  }
   function gainFor(id, it) {
     const r = S.roster[id]; if (!r || it.owner === id) return 0;
     const now = itemsOf(id), next = [...now.filter(x => x.slot !== it.slot), it];
@@ -1770,14 +1833,14 @@
     if (FG.set !== 'all') l = l.filter(x => x.set === FG.set);
     if (FG.main !== 'all') l = l.filter(x => x.main === FG.main);
     if (FG.sub !== 'all') l = l.filter(x => x.subs.some(s => s[0] === FG.sub));
-    const by = { power: (a, b) => gainFor(id, b) - gainFor(id, a) || b.rar - a.rar, rarity: (a, b) => b.rar - a.rar || b.lvl - a.lvl, level: (a, b) => b.lvl - a.lvl || b.rar - a.rar };
+    const by = { power: (a, b) => fitGain(id, b) - fitGain(id, a) || b.rar - a.rar, rarity: (a, b) => b.rar - a.rar || b.lvl - a.lvl, level: (a, b) => b.lvl - a.lvl || b.rar - a.rar };
     return l.sort(by[FG.sort] || by.power);
   }
   // a piece in the bag's grid: rarity frame, +level, its set, who wears it, ▲ when it makes this hero stronger; the
   // piece the hero wears in the slot comes first with a gold ring
   function fgCell(it, id) {
-    const g = gainFor(id, it), owner = it.owner && C[it.owner], mine = it.owner === id;
-    return `<button type="button" class="fg-cell rar-${it.rar} ${FG.pick === it.id ? 'on' : ''} ${mine ? 'mine' : ''}" style="--rc:var(--r${it.rar})" data-act="hbpick" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}${mine ? ' · equipped' : owner ? ' · worn by ' + esc(owner.short) : ''}">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${setDot(it.set)}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}${owner && !mine ? `<span class="fg-who">${por(it.owner)}</span>` : ''}${it.lock ? `<span class="fg-lk">${LOCK_SVG}</span>` : ''}${g > 0 ? '<span class="fg-up" title="Stronger for this hero">▲</span>' : ''}</button>`;
+    const g = fitGain(id, it), owner = it.owner && C[it.owner], mine = it.owner === id;
+    return `<button type="button" class="fg-cell rar-${it.rar} ${FG.pick === it.id ? 'on' : ''} ${mine ? 'mine' : ''}" style="--rc:var(--r${it.rar})" data-act="hbpick" data-item="${it.id}" title="${esc(itemName(it))} · ${esc(K.SETS[it.set].name)}${mine ? ' · equipped' : owner ? ' · worn by ' + esc(owner.short) : ''}">${gearIcon(it, 'fg-ic')}<span class="fg-plv">+${it.lvl}</span>${setDot(it.set)}${it.asc ? `<span class="fg-ast">${"★".repeat(it.asc)}</span>` : ""}${owner && !mine ? `<span class="fg-who">${por(it.owner)}</span>` : ''}${it.lock ? `<span class="fg-lk">${LOCK_SVG}</span>` : ''}${g > 0.0005 ? '<span class="fg-up" title="Better for the role of this hero">▲</span>' : ''}</button>`;
   }
   // a set's mark: its essence badge, or a gold dot for a campaign set
   const setDot = k => essBadge(setEss(k)) || '<span class="hb-sd" aria-hidden="true"></span>';
@@ -1837,7 +1900,7 @@
     const eq = blk ? `<button type="button" class="btn" disabled title="${esc(blk)}">${LOCK_SVG} ${lockedTo(pick) && lockedTo(pick) !== id ? `Locked to ${esc(C[pick.owner].short)}` : 'Slot locked'}</button>`
       : `<button type="button" class="btn primary" data-act="equip" data-item="${pick.id}" ${wearOk(id, pick) ? '' : `disabled title="Ascended gear needs a ${K.ASC_STARS}★ hero"`}>${wearOk(id, pick) ? 'Equip' : `Needs ${K.ASC_STARS}★`}</button>`;
     return `<div class="hb-cmp">${left}${right}<div class="hb-st two">${hdr}${keys.length > 1 ? hdr : ''}${rows}</div>
-      <div class="hb-acts"><span class="hb-pow ${g >= 0 ? 'u' : 'd'}" title="Power for ${esc(C[id].short)}">Power ${g >= 0 ? '+' : '−'}${Math.abs(g).toLocaleString('en-US')} ${g >= 0 ? '▲' : '▼'}</span>${eq}<button type="button" class="btn" data-act="hbup" data-item="${pick.id}">${pick.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn" data-act="vlock" data-item="${pick.id}">${pick.lock ? 'Unlock' : 'Lock'}</button>${pick.owner ? '' : `<button type="button" class="btn danger" data-act="sell" data-item="${pick.id}" ${pick.lock ? 'disabled title="Locked: unlock it first"' : ''}>Sell · ${K.sellValue(pick).toLocaleString('en-US')}</button>`}</div></div>`;
+      <div class="hb-acts"><span class="hb-pow ${g >= 0 ? 'u' : 'd'}" title="Power for ${esc(C[id].short)}">Power ${g >= 0 ? '+' : '−'}${Math.abs(g).toLocaleString('en-US')} ${g >= 0 ? '▲' : '▼'}</span>${(() => { const f = fitGain(id, pick), up = f > 0.0005, dn = f < -0.0005; return `<span class="hb-pow hb-fit ${up ? 'u' : dn ? 'd' : ''}" title="How well it suits ${esc(C[id].short)}'s role (what Equip best goes by)">${esc(C[id].role)} fit ${up ? '▲' : dn ? '▼' : '='}</span>`; })()}${eq}<button type="button" class="btn" data-act="hbup" data-item="${pick.id}">${pick.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn" data-act="vlock" data-item="${pick.id}">${pick.lock ? 'Unlock' : 'Lock'}</button>${pick.owner ? '' : `<button type="button" class="btn danger" data-act="sell" data-item="${pick.id}" ${pick.lock ? 'disabled title="Locked: unlock it first"' : ''}>Sell · ${K.sellValue(pick).toLocaleString('en-US')}</button>`}</div></div>`;
   }
   // the bag turned into the upgrade panel of one piece; "‹ Bag" goes back
   function hbUp(it, id) {
@@ -3313,8 +3376,9 @@
           const others = itemsOf(selChamp).filter(x => x.slot !== slot);
           if (cur && cur.lock) continue; // a piece locked to this hero stays
           const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === selChamp) && wearOk(selChamp, x));
-          let best = cur, bestP = power(K.heroStats(selChamp, h, cur ? [...others, cur] : others));
-          for (const c of cands) { const pw = power(K.heroStats(selChamp, h, [...others, c])); if (pw > bestP + 1e-9) { best = c; bestP = pw; } }
+          // by what the hero's role needs (gearFit), not raw Power
+          let best = cur, bestP = gearFit(selChamp, h, cur ? [...others, cur] : others);
+          for (const c of cands) { const pw = gearFit(selChamp, h, [...others, c]); if (pw > bestP + 1e-6) { best = c; bestP = pw; } }
           if (best && best !== cur) { if (cur) cur.owner = null; best.owner = selChamp; more = true; }
         }
       }
@@ -4900,8 +4964,9 @@
     for (const ids of [pool.filter(inAnyTeam), pool]) {
       for (const id of ids) {
         const h = S.roster[id], cur = itemsOf(id).find(x => x.slot === it.slot); if (cur === it || !wearOk(id, it)) continue;
-        const rest = itemsOf(id).filter(x => x.slot !== it.slot), p0 = power(K.heroStats(id, h, cur ? [...rest, cur] : rest)), p1 = power(K.heroStats(id, h, [...rest, it]));
-        const g = (p1 - p0) / Math.max(1, p0); if (g > 0.0005 && (!best || g > best.g)) best = { id, g };
+        // the role score is a log, so its gain is already a share (0.05 = about 5% better for that hero's role)
+        const rest = itemsOf(id).filter(x => x.slot !== it.slot), g = gearFit(id, h, [...rest, it]) - gearFit(id, h, cur ? [...rest, cur] : rest);
+        if (g > 0.0005 && (!best || g > best.g)) best = { id, g };
       }
       if (best) break;
     }
