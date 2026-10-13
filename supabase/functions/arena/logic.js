@@ -7,7 +7,7 @@ const clean = s => String(s || '').replace(/[\u0000-\u001f<>]/g, '').trim().slic
 const avatarOk = (K, a) => (typeof a === 'string' && K.CHAMPS[a] ? a : null);
 const preview = team => team.map(h => ({ id: h.id, lvl: h.lvl, stars: h.stars }));
 // keeps only the known fields of a checked team (nothing else a browser sent gets stored)
-const tidy = team => team.map(h => ({ id: h.id, lvl: h.lvl, stars: h.stars, sk: [...h.sk], items: h.items.map(it => ({ slot: it.slot, rar: it.rar, lvl: it.lvl, il: it.il, set: it.set, main: it.main, subs: it.subs.map(s => [s[0], s[1]]) })) }));
+const tidy = team => team.map(h => ({ id: h.id, lvl: h.lvl, stars: h.stars, sk: [...h.sk], items: h.items.map(it => ({ slot: it.slot, rar: it.rar, lvl: it.lvl, il: it.il, set: it.set, main: it.main, subs: it.subs.map(s => [s[0], s[1]]), asc: it.asc || 0 })) }));
 // developer heroes (K.DEV_HEROES) may only be used by their owner: hero id → start of the owner's account id
 const DEV_HERO_OWNERS = { j3duin: '6c7ea9be' };
 const devHeroBad = (team, user) => Array.isArray(team) && team.some(h => h && DEV_HERO_OWNERS[h.id] && !String(user.id).startsWith(DEV_HERO_OWNERS[h.id]));

@@ -798,6 +798,7 @@ button, a, input { touch-action: manipulation; }
 .lb img.spr, .lb .lb-noav { width: 32px; height: 32px; }
 .lb-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .lb-name b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb .g-emb { width: 30px; height: 34px; } .lb .g-emb b { font-size: .6rem; margin-top: -6px; } /* the guild leaderboard: the guild's shield instead of a portrait */
 .lb-score { text-align: right; font-size: .9rem; color: var(--muted); }
 /* guide */
 .guide { display: flex; flex-direction: column; gap: 12px; }
@@ -3521,6 +3522,14 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .pc-wrap .starter-acc { padding: 4px 8px !important; } .pc-wrap .starter-acc p { font-size: .66rem; margin: 0; } .pc-wrap .starter-acc .btn { padding: 2px 8px; min-height: 0; font-size: .68rem; }
   .pc-wrap .st-info { margin: 0; min-height: 0; overflow-y: auto; scrollbar-width: thin; } .pc-wrap .st-card { padding: 8px 10px; gap: 4px; font-size: .74rem; } .pc-wrap .st-card h3 { font-size: .95rem; } .pc-wrap .starter-top img, .pc-wrap .starter-top .spr { width: 40px; height: 40px; }
   .pc-wrap .st-pitch { margin: 0; font-size: .72rem; } .pc-wrap .st-cols { grid-template-columns: minmax(0, 1fr); gap: 6px; } .pc-wrap .sbar { font-size: .66rem; } .pc-wrap .st-card .skill { margin: 0 0 4px; } .pc-wrap .st-card .skill p { font-size: .68rem; margin: 0; } .pc-wrap .starter-sk { font-size: .7rem; } .pc-wrap .starter-sk span { font-size: .66rem; margin-bottom: 3px; }
+}
+/* the end of an Auto ×10 run on a phone on its side: the last battle's own tiles give way (the run's totals say it all)
+   and the buttons (Auto ×10, Fight again, Edit team, Next stage) sit in one row beside the round ones */
+@media (max-height: 500px) and (orientation: landscape) {
+  .modal-box.result.rs2.rep-done > .rs-rw { display: none !important; }
+  .modal-box.rs2.rep-done .rs-foot { display: flex; align-items: center; gap: 8px; padding: 0; }
+  .modal-box.rs2.rep-done .rs-acts { display: flex; flex: 1; flex-wrap: nowrap; gap: 6px; }
+  .modal-box.rs2.rep-done .rs-big { width: auto; flex: 1 1 0; }
 }
 </style>
 

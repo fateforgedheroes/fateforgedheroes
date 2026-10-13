@@ -115,6 +115,8 @@
     if (!s.starter && !s.needStarter) s.starter = ['thalnir', 'krothar', 'zephara', 'ithyra', 'drakulen', ...K.STARTERS].find(id => s.roster[id]) || null;
     // the homebase tour (TOUR) is for new players; anyone past the first stage has found their way already
     if (s.seen && s.seen.tour == null && s.cleared > 0) s.seen.tour = true;
+    // a difficulty that was already open before its unlock message existed is not announced again
+    if (s.seen && !s.seen.diffs) { s.seen.diffs = 1; for (let d = 1; d < K.DIFFS.length; d++) if ((d === 1 ? s.cleared : ((s.dcl || [])[d - 1] ?? -1)) >= K.STAGES.length - 1) s.seen['diff' + d] = true; }
     if (!s.dcl) { s.dcl = [null, s.clearedHard ?? -1, -1, -1, -1]; s.diff = 0; delete s.hard; delete s.clearedHard; }
     if (!s.seen) {
       s.seen = {};
@@ -232,7 +234,7 @@
     return fresh();
   }
   let S;
-  function save() { syncHero(S); S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); }
+  function save() { syncHero(S); S.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* ignore */ } if (window.FFH_CLOUD) window.FFH_CLOUD.queue(); try { defSoon(); } catch (e) { /* the arena code is not set up yet (early in the boot) */ } }
 
   // ---------- sound ----------
   // two volumes, 0-1: sound effects S.vol and music S.mvol (older saves: the old shared S.vol), a slider each in
@@ -657,7 +659,7 @@
   const HOME_LIST = [
     { go: 'profiel', label: 'Town Hall' }, { go: 'campagne', label: 'Campaign' },
     { go: 'kerkers', label: 'Boss Hall' }, { go: 'tower', label: 'Tower of Essence' }, { go: 'arena', label: 'Arena' },
-    { go: 'team', label: 'Heroes' }, { go: 'forge', label: 'Forge' }, { go: 'altaar', label: 'Fate Altar' }, { go: 'social', label: 'Social' },
+    { go: 'team', label: 'Heroes' }, { go: 'forge', label: 'Vault' }, { go: 'altaar', label: 'Fate Altar' }, { go: 'social', label: 'Social' },
     { go: 'market', label: 'Market' }, { go: 'expedition', label: 'Expeditions' },
   ];
   // First steps: a new player (own hero made, no campaign battle yet) can only press the Campaign ("Start here");
@@ -668,7 +670,7 @@
   // Fight button is spotlighted (spotFight). S.seen.tour = done or skipped.
   const TOUR = [
     { go: 'team', title: 'Heroes', text: 'Your team and every hero. Level heroes up with Elixirs or by feeding spare heroes, ascend them for higher level caps and build up to seven teams of four, one for each game mode.' },
-    { go: 'forge', title: 'Forge', text: 'Everything you own in one place: gear, stones, shards and elixirs. Upgrade gear, lock what you keep and sell the rest. To equip gear, open a hero in Heroes and tap a slot.' },
+    { go: 'forge', title: 'Vault', text: 'Everything you own in one place: gear, stones, shards and elixirs. Upgrade gear, lock what you keep and sell the rest. To equip gear, open a hero in Heroes and tap a slot.' },
     { go: 'altaar', title: 'Fate Altar', text: 'Summon new heroes with Fate Shards. Shards drop from battles and level-ups; rarer shards bring Epic and Legendary heroes.' },
     { go: 'kerkers', title: 'Boss Hall', text: 'Twenty-five bosses with ten levels each; every two levels match a campaign difficulty. Bosses drop their own gear sets.' },
     { go: 'arena', title: 'Arena', text: 'Fight the defense teams of other players, climb the ranking and earn weekly rewards. Needs a free account.' },
@@ -1397,10 +1399,41 @@
     try { r = await cloud().fn('arena', { action, name: S.p.name, avatar: avatarId(), team: snapTeam(teamIds('arena')), ...extra }); }
     catch (e) { r = { error: 'No connection to the arena. Check your internet and try again.' }; }
     AR.busy = false;
-    if (r.state) { AR.st = r.state; AR.loadedAt = Date.now(); }
+    if (r.state) { AR.st = r.state; AR.loadedAt = Date.now(); defSeen(r.state); }
     AR.err = r.error || '';
     if (tab === 'arena' && !B) render();
     return r;
+  }
+  // The arena defense follows your heroes. The server keeps a snapshot of the defending heroes (levels, stars, skills,
+  // gear), so when one of them levels up, ascends, learns a skill or changes gear, the same heroes are sent again: quietly,
+  // 15 s after the save that changed them (never during a battle), and only when the snapshot really differs. Which
+  // heroes defend and the last snapshot sent are kept per account in localStorage (ffh-ardef:<email>), not in the save.
+  const defKey = () => { const cl = cloud(); return cl && cl.signedIn && cl.signedIn() ? 'ffh-ardef:' + cl.info().email : null; };
+  const defGet = () => { try { return JSON.parse(localStorage.getItem(defKey()) || 'null'); } catch (e) { return null; } };
+  const defPut = v => { try { localStorage.setItem(defKey(), JSON.stringify(v)); } catch (e) { /* ignore */ } };
+  // the heroes the server last showed as the defense (a Fateborn that changed class keeps its place)
+  const defIds = d => (d.ids || []).map(id => (S.roster[id] ? id : K.PC_IDS.includes(id) && S.hero ? S.hero.id : null)).filter(id => id && S.roster[id] && C[id]);
+  function defSeen(st) {
+    if (!defKey()) return;
+    const d = defGet() || {}, ids = st.defense ? st.defense.map(h => h.id) : [];
+    if (!d.ids || JSON.stringify(ids) !== JSON.stringify(d.ids)) defPut({ ids, sig: null });
+  }
+  let defT = 0, defBusy = false;
+  function defSoon() { if (!defKey()) return; clearTimeout(defT); defT = setTimeout(defSync, 15000); }
+  async function defSync() {
+    const d = defKey() && defGet();
+    if (!d || defBusy || !unlocked('arena')) return;
+    if (B) { defSoon(); return; }
+    const ids = defIds(d); if (!ids.length) return;
+    const team = snapTeam(ids), sig = JSON.stringify(team);
+    if (sig === d.sig) return;
+    defBusy = true; let r = null;
+    try { r = await cloud().fn('arena', { action: 'defense', name: S.p.name, avatar: avatarId(), team }); } catch (e) { /* no connection: the next save tries again */ }
+    defBusy = false;
+    if (!r) return;
+    // remembered also after a refusal, so a team the server will not take is not sent again and again
+    defPut({ ids: r.state && r.state.defense ? r.state.defense.map(h => h.id) : ids, sig });
+    if (r.state) { AR.st = r.state; AR.loadedAt = Date.now(); if (tab === 'arena' && !B) render(); }
   }
   async function loadBoard(kind) {
     AR.lb = kind; AR.board = null; AR.boardErr = '';
@@ -1463,7 +1496,7 @@
         <p class="empty-note">Weekly reward (${tier.name}): ${tierReward(tier)}. ${st.weekFights ? `You fought ${st.weekFights}× this week.` : 'Fight at least once this week to earn it.'}${next ? ` ${next.name} from ${next.min} rating.` : ''}</p>
         <div class="ar-top5"><span class="tag">Top 5 of the week (extra)</span><ol>${K.ARENA_RANK_REWARDS.map((t, i) => `<li><b>#${i + 1}</b> ${tierReward(t)}</li>`).join('')}</ol><small class="empty-note">Ranked by rating among everyone who fought that week.</small></div>
         ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
-    const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')}</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
+    const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')} · levels, skills and gear stay up to date by themselves</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
         <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="editteam" data-mode="arena">Edit arena team</button></div></div>`;
     const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b>${o.kind === 'bot' ? ' <span class="tag">Bot</span>' : ''}<small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
     const opps = `<section class="ar-opps"><div class="section-head"><h3>Opponents</h3><button class="btn small" data-act="arrefresh" ${AR.busy ? 'disabled' : ''}>New opponents</button></div>
@@ -1850,7 +1883,7 @@
       : `<span class="it-shown">${(showGear ? list.length : 0) + showMats.length} shown</span><button type="button" class="btn small primary" data-act="vsellmode" ${showGear ? '' : 'disabled'}>Select to sell</button>`;
 
     return `<div class="it">
-      <section class="fg-head it-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Items</h1><p>Everything you own in one place. Filter, lock what you want to keep and sell the rest.</p></div>
+      <section class="fg-head it-head" style="--forge:url(${CHAPTER_BG[2]})"><div><h1>Vault</h1><p>Everything you own in one place. Filter, lock what you want to keep and sell the rest.</p></div>
         <div class="it-cats">${[['all', 'All'], ['gear', 'Gear'], ['stone', 'Stones'], ['shard', 'Fate Shards'], ['elixir', 'Elixirs']].map(([k, l]) => `<button type="button" class="${FG.cat === k ? 'on' : ''}" data-act="icat" data-k="${k}">${l} <small>${cnt[k]}</small></button>`).join('')}</div></section>
       <div class="it-work">${filters}<section class="fg-panel it-list"><div class="it-tools">${tools}</div>
         ${gearCells || matCells ? `<div class="fg-groups">${grouped}</div>` : '<p class="empty-note">Nothing matches these filters.</p>'}
@@ -2214,7 +2247,8 @@
     if (!cl || !cl.signedIn()) return;
     LB.loading = kind; if (tab === 'profiel' && !B) render();
     let rows = null;
-    try { rows = await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
+    // the guilds have their own function (0012_guild_board.sql): 'guilds' = this week, 'guilds:all', 'guilds:best'
+    try { rows = kind.startsWith('guilds') ? await cl.rpc('guild_board', { kind: kind.split(':')[1] || 'week' }) : await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
     if (LB.kind !== kind) return;
     LB.rows = rows || []; LB.loading = '';
     if (tab === 'profiel' && TH.tab === 'leaders' && !B) render();
@@ -2225,17 +2259,18 @@
     if (!cl.signedIn()) return `<section class="th-sec"><div class="lockbox">${LOCK_SVG}<div><h3>Sign in to see the leaderboards</h3><p class="empty-note">Rankings are read from the accounts of signed-in players.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div></section>`;
     if (!LB.rows && !LB.err && LB.loading !== LB.kind) lbLoad(LB.kind);
     const main = LB.kind.split(':')[0], sub = LB.kind.split(':')[1] || '';
-    const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence']];
+    const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence'], ['guilds', 'Guilds']];
     const seg = `<div class="seg" role="group" aria-label="Leaderboard">${groups.map(([k, l]) => `<button type="button" data-act="lbkind" data-kind="${k}" aria-pressed="${main === k || (k === 'bosses' && main === 'boss')}">${l}</button>`).join('')}</div>`;
     // Boss Hall and the towers: everything together, or one boss / one tower
     const pick = main === 'bosses' || main === 'boss' ? `<label class="lb-pick">Boss <select id="lb-sub" data-base="boss" data-all="bosses"><option value="">All bosses (total levels)</option>${K.BOSS_ORDER.map(id => `<option value="${id}" ${sub === id ? 'selected' : ''}>${esc(K.BOSSES[id].name)}</option>`).join('')}</select></label>`
-      : main === 'tower' ? `<label class="lb-pick">Tower <select id="lb-sub" data-base="tower" data-all="tower"><option value="">All towers (total floors)</option>${K.TOWERS.map(e => `<option value="${e}" ${sub === e ? 'selected' : ''}>${twName(e)}</option>`).join('')}</select></label>` : '';
-    const fmt = r => main === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : main === 'campaign' ? campaignText(r)
+      : main === 'tower' ? `<label class="lb-pick">Tower <select id="lb-sub" data-base="tower" data-all="tower"><option value="">All towers (total floors)</option>${K.TOWERS.map(e => `<option value="${e}" ${sub === e ? 'selected' : ''}>${twName(e)}</option>`).join('')}</select></label>`
+      : main === 'guilds' ? `<label class="lb-pick">Rank by <select id="lb-sub" data-base="guilds" data-all="guilds">${[['', 'Guild boss points this week'], ['all', 'Guild boss points of all time'], ['best', 'Biggest single hit']].map(([v, l]) => `<option value="${v}" ${sub === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : '';
+    const fmt = r => main === 'guilds' ? `${Math.round(Number(r.score)).toLocaleString('en-US')} ${sub === 'best' ? 'damage' : 'points'}` : main === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : main === 'campaign' ? campaignText(r)
       : main === 'bosses' ? `${r.score} boss levels${r.detail && r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}` : main === 'boss' ? `Level ${r.score} / ${K.BOSS_LEVELS}`
       : sub ? `Floor ${r.score} / ${K.TOWER.floors}` : `${r.score.toLocaleString('en-US')} floors${r.detail && r.detail.best ? ` · best ${r.detail.best}` : ''}`;
     const list = LB.rows && main === 'arena' ? LB.rows.concat(boardBots()).sort((a, b) => b.score - a.score) : LB.rows;
-    const rows = list ? list.map(r => `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
-    const note = main === 'arena' ? 'Ratings from fights the server played; arena bots have no rank.' : 'Top 100 of every player with an account, plus your own place.';
+    const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = main === 'guilds' ? 'Every guild ranked by its guild boss fights (counted by the server), plus your own guild. A fight counts for the guild its player was in at the time.' : main === 'arena' ? 'Ratings from fights the server played; arena bots have no rank.' : 'Top 100 of every player with an account, plus your own place.';
     return `<section class="th-sec lbg"><div class="th-head"><h3>Leaderboards</h3>${seg}</div>${pick}<p class="empty-note">${note}</p>
       ${LB.err ? `<p class="ar-err">${esc(LB.err)}</p>` : !LB.rows ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
@@ -2451,7 +2486,7 @@
         row('Skill level', `Each skill can be levelled ${K.SKILL_MAX} times. Every level multiplies the skill's damage, healing and shields by another ${Math.round(K.SKILL_STEP * 100)}% of the base (level 1 ×${(1 + K.SKILL_STEP).toFixed(2)}, level ${K.SKILL_MAX} ×${(1 + K.SKILL_MAX * K.SKILL_STEP).toFixed(2)}): a 90% Attack hit becomes ${Math.round(90 * (1 + K.SKILL_STEP))}% at level 1 and ${Math.round(90 * (1 + K.SKILL_MAX * K.SKILL_STEP))}% at level ${K.SKILL_MAX}. At the maximum the cooldown is also 1 turn shorter.`),
         row('Captured', 'Enemies you capture in the campaign (5% per win) join as weak heroes or as fodder to feed.'),
         row('Essence Elixirs', `One kind per essence. A hero drinks elixirs of its own essence (Team · Upgrade) for the XP of ${K.ELIXIR.wins} campaign wins at its own level; an Aether Elixir fits every hero. They drop now and then: ${Math.round(K.ELIXIR.camp * 100)}% per campaign win (a foe's essence), ${Math.round(K.ELIXIR.hall * 100)}% per Boss Hall win (the boss's essence), and one on the first clear of every 10th Tower floor.`),
-        row('Team', 'Up to 4 heroes fight together. Pick them in Heroes; gear them in the Forge.'),
+        row('Team', 'Up to 4 heroes fight together. Pick them in Heroes and gear them there (tap a gear slot).'),
       ]),
       sec('gear', 'Gear', [
         row('Slots and main stat', `One piece per slot per hero; the slot decides the main stat it can have. <b>Weapon</b>: Attack. <b>Helmet</b>: HP. <b>Shield</b>: Defense. <b>Gloves</b>: Attack %, Defense %, HP %, Crit Rate or Crit Damage. <b>Chestplate</b>: Attack %, Defense %, HP %, Accuracy or Resistance. <b>Boots</b>: Attack %, Defense %, HP % or Speed.`),
@@ -2498,6 +2533,8 @@
   // fetches friends and mail; paints the header badge and re-renders an open Social or Mail screen
   async function socialLoad() {
     if (!signedIn() || SO.loading) { paintMail(); return; }
+    // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
+    if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
     if (SO.who !== who) Object.assign(SO, { who, code: '', friends: null, mail: null });
     SO.loading = true;
@@ -4626,6 +4663,12 @@
       S.seen[k] = true;
       out.push({ k, title: `${UNLOCK_NAME[k]} unlocked`, text: UNLOCK_TEXT[k] || '' });
     }
+    // a whole difficulty cleared: the next one opens in the campaign, and with it two more levels of every Boss Hall boss
+    for (let d = 1; d < K.DIFFS.length; d++) if (!S.seen['diff' + d] && diffOpen(d)) {
+      S.seen['diff' + d] = true;
+      const D = K.DIFFS[d], lv = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(n => K.bossDiff(n) === d);
+      out.push({ k: 'diff', title: `${D.name} unlocked`, text: `You cleared the whole campaign on ${K.DIFFS[d - 1].name}. The campaign on ${D.name} is open (enemies level ${K.diffLvl(K.STAGES[0], d)}+, ${D.rars.map(r => K.RARITIES[r]).join(' and ')} gear), and in the Boss Hall levels ${lv.join(' and ')} of every boss you can reach.` });
+    }
     // the homebase message comes last: its button leads there
     return out.sort((a, b) => (a.k === 'home') - (b.k === 'home'));
   }
@@ -4737,7 +4780,7 @@
     const isStage = cfg.type === 'stage';
     const last = isStage && cfg.i === K.STAGES.length - 1;
     const nd = isStage && K.DIFFS[cfg.diff + 1];
-    const note = win && TUT.on ? `<div class="coach-note"><b>Well done! What now?</b><ul><li><b>Next stage</b> continues the story; clearing stages 1-3 brings new heroes to your team.</li><li>The gear you win goes to the <b>Forge</b> on your homebase: equip and upgrade it there.</li><li>Stuck later on? <b>Replay</b> cleared stages to level up and farm gear.</li></ul></div>`
+    const note = win && TUT.on ? `<div class="coach-note"><b>Well done! What now?</b><ul><li><b>Next stage</b> continues the story; clearing stages 1-3 brings new heroes to your team.</li><li>The gear you win goes to your <b>Vault</b>; to equip it, open a hero in <b>Heroes</b> and tap a gear slot.</li><li>Stuck later on? <b>Replay</b> cleared stages to level up and farm gear.</li></ul></div>`
       : win && first && last ? `<p class="lede">You finished all ten chapters on ${K.DIFFS[cfg.diff].name}.${nd ? ` ${nd.name} difficulty is now open: tougher enemies, better gear (${rarsHtml(nd.rars)}).` : ' You beat the hardest difficulty!'}</p>`
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
@@ -4896,7 +4939,12 @@
       : `<b>Auto ×${r.n} finished</b> · ${won} of ${r.k} ${r.k === 1 ? 'battle' : 'battles'} won${win ? '' : ' (stopped after a defeat)'}`;
     box.insertBefore(el, box.querySelector('.rewards'));
     clearInterval(repTimer);
-    const done = () => { lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; box.classList.add('rep-done'); el.insertAdjacentHTML('afterend', repSummary(r)); };
+    // when the run is over (ten battles, a defeat, Stop or no energy): its summary, and a big Auto ×10 to go again
+    const done = () => {
+      lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; box.classList.add('rep-done'); el.insertAdjacentHTML('afterend', repSummary(r));
+      const acts = box.querySelector('.rs-acts'), c = cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n);
+      if (acts && !acts.querySelector('[data-go="auto10"]')) acts.insertAdjacentHTML('afterbegin', `<button class="btn rs-big violet" data-act="modal" data-go="auto10" title="Play this ${cfg.type === 'stage' ? 'stage' : 'level'} ten more times on auto"><span class="rs-bi">»</span><span>Auto ×10${enCost(c)}</span></button>`);
+    };
     if (!more) { done(); return; }
     let left = 3;
     repTimer = setInterval(() => {
@@ -4919,6 +4967,7 @@
     if (go.startsWith('open-')) setTab(go.slice(5));
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
+    else if (go === 'auto10') { if (cfg.type === 'stage') startCampaign(cfg.i, { n: 10, k: 1, won: 0 }); else startDungeon(cfg.id, cfg.n, { n: 10, k: 1, won: 0 }); }
     else if (go === 'champs') setTab('team');
     else if (go === 'prep' && cfg.type === 'stage') openPrep(cfg.i); // Edit team: the team screen before this stage or level
     else if (go === 'prep' && cfg.type === 'boss') openBossPrep(cfg.id, cfg.n);
