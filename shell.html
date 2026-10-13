@@ -3201,6 +3201,21 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .rs-ban h2 { font-size: 1.1rem !important; } .rs2 .rewards.rs-rw { padding: 2px 8px; } .rs2 .rewards li.rt { width: 40px; height: 40px; }
   .rs-h .pp-c { width: 38px; } .rs-n { line-height: 1.15; } .rs-big { padding: 5px 8px !important; } .rs-rb svg { width: 28px; height: 28px; padding: 6px; }
 }
+/* popups (daily reward, unlocks) never push their button off a short screen: they scroll, and on a phone on its side
+   the daily reward is compact enough to fit whole */
+.unlock-pop { overflow-y: auto; align-items: safe center; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .unlock-pop { padding: 6px 16px; }
+  .unlock-card.login-card { padding: 10px 16px 10px; gap: 6px; width: min(760px, 100%); max-width: 760px; }
+  .login-card h2 { font-size: 1.3rem; } .lg-sub, .lg-foot { display: none; }
+  .lg-days { margin: 10px 0 2px; gap: 6px; }
+  .lg-day, .lg-day.big { min-height: 0; padding: 14px 4px 8px; gap: 5px; } .lg-day.today { transform: none; }
+  .lg-medal { width: 42px; height: 42px; } .lg-medal img { width: 26px; height: 26px; } .lg-medal img + img { width: 22px; height: 22px; }
+  .lg-day.big .lg-medal { width: 50px; height: 50px; } .lg-day.big .lg-medal img { width: 30px; height: 30px; } .lg-day.big .lg-medal img + img { width: 26px; height: 26px; }
+  .lg-amt b { font-size: .74rem; } .lg-ok { width: 36px; height: 36px; font-size: 1.2rem; }
+  .lg-claim { font-size: 1rem; padding: 8px 32px; min-height: 40px; }
+.unlock-card { padding: 12px 18px 12px; gap: 5px; } .unlock-card h2 { font-size: 1.35rem; } .dc-card > .dc-ic { width: 38px; height: 38px; }
+}
 </style>
 
 <div id="app">
