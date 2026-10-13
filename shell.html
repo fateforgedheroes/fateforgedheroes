@@ -3531,6 +3531,76 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .modal-box.rs2.rep-done .rs-acts { display: flex; flex: 1; flex-wrap: nowrap; gap: 6px; }
   .modal-box.rs2.rep-done .rs-big { width: auto; flex: 1 1 0; }
 }
+/* Create your hero, the ornate look (app.js createHtml, .pcx): class cards filled with the hero itself (head and
+   shoulders, the class icon and name at the bottom, the class colour --cc behind it and glowing on the chosen one),
+   gold numbered steps, Male and Female with their signs, a dice for a random name, a gilded Create button with diamond
+   ends, and the details panel lit in the class colour with the hero large on its right, stats and skills with icons */
+.pcx .pcx-title { display: flex; align-items: center; gap: 10px; text-align: left; font-size: 1.9rem; letter-spacing: .03em; color: #f0cf7e; background: linear-gradient(180deg, #fff1c4, #e9c46f 55%, #b07a2a); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; text-shadow: none; filter: drop-shadow(0 2px 0 #000) drop-shadow(0 0 6px rgba(0, 0, 0, .8)); }
+.pcx .pcx-title::before, .pcx .pcx-title::after { content: ''; width: 10px; height: 10px; flex: none; transform: rotate(45deg); background: linear-gradient(135deg, #fff1c4, #b07a2a); -webkit-text-fill-color: initial; }
+.pcx .pcx-step { font-family: var(--font-display); font-weight: 700; font-size: .95rem; letter-spacing: .04em; color: #f0cf7e; text-shadow: 0 1px 0 #000, 0 0 6px rgba(0, 0, 0, .9); white-space: nowrap; }
+.pcx .pc-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 900px) and (min-height: 501px) { .pcx .pc-cards { grid-template-columns: repeat(6, minmax(0, 1fr)); } } /* a computer: all six in one row, so the portraits stay sharp */
+.pcx .pcx-card { position: relative; display: block; padding: 0; aspect-ratio: 16 / 8; overflow: hidden; cursor: pointer; border: 2px solid #5c4a34;
+  background: radial-gradient(110% 100% at 66% 30%, color-mix(in srgb, var(--cc) 50%, #120d16), #0c090f 72%); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .75), 0 3px 8px rgba(0, 0, 0, .6); transition: transform .12s, box-shadow .15s, border-color .15s; }
+.pcx .pcx-card:hover { transform: translateY(-2px); border-color: #a8834a; }
+.pcx .pcx-art { position: absolute; right: 0; top: 0; width: 64%; height: 100%; max-width: none; object-fit: cover; object-position: 50% 28%; pointer-events: none; transition: filter .15s;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 38%); mask-image: linear-gradient(90deg, transparent 0, #000 38%); }
+.pcx .pcx-art.full { inset: 0; width: 100%; height: 100%; object-position: 50% 30%; -webkit-mask-image: none; mask-image: none; } /* painted card art (cards.js) fills the whole card */
+.pcx .pc-cards:has(.sel) .pcx-card:not(.sel) .pcx-art { filter: brightness(.72) saturate(.8); }
+.pcx .pcx-card > .pcx-cn { position: absolute; left: 0; right: 0; bottom: 0; display: flex !important; align-items: center; gap: 6px; padding: 16px 8px 5px; background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .88) 70%); font-size: 1rem; }
+.pcx .pcx-cn b { font-family: var(--font-display); font-size: 1.02rem; color: #f3d98f; text-shadow: 0 1px 0 #000, 0 0 6px #000; }
+.pcx .pcx-ci { width: 20px; height: 20px; flex: none; fill: none; stroke: #f0cf7e; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 1px #000); }
+.pcx .pcx-card.sel { border-color: #f3d27a; box-shadow: 0 0 0 1px #000, 0 0 16px 3px rgba(255, 205, 110, .55), inset 0 0 22px color-mix(in srgb, var(--cc) 55%, transparent); }
+.pcx .pcx-gs { font-size: 1.2em; line-height: 1; margin-right: 6px; }
+.pcx .pc-g .btn { min-width: 128px; }
+.pcx .pcx-name { display: flex; flex: 1; gap: 6px; min-width: 0; }
+.pcx .pc-namerow .pcx-name input { flex: 1; min-width: 0; max-width: none; }
+.pcx .pcx-dice { width: 44px; flex: none; display: grid; place-items: center; cursor: pointer; color: #f0cf7e; border: 1px solid #a8834a; background: linear-gradient(180deg, #2c2116, #120d09); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .6); }
+.pcx .pcx-dice:hover { border-color: #f3d27a; color: #fff1c4; }
+.pcx .pcx-dice svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; } .pcx .pcx-dice circle { fill: currentColor; stroke: none; }
+.pcx .st-go { position: relative; padding: 0 20px; }
+.pcx .st-go::before, .pcx .st-go::after { content: ''; position: absolute; top: 50%; width: 15px; height: 15px; transform: translateY(-50%) rotate(45deg); background: linear-gradient(135deg, #fff1c4, #b07a2a); border: 1px solid #2a1c08; z-index: 1; }
+.pcx .st-go::before { left: 3px; } .pcx .st-go::after { right: 3px; }
+.pcx .pcx-go { width: 100%; min-height: 56px; font-size: 1.35rem; letter-spacing: .08em; border: 2px solid #f3d27a; box-shadow: 0 0 0 2px #2a1c08, 0 0 0 3px #a8782a, 0 6px 16px rgba(0, 0, 0, .6), inset 0 0 18px rgba(255, 230, 160, .3); }
+.pcx .pcx-go:disabled { filter: saturate(.55) brightness(.75); opacity: 1; }
+/* the details panel */
+.pcx .pcx-info { position: relative; overflow: hidden; min-height: 100%; padding: 16px; gap: 0; border: 2px solid #8a6a32; border-bottom-width: 2px;
+  background: radial-gradient(85% 75% at 86% 32%, color-mix(in srgb, var(--cc) 42%, transparent), transparent 72%), linear-gradient(180deg, #19131d, #0c090f); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .7), 0 6px 18px rgba(0, 0, 0, .55); }
+.pcx .pcx-big { position: absolute; right: -22%; bottom: -2%; height: 108%; width: auto; max-width: none; pointer-events: none; z-index: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent 12%, #000 48%); mask-image: linear-gradient(90deg, transparent 12%, #000 48%); filter: drop-shadow(0 0 18px color-mix(in srgb, var(--cc) 65%, transparent)); }
+.pcx .pcx-big.paint { top: 0; bottom: 0; right: 0; height: 100%; filter: none; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 38%); mask-image: linear-gradient(90deg, transparent 0, #000 38%); } /* painted panel art (cards.js CLASS_PANEL) */
+.pcx .pcx-body { position: relative; z-index: 1; width: 64%; display: flex; flex-direction: column; gap: 9px; text-shadow: 0 1px 2px #000; }
+.pcx .pcx-info h3 { font-family: var(--font-display); font-size: 1.6rem; color: #f3d98f; margin: 0 0 4px; }
+.pcx .pcx-info .starter-top img, .pcx .pcx-info .starter-top .spr { width: 76px; height: 76px; border: 2px solid #d9b45a; box-shadow: 0 0 0 1px #000; }
+.pcx .pcx-info .st-pitch { color: #e9dfcd; }
+.pcx .sbar { grid-template-columns: 18px 64px 1fr 42px; color: #e9dfcd; }
+.pcx .pcx-si { width: 17px; height: 17px; fill: none; stroke: #f0cf7e; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.pcx .sbar i { height: 10px; background: rgba(0, 0, 0, .6); border-color: #4a3b2a; } .pcx .sbar b { background: linear-gradient(180deg, #ffe7a3, #d9a441); }
+.pcx .pcx-sk { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
+.pcx .pcx-sk li { display: flex; gap: 10px; align-items: flex-start; }
+.pcx .pcx-sic { flex: none; width: 42px; height: 42px; display: grid; place-items: center; border: 2px solid #d9b45a; border-radius: 6px; --sc: #c9583a;
+  background: radial-gradient(circle at 50% 35%, color-mix(in srgb, var(--sc) 85%, #fff 15%), color-mix(in srgb, var(--sc) 55%, #000) 78%); box-shadow: 0 0 0 1px #000, 0 2px 6px rgba(0, 0, 0, .6); }
+.pcx .pcx-sic svg { width: 23px; height: 23px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .7)); }
+.pcx .pcx-sic.sk-magic { --sc: #8a4ad8; } .pcx .pcx-sic.sk-heal { --sc: #3fa86b; } .pcx .pcx-sic.sk-guard { --sc: #3a78d8; } .pcx .pcx-sic.sk-pass { --sc: #c98a2a; }
+.pcx .pcx-sk b { font-family: var(--font-display); font-size: .95rem; color: #f3d98f; } .pcx .pcx-sk b small { font-size: .78em; color: #e9dfcd; letter-spacing: .05em; text-transform: uppercase; }
+.pcx .pcx-sk p { margin: 2px 0 0; font-size: .86rem; color: #e9dfcd; }
+.pcx .pcx-empty { display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; color: #e9dfcd; min-height: 260px; }
+.pcx .pcx-crest { width: min(260px, 70%); opacity: .9; filter: drop-shadow(0 4px 12px rgba(0, 0, 0, .8)); }
+@media (max-height: 500px) and (orientation: landscape) {
+  .pcx .pcx-title { font-size: 1.15rem; gap: 7px; } .pcx .pcx-title::before, .pcx .pcx-title::after { width: 7px; height: 7px; }
+  .pcx .pcx-step { font-size: .7rem; }
+  .pcx .pc-cards { gap: 5px; } .pcx .pcx-card { aspect-ratio: 16 / 8; padding: 0; } .pcx .pcx-card > .pcx-cn { padding: 10px 5px 3px; gap: 4px; } .pcx .pcx-cn b { font-size: .74rem; } .pcx .pcx-ci { width: 14px; height: 14px; }
+  .pcx .pc-g .btn { min-width: 0; padding: 3px 14px; }
+  .pcx .pcx-dice { width: 32px; } .pcx .pcx-dice svg { width: 18px; height: 18px; }
+  .pcx .st-go { padding: 0 14px; } .pcx .st-go::before, .pcx .st-go::after { width: 10px; height: 10px; } .pcx .st-go::before { left: 2px; } .pcx .st-go::after { right: 2px; }
+  .pcx .pcx-go { min-height: 0; padding: 6px 12px !important; font-size: .92rem; box-shadow: 0 0 0 1px #2a1c08, 0 0 0 2px #a8782a, 0 3px 8px rgba(0, 0, 0, .6), inset 0 0 12px rgba(255, 230, 160, .3); }
+  .pcx .st-info { overflow: hidden; } .pcx .pcx-info { height: 100%; min-height: 0; padding: 8px 10px; overflow-y: auto; scrollbar-width: none; }
+  .pcx .pcx-body { width: 66%; gap: 5px; } .pcx .pcx-info h3 { font-size: 1rem; margin: 0; } .pcx .pcx-info .starter-top img, .pcx .pcx-info .starter-top .spr { width: 40px; height: 40px; }
+  .pcx .pcx-info .st-pitch { font-size: .68rem; } .pcx .sbar { grid-template-columns: 12px 46px 1fr 30px; gap: 4px; font-size: .64rem; } .pcx .pcx-si { width: 12px; height: 12px; } .pcx .sbar i { height: 7px; }
+  .pcx .pcx-sk { gap: 5px; margin: 2px 0 0; } .pcx .pcx-sk li { gap: 6px; } .pcx .pcx-sic { width: 28px; height: 28px; border-width: 1px; } .pcx .pcx-sic svg { width: 16px; height: 16px; }
+  .pcx .pcx-sk b { font-size: .7rem; } .pcx .pcx-sk p { font-size: .64rem; margin: 0; }
+  .pcx .pcx-empty { min-height: 0; height: 100%; } .pcx .pcx-crest { width: min(200px, 60%); } .pcx .pcx-empty p { font-size: .8rem; }
+}
 </style>
 
 <div id="app">

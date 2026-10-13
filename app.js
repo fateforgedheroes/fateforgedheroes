@@ -1324,34 +1324,56 @@
   let pcSel = { g: 'm', cls: null, name: '' };
   const pcName = () => (pcSel.name || '').replace(/[<>&"]/g, '').trim().slice(0, 16);
   const pcReady = () => !!(pcSel.cls && pcName());
+  // the look of the six classes: a colour each (card glow, the details panel's light) and a small icon
+  const PC_COL = { tank: '#6f9bd1', warrior: '#e0542e', mage: '#9b62ff', ranger: '#4fbf72', rogue: '#c23a55', healer: '#f2d27a' };
+  const PC_IC = {
+    tank: '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+    warrior: '<path d="M5 19L17 7l2-3-3 2L4 18"/><path d="M8 14l2 2M4 20l2-2"/>',
+    mage: '<path d="M4 5c3-1 6-1 8 1 2-2 5-2 8-1v13c-3-1-6-1-8 1-2-2-5-2-8-1z"/><path d="M12 6v13"/>',
+    ranger: '<path d="M6 4c7 2 12 7 14 14"/><path d="M6 4L20 18"/><path d="M4 20l9-9M4 20h4M4 20v-4"/>',
+    rogue: '<path d="M14 4l6 6-9 9-3 1 1-3z"/><path d="M8 16l-4 4M12 8l4 4"/>',
+    healer: '<circle cx="12" cy="7" r="3.2"/><path d="M12 10.2V21M7 14h10"/>',
+  };
+  const STAT_IC = {
+    hp: '<path d="M12 20s-7-4.5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 19 10c0 5.5-7 10-7 10z"/>',
+    atk: '<path d="M5 19L17 7l2-3-3 2L4 18"/><path d="M8 14l2 2"/>',
+    def: '<path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>',
+    spd: '<path d="M7 4h4l-1 7h5l-1 9H8l1-6H5z"/>',
+  };
+  const svgI = (p, cls) => `<svg class="${cls || ''}" viewBox="0 0 24 24" aria-hidden="true">${p}</svg>`;
+  // the dice next to the name: a fitting fantasy name for the chosen gender
+  const PC_NAMES = { m: ['Aldric', 'Bran', 'Cassian', 'Darian', 'Eamon', 'Fenris', 'Garrick', 'Halvard', 'Ivor', 'Kael', 'Lucan', 'Orrin', 'Roderic', 'Soren', 'Theron', 'Varek'],
+    f: ['Aria', 'Brynn', 'Celeste', 'Elara', 'Freya', 'Isolde', 'Kira', 'Lyra', 'Maeve', 'Nyra', 'Rowan', 'Seren', 'Talia', 'Vera', 'Wren', 'Ysolde'] };
   function createHtml() {
     const ids = Object.keys(K.PC_CLASSES).map(k => `pc_${k}_${pcSel.g}`);
     const st = id => K.heroStats(id, { lvl: 1, xp: 0, stars: K.pcStars(1), sk: [0, 0, 0] }, []);
     const top = { hp: 0, atk: 0, def: 0, spd: 0 };
     for (const id of ids) { const s = st(id); for (const k in top) top[k] = Math.max(top[k], s[k]); }
-    const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar"><span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
+    const bar = (id, k) => { const v = st(id)[k]; return `<div class="sbar">${svgI(STAT_IC[k], 'pcx-si')}<span>${K.STAT_NAMES[k]}</span><i><b style="width:${Math.round(v / top[k] * 100)}%"></b></i><em>${v}</em></div>`; };
     const PC_TAG = { tank: 'Front line · taunts and shields', warrior: 'Heavy hits · cleaves groups', mage: 'Spells on every enemy', ranger: 'Arrows and crits from afar', rogue: 'Stealth and executes', healer: 'Keeps the team alive' };
-    const cards = ids.map(id => { const k = C[id].pcClass; return `<button type="button" class="pc-card ${k === pcSel.cls ? 'sel' : ''}" data-act="pcclass" data-k="${k}" aria-pressed="${k === pcSel.cls}"><span class="pc-por">${por(id)}</span><b>${K.PC_CLASSES[k].name}</b><small>${PC_TAG[k]}</small></button>`; }).join('');
+    // a class card: its painted art (cards.js CLASS_CARD, per class and gender) or else the hero's portrait, its icon and name at the bottom
+    const cards = ids.map(id => { const k = C[id].pcClass; return `<button type="button" class="pc-card pcx-card ${k === pcSel.cls ? 'sel' : ''}" style="--cc:${PC_COL[k]}" data-act="pcclass" data-k="${k}" aria-pressed="${k === pcSel.cls}" title="${esc(PC_TAG[k])}">${typeof CLASS_CARD !== 'undefined' && CLASS_CARD[`${k}_${pcSel.g}`] ? `<img class="pcx-art full" src="${CLASS_CARD[`${k}_${pcSel.g}`]}" alt="">` : `<img class="pcx-art" src="${SPR.url(id)}" alt="">`}<span class="pcx-cn">${svgI(PC_IC[k], 'pcx-ci')}<b>${K.PC_CLASSES[k].name}</b></span></button>`; }).join('');
     const p = pcSel.cls && K.PC_CLASSES[pcSel.cls], id = p && `pc_${pcSel.cls}_${pcSel.g}`, c = id && C[id];
-    const info = p ? `<div class="st-card rar-3">
-        <div class="starter-top">${por(id)}<div><h3 id="pc-h">${esc(pcName() || p.name)}</h3><div class="tags">${affChip('Aether')} Aether · ${roleStr(c)}</div><span class="tag">Your hero</span></div></div>
+    // the details: the hero large on the right, fading into the panel, lit in its class's colour; its stats and skills with icons
+    const skRow = (tag, name, desc, s) => `<li><span class="pcx-sic sk-${s ? skKind(s) : 'pass'}">${svgI(s ? SK_GLYPH[skGlyph(s)] : SK_GLYPH.star)}</span><div><b><small>${tag} ·</small> ${esc(name)}</b><p>${esc(desc)}</p></div></li>`;
+    const info = p ? `<div class="st-card pcx-info" style="--cc:${PC_COL[pcSel.cls]}">${typeof CLASS_PANEL !== 'undefined' && CLASS_PANEL[`${pcSel.cls}_${pcSel.g}`] ? `<img class="pcx-big paint" src="${CLASS_PANEL[`${pcSel.cls}_${pcSel.g}`]}" alt="">` : `<img class="pcx-big" src="${SPR.url(id, 2)}" alt="">`}
+        <div class="pcx-body"><div class="starter-top">${por(id)}<div><h3 id="pc-h">${esc(pcName() || p.name)}</h3><div class="tags">${affChip('Aether')} Aether · ${roleStr(c)}</div></div></div>
         <p class="st-pitch">${esc(p.pitch)}</p>
-        <div class="st-cols"><div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(id, k)).join('')}</div>
-        <div><div class="skill passive"><b>Passive · ${esc(p.passiveName)}</b><p>${esc(p.passiveDesc)}</p></div>
-        <ul class="starter-sk">${p.skills.map((s, i) => `<li><b>${SKILL_TAG[i]}</b> ${esc(s.name)} <span>${esc(s.desc)}</span></li>`).join('')}</ul></div></div>
-      </div>` : '<p class="empty-note st-hint">Tap a class to see what your hero can do.</p>';
+        <div class="sbars">${['hp', 'atk', 'def', 'spd'].map(k => bar(id, k)).join('')}</div>
+        <ul class="pcx-sk">${skRow('Passive', p.passiveName, p.passiveDesc, null)}${p.skills.map((s, i) => skRow(SKILL_TAG[i], s.name, s.desc, s)).join('')}</ul></div>
+      </div>` : `<div class="st-card pcx-info pcx-empty"><img class="pcx-crest" src="${LOGO_URL}" alt=""><p>Tap a class to see what your hero can do.</p></div>`;
     const cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
     const signin = cl && cl.enabled && !cl.email && !Object.keys(S.roster).length ? `<div class="prof-acc starter-acc"><p class="empty-note">Played before? Sign in to load your progress instead of starting over.</p><div class="row"><button class="btn small" data-act="account">Sign in</button></div></div>` : '';
-    const g = (k, label) => `<button type="button" class="btn ${pcSel.g === k ? 'primary' : ''}" data-act="pcgender" data-g="${k}" aria-pressed="${pcSel.g === k}">${label}</button>`;
+    const g = (k, sym, label) => `<button type="button" class="btn ${pcSel.g === k ? 'primary' : ''}" data-act="pcgender" data-g="${k}" aria-pressed="${pcSel.g === k}"><span class="pcx-gs" aria-hidden="true">${sym}</span>${label}</button>`;
     // (.pc-wrap: on a phone on its side the choices on the left and the class's details on the right, .pc-left; elsewhere
     // one column with the details between the gender and the name)
-    return `<div class="pc-wrap lfit"><div class="pc-left"><h2 class="st-title">Create your hero</h2>
+    return `<div class="pc-wrap pcx lfit"><div class="pc-left"><h2 class="st-title pcx-title">Create your hero</h2>
       <p class="lede pc-lede">Your hero is forged by fate: <b>Aether</b>, never strong or weak against anyone, and always at your side in every fight. Later you can change its class with a Fate Changing Stone from the Market.</p>
-      <div class="pc-row"><span class="tag">1 · Choose a class</span></div>
+      <div class="pc-row"><span class="pcx-step">1. Choose a class</span></div>
       <div class="pc-cards">${cards}</div>
-      <div class="pc-row"><span class="tag">2 · Your hero is</span><div class="seg pc-g">${g('m', 'Male')}${g('f', 'Female')}</div></div>
-      <div class="pc-row pc-namerow"><label class="tag" for="pc-name">3 · Name your hero</label><input id="pc-name" maxlength="16" autocomplete="off" placeholder="Your hero's name" value="${esc(pcSel.name)}"></div>
-      <div class="st-go"><button class="btn primary" id="pc-go" data-act="pccreate" ${pcReady() ? '' : 'disabled'}>${pcReady() ? `Create ${esc(pcName())}` : 'Create your hero'}</button></div>${signin}</div><div class="st-info">${info}</div></div>`;
+      <div class="pc-row"><span class="pcx-step">2. Your hero is</span><div class="seg pc-g">${g('m', '♂', 'Male')}${g('f', '♀', 'Female')}</div></div>
+      <div class="pc-row pc-namerow"><label class="pcx-step" for="pc-name">3. Name your hero</label><div class="pcx-name"><input id="pc-name" maxlength="16" autocomplete="off" placeholder="Your hero's name" value="${esc(pcSel.name)}"><button type="button" class="pcx-dice" data-act="pcdice" title="A random name" aria-label="A random name"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r="1.2"/><circle cx="15.5" cy="8.5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="8.5" cy="15.5" r="1.2"/><circle cx="15.5" cy="15.5" r="1.2"/></svg></button></div></div>
+      <div class="st-go"><button class="btn primary pcx-go" id="pc-go" data-act="pccreate" ${pcReady() ? '' : 'disabled'}>${pcReady() ? `Create ${esc(pcName())}` : 'Create your hero'}</button></div>${signin}</div><div class="st-info">${info}</div></div>`;
   }
   // the name box updates the Create button without a re-render (keeps the focus)
   document.addEventListener('input', e => {
@@ -3026,6 +3048,7 @@
     else if (act === 'tfreset') { Object.assign(TF, { aff: 'all', rar: 'all', role: 'all' }); render(); }
     else if (act === 'pcgender') { pcSel.g = a.dataset.g; render(); }
     else if (act === 'pcclass') { pcSel.cls = a.dataset.k; render(); }
+    else if (act === 'pcdice') { const l = PC_NAMES[pcSel.g].filter(n => n !== pcSel.name); pcSel.name = l[Math.floor(Math.random() * l.length)]; render(); const inp = document.getElementById('pc-name'); if (inp) inp.focus(); }
     else if (act === 'pccreate') { if (pcReady()) confirmHero(); }
     else if (act === 'pcok') { $('#modal').hidden = true; createHero(); }
     else if (act === 'pccancel') $('#modal').hidden = true;
