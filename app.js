@@ -36,12 +36,12 @@
 
   // ---------- state ----------
   // what opens a building: the Fate Altar at a player level, the Arena and the Boss Hall after clearing a chapter (Easy)
-  const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, tower: { ch: 2 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 } };
+  const UNLOCKS = { altaar: { lvl: 5 }, expedition: { ch: 1 }, tower: { ch: 2 }, arena: { ch: 2 }, guild: { ch: 2 }, kerkers: { ch: 3 }, siege: { ch: 3 } };
   const PLAYER_UNLOCK = { altaar: 5 }; // the player-level ones (level-up messages)
   const isOpen = (s, t) => { const u = UNLOCKS[t]; return !u || (u.lvl ? effLvl(s) >= u.lvl : s.cleared >= u.ch * 7 - 1); };
   const needTxt = t => { const u = UNLOCKS[t]; return u.lvl ? `player level ${u.lvl}` : `clearing Chapter ${ROMAN[u.ch - 1]}`; };
   const needTag = t => { const u = UNLOCKS[t]; return u.lvl ? `Lv ${u.lvl}` : `Ch ${ROMAN[u.ch - 1]}`; };
-  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena', guild: 'Guilds', expedition: 'Expeditions', tower: 'Tower of Essence' };
+  const UNLOCK_NAME = { altaar: 'Fate Altar', kerkers: 'Boss Hall', arena: 'Arena', guild: 'Guilds', expedition: 'Expeditions', tower: 'Tower of Essence', siege: 'Siege' };
   // player XP per level: steeper than before (level 10, the Boss Hall, now takes ~75-130 battles instead of ~25)
   const pxNeed = l => 60 * l + 12 * l * l;
   // Player level stops at PLAYER_MAX; there the player can prestige (S.p.prestige): back to level 1 with everything kept,
@@ -70,7 +70,7 @@
   // ---------- Teams: up to TEAM_MAX named teams (S.teams[i] = { name, ids }); S.modeTeam says which team each game mode
   // uses. S.team is the team in use (the one on the Team screen and in the last battle): the same array as
   // S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
-  const TEAM_MAX = K.ESSENCES.length, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss']];
+  const TEAM_MAX = K.ESSENCES.length, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss'], ['siege', 'Siege']];
   // The own hero (S.hero = { id, name, g, cls }; engine PC_CLASSES): made at the start, always first in every team and every
   // Tower team (keepHero), 6 stars and skills that follow its level (syncHero, run on every save).
   const heroId = () => (S && S.hero && S.roster[S.hero.id] ? S.hero.id : null);
@@ -86,6 +86,7 @@
     s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
     s.modeTeam = s.modeTeam || {};
     { const hid = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (hid) s.teams.forEach(t => keepHero(t.ids, hid)); }
+    if (s.modeTeam.siege == null && s.modeTeam.campaign != null) s.modeTeam.siege = s.modeTeam.campaign;
     for (const [m] of TEAM_MODES) if (!(s.modeTeam[m] < s.teams.length)) s.modeTeam[m] = 0;
     s.bossTeam = s.bossTeam || {}; for (const k in s.bossTeam) if (!(s.bossTeam[k] < s.teams.length)) delete s.bossTeam[k];
     s.team = s.teams[s.tsel].ids;
@@ -104,6 +105,7 @@
   function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
     if (!s.elx || typeof s.elx !== 'object') s.elx = {}; // Essence Elixirs per essence
+    if (!s.sg || typeof s.sg !== 'object') s.sg = { best: 0, runs: 0, kills: 0 }; // the Siege: best wave, runs, kills (tickets: sgT, sgAt)
     // energy above the bar is capped at K.ENERGY.over times it (older saves could pile up thousands)
     if (s.p) { const ceil = K.energyMax(effLvl(s)) * K.ENERGY.over; if (s.energy > ceil) s.energy = ceil; }
     // the Support class was dropped before release: a test save's Support hero becomes a Healer (same id everywhere)
@@ -311,6 +313,10 @@
       banner() { tone(330, 0.12, 'square', 0.12, 1.5); tone(495, 0.18, 'square', 0.1, 1.2, 0.08); },
       win() { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, 'square', 0.16, 1, i * 0.12)); tone(1047, 0.6, 'triangle', 0.18, 1, 0.5); },
       lose() { [392, 330, 262, 196].forEach((f, i) => tone(f, 0.3, 'triangle', 0.22, 1, i * 0.18)); },
+      // the summon reveal: a rising hum while the shard charges, a bright ping each time it turns a rarer colour, the burst
+      sumCharge(n) { tone(110, 0.95 * n + 0.3, 'sawtooth', 0.05, 2.2 + n * 0.6); tone(220, 0.95 * n + 0.3, 'triangle', 0.06, 2 + n * 0.5); noise(0.9 * n, 0.08, 2500); },
+      sumStep(r) { const f = [0, 0, 523, 659, 784][r]; tone(f, 0.5, 'triangle', 0.16); tone(f * 1.5, 0.6, 'sine', 0.1, 1, 0.05); noise(0.25, 0.18, 1800); },
+      sumBurst(r) { noise(0.7, 0.55, 220); tone(70, 0.6, 'sine', 0.35, 0.5); const ch = r >= 4 ? [523, 659, 784, 1047, 1319] : r >= 3 ? [440, 554, 659, 880] : [392, 494, 587]; ch.forEach((f, i) => tone(f, 1.2 + i * 0.1, 'triangle', 0.1, 1, 0.08 + i * 0.07)); if (r >= 4) tone(1568, 1.6, 'sine', 0.12, 1, 0.45); },
       summon(r) { const base = [330, 392, 440, 523, 659][r]; for (let i = 0; i < 4 + r; i++) tone(base * (1 + i * 0.25), 0.16, 'triangle', 0.14, 1, i * 0.06); if (r >= 3) tone(base * 2, 0.8, 'sine', 0.2, 1, 0.4); },
       click() { tone(880, 0.035, 'square', 0.07); },
       up() { tone(660, 0.1, 'square', 0.12, 1.5); tone(990, 0.15, 'square', 0.1, 1.2, 0.08); },
@@ -664,7 +670,7 @@
   // per building) with its name and how it stands (the next stage, rewards to claim, the ship is back, or what opens it).
   const HOME_LIST = [
     { go: 'profiel', label: 'Town Hall' }, { go: 'campagne', label: 'Campaign' },
-    { go: 'kerkers', label: 'Boss Hall' }, { go: 'tower', label: 'Tower of Essence' }, { go: 'arena', label: 'Arena' },
+    { go: 'kerkers', label: 'Boss Hall' }, { go: 'tower', label: 'Tower of Essence' }, { go: 'siege', label: 'Siege' }, { go: 'arena', label: 'Arena' },
     { go: 'team', label: 'Heroes' }, { go: 'forge', label: 'Vault' }, { go: 'altaar', label: 'Fate Altar' }, { go: 'social', label: 'Social' },
     { go: 'market', label: 'Market' }, { go: 'expedition', label: 'Expeditions' },
   ];
@@ -684,6 +690,7 @@
     { go: 'social', title: 'Social', text: 'Friends and your guild. Add friends with their friend code; on the Guild tab create or join a guild (after Chapter II), fight the guild boss every day and earn a Guild Chest every week. Mail (in the top bar, or the ☰ menu on a phone) holds friend requests, gifts, guild invites and arena rewards.' },
     { go: 'expedition', title: 'Expeditions', text: 'Send heroes who are not in a team on a voyage of 1, 12 or 24 hours. They come back with XP, Sigils, shards and Ascension Stones. Opens after Chapter I.' },
     { go: 'tower', title: 'Tower of Essence', text: 'Six towers of 300 floors, one per essence, climbed with heroes of that essence only, and the Tower of Fate for every hero. Gentle at first, brutal at the top. Opens after Chapter II.' },
+    { go: 'siege', title: 'Siege', text: 'Hold your gate against endless waves of enemies that grow stronger and more numerous until your team falls. Every kill pays XP and Sigils, and checkpoints every 25 waves pay shards and stones. A run costs a Siege ticket. Opens after Chapter III.' },
     { go: 'market', title: 'Market', text: 'Spend Crystals on Energy refills, Fate Shards, Sigils and Ascension Stones. You earn Crystals from level-ups, quest chests, missions and achievements.' },
     { go: 'campagne', title: 'Campaign', text: 'Ten chapters on five difficulties: the heart of the game. Clearing chapters opens new buildings: Expeditions, the Arena, Guilds, the Tower and the Boss Hall. On to the next stage!' },
   ];
@@ -706,6 +713,7 @@
     }
     if (go === 'kerkers') return `${K.BOSS_ORDER.filter(id => (S.bh[id] || 0) >= 1).length} / ${K.BOSS_ORDER.length} bosses beaten`;
     if (go === 'tower') { const best = Math.max(0, ...Object.values(S.tw.prog)); return best ? `Highest floor ${best}` : 'Not climbed yet'; }
+    if (go === 'siege') { sgTick(); return `${S.sg.best ? `Best wave ${S.sg.best}` : 'Not defended yet'} · ${S.sgT} / ${K.SIEGE.tickets} tickets`; }
     if (go === 'expedition') return !S.exp ? 'The ship is ready to sail' : expDone() ? 'The ship is back: collect the rewards' : `At sea · back in ${fmtMins(Math.max(1, Math.ceil((S.exp.end - Date.now()) / 60000)))}`;
     if (go === 'team') return `${Object.keys(S.roster).length} heroes · team power ${teamPower().toLocaleString('en-US')}`;
     if (go === 'forge') { const spare = S.inv.filter(x => !x.owner).length; return `${S.inv.length} pieces of gear · ${spare} spare`; }
@@ -720,7 +728,7 @@
     const tut = firstSteps(), tour = tourOn() ? TOUR[tourStep] : null, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const btn = z => {
       const locked = !unlocked(z.go), main = z.go === 'campagne', start = tut && main;
-      const dot = !locked && !tut && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
+      const dot = !locked && !tut && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
       const act = tut && !main ? 'data-act="tutlock"' : `data-act="go" data-go="${z.go}"`;
       const st = start ? 'Start here: your adventure begins in the Campaign' : tut ? 'Opens after your first battle' : locked ? `${LOCK_SVG} Opens after ${needTxt(z.go)}` : homeStatus(z.go);
       return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
@@ -734,7 +742,7 @@
   function sideNav() {
     const cur = tab === 'prep' && PREP.tower ? 'tower' : tab === 'prep' && PREP.boss ? 'kerkers' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
-      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
+      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
         <span class="sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</nav>`;
@@ -779,7 +787,7 @@
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
@@ -1735,6 +1743,15 @@
   function untilUtc(ms) { const s = Math.max(0, Math.round((ms - Date.now()) / 1000)), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; }
   const today = () => Math.floor(Date.now() / 86400000);
   const nextMidnight = () => (today() + 1) * 86400000;
+  // the guild boss keys reset at 00:00 UTC: a live countdown next to them (h:mm:ss, ticked every second below)
+  const keyClock = () => { const s = Math.max(0, Math.ceil((nextMidnight() - Date.now()) / 1000)), p = n => String(n).padStart(2, '0'); return `${Math.floor(s / 3600)}:${p(Math.floor(s % 3600 / 60))}:${p(s % 60)}`; };
+  const keyReset = () => `<span class="gb-reset" title="The guild boss keys reset every day at 00:00 UTC">Resets in <b data-kclock>${keyClock()}</b></span>`;
+  let kcDay = today();
+  setInterval(() => {
+    const els = document.querySelectorAll('[data-kclock]'); if (!els.length) { kcDay = today(); return; }
+    const t = keyClock(); els.forEach(e => { e.textContent = t; });
+    if (today() !== kcDay) { kcDay = today(); guildLoad(); } // a new day: fetch the fresh keys
+  }, 1000);
   const nextMonday = () => { const day = today(), dow = (day + 3) % 7; return (day + (7 - dow)) * 86400000; }; // day 0 (1970-01-01) was a Thursday
   // a guild boss difficulty is open when that campaign difficulty is (the server checks the same)
   const gbOpen = d => d === 0 || (d === 1 ? S.cleared >= K.STAGES.length - 1 : clearedOn(d - 1) >= K.STAGES.length - 1);
@@ -1791,7 +1808,7 @@
         <small class="empty-note">${g.members.length} / ${GUILD_MAX} members · Guildmaster ${esc(gm ? gm.name : '?')} · ${g.open ? 'open to new members' : 'closed'} · you: ${ROLE_NAME[me]}</small>
         ${info}</div></section>
       <div class="g-tiles">
-        <button type="button" class="g-tile" data-act="gview" data-v="boss"><img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt=""><b>Guild Boss</b><small>${keysLeft} / ${K.GBOSS.keys} keys left today</small></button>
+        <button type="button" class="g-tile" data-act="gview" data-v="boss"><img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt=""><b>Guild Boss</b><small>${keysLeft} / ${K.GBOSS.keys} keys left today</small><small>${keyReset()}</small></button>
         <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
@@ -1836,11 +1853,11 @@
     if (!gbOpen(GD.d)) GD.d = 0;
     const diffs = K.DIFFS.map((x, i) => `<button type="button" class="${i === GD.d ? 'sel' : ''}" data-act="gbd" data-n="${i}" ${gbOpen(i) ? '' : 'disabled title="Clear the previous campaign difficulty first"'}>${gbOpen(i) ? '' : LOCK_SVG}${esc(x.name)}<small>×${K.GBOSS.mult[i]} points</small></button>`).join('');
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === ess);
-    return `<div class="section-head" style="margin:0">${guildBack}<span class="tag">Keys reset in ${untilUtc(nextMidnight())}</span></div>
+    return `<div class="section-head" style="margin:0">${guildBack}</div>
       <section class="gb-card"><div class="gb-art"><img class="spr" src="${SPR.url(art, 2)}" alt="${esc(K.BOSSES[art].name)}"></div>
         <div class="gb-main"><span class="tag">Today's guild boss · a new one every day</span><h3>${esc(K.BOSSES[art].name)} ${affChip(ess)}</h3>${K.BOSSES[art].title ? `<span class="gb-title">${esc(K.BOSSES[art].title)}</span>` : ''}
           <p class="empty-note">It cannot be killed: deal as much damage as you can before your team falls or the boss has taken ${K.GBOSS.turns} turns. It enrages after ${K.ENRAGE.at} of its turns. ${ess === 'Aether' ? 'No essence has the advantage today.' : `Strong against it today: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
-          <div class="gb-keys">${Array.from({ length: K.GBOSS.keys }, (_, i) => `<i class="${i < keysLeft ? 'on' : ''}"></i>`).join('')}<span>${keysLeft} / ${K.GBOSS.keys} keys left today</span></div>
+          <div class="gb-keys">${Array.from({ length: K.GBOSS.keys }, (_, i) => `<i class="${i < keysLeft ? 'on' : ''}"></i>`).join('')}<span>${keysLeft} / ${K.GBOSS.keys} keys left today</span>${keyReset()}</div>
         </div></section>
       <div class="gb-diffs" role="group" aria-label="Difficulty">${diffs}</div>
       <div class="section-head" style="margin:0"><span class="empty-note">Your team: power ${K.teamPower(snapTeam(teamIds('guild'))).toLocaleString('en-US')} · <button class="linkbtn" data-act="editteam" data-mode="guild">change</button></span>
@@ -2232,6 +2249,7 @@
     { id: 'summon', n: 1, pts: 10, t: 'Summon a hero at the Fate Altar', go: 'altaar', u: 'altaar' },
     { id: 'exp', n: 1, pts: 10, t: 'Send out an expedition', go: 'expedition', u: 'expedition' },
     { id: 'tower', n: 1, pts: 15, t: 'Fight in the Tower of Essence', go: 'tower', u: 'tower' },
+    { id: 'siege', n: 1, pts: 10, t: 'Defend the Siege', go: 'siege', u: 'siege' },
     { id: 'boss', n: 1, pts: 15, t: 'Win a Boss Hall battle', go: 'kerkers', u: 'kerkers' },
     { id: 'arena', n: 2, pts: 15, t: 'Attack twice in the Arena', go: 'arena', u: 'arena', acc: true },
     { id: 'gboss', n: 1, pts: 10, t: 'Fight the Guild Boss', go: 'guild', u: 'guild', acc: true },
@@ -2338,6 +2356,7 @@
     { id: 'bh10', name: 'Hall of Legends', t: n => `Beat level 10 of ${plural(n, 'Boss Hall boss', 'Boss Hall bosses')}`, v: () => bhAt(10), at: [1, 5, 15, K.BOSS_ORDER.length] },
     { id: 'tower', name: 'Tower Climber', t: n => `Reach floor ${n} in a Tower of Essence`, v: bestTower, at: [50, 100, 200, 300] },
     { id: 'towers', name: 'Master of Essences', t: n => `Reach floor 100 in ${plural(n, 'Tower of Essence', 'Towers of Essence')}`, v: () => Object.values((S.tw && S.tw.prog) || {}).filter(f => f >= 100).length, at: [3, K.TOWERS.length] },
+    { id: 'siege', name: 'Gatekeeper', t: n => `Hold the Siege until wave ${n}`, v: () => (S.sg && S.sg.best) || 0, at: [50, 100, 200, 300, 500] },
     { id: 'solo', name: 'Lone Wolf', t: n => `Clear floor ${n} of a Tower of Essence with a single hero`, v: () => tot('solo'), at: [10, 25, 50] },
     { id: 'flaw', name: 'Untouchable', t: n => `Win ${plural(n, 'Nightmare stage', 'Nightmare stages')} without losing a hero`, v: () => tot('flaw'), at: [1, 25, 100] },
     { id: 'stars', name: 'Ascendant', t: n => `Ascend ${plural(n, 'hero', 'heroes')} to 6★`, v: () => heroesAt(h => h.stars >= 6), at: [1, 4, 10] },
@@ -2487,7 +2506,7 @@
     if (!cl.signedIn()) return `<section class="th-sec"><div class="lockbox">${LOCK_SVG}<div><h3>Sign in to see the leaderboards</h3><p class="empty-note">Rankings are read from the accounts of signed-in players.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div></section>`;
     if (!LB.rows && !LB.err && LB.loading !== LB.kind) lbLoad(LB.kind);
     const main = LB.kind.split(':')[0], sub = LB.kind.split(':')[1] || '';
-    const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence'], ['guilds', 'Guilds']];
+    const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence'], ['siege', 'Siege'], ['guilds', 'Guilds']];
     const seg = `<div class="seg" role="group" aria-label="Leaderboard">${groups.map(([k, l]) => `<button type="button" data-act="lbkind" data-kind="${k}" aria-pressed="${main === k || (k === 'bosses' && main === 'boss')}">${l}</button>`).join('')}</div>`;
     // Boss Hall and the towers: everything together, or one boss / one tower
     const pick = main === 'bosses' || main === 'boss' ? `<label class="lb-pick">Boss <select id="lb-sub" data-base="boss" data-all="bosses"><option value="">All bosses (total levels)</option>${K.BOSS_ORDER.map(id => `<option value="${id}" ${sub === id ? 'selected' : ''}>${esc(K.BOSSES[id].name)}</option>`).join('')}</select></label>`
@@ -2495,6 +2514,7 @@
       : main === 'guilds' ? `<label class="lb-pick">Rank by <select id="lb-sub" data-base="guilds" data-all="guilds">${[['', 'Guild boss points this week'], ['all', 'Guild boss points of all time'], ['best', 'Biggest single hit']].map(([v, l]) => `<option value="${v}" ${sub === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>` : '';
     const fmt = r => main === 'guilds' ? `${Math.round(Number(r.score)).toLocaleString('en-US')} ${sub === 'best' ? 'damage' : 'points'}` : main === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : main === 'campaign' ? campaignText(r)
       : main === 'bosses' ? `${r.score} boss levels${r.detail && r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}` : main === 'boss' ? `Level ${r.score} / ${K.BOSS_LEVELS}`
+      : main === 'siege' ? `Wave ${r.score} / ${K.SIEGE.waves}${r.detail && r.detail.kills ? ` · ${Number(r.detail.kills).toLocaleString('en-US')} enemies defeated` : ''}`
       : sub ? `Floor ${r.score} / ${K.TOWER.floors}` : `${r.score.toLocaleString('en-US')} floors${r.detail && r.detail.best ? ` · best ${r.detail.best}` : ''}`;
     const list = LB.rows && main === 'arena' ? LB.rows.concat(boardBots()).sort((a, b) => b.score - a.score) : LB.rows;
     const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
@@ -2783,7 +2803,7 @@
     const cur = tab === 'prep' && PREP.tower ? 'tower' : tab === 'prep' && PREP.boss ? 'kerkers' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const home = `<button type="button" class="nd-it" data-act="tab" data-tab="home"><span class="nd-ic nd-home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg></span><span class="nd-t"><b>Home</b><small>Your homebase</small></span></button>`;
     return `<div class="nd-box" role="menu" aria-label="Buildings">${home}${HOME_LIST.map(z => {
-      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()));
+      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
       return `<button type="button" class="nd-it ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" ${z.go === cur ? 'aria-current="page"' : ''}><span class="nd-ic sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><span class="nd-t"><b>${esc(z.label)}</b><small>${locked ? `${LOCK_SVG} Opens after ${esc(needTxt(z.go))}` : esc(homeStatus(z.go) || '')}</small></span>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</div>`;
   }
@@ -3389,6 +3409,8 @@
     else if (act === 'twlist') { TV.view = 'towers'; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'twrow') { TV.open = TV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); } // a floor row opens and closes
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
+    else if (act === 'sggo') startSiege(+a.dataset.n);
+    else if (act === 'sgrow') { SGV.open = SGV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
     else if (act === 'twgo') openTowerPrep(S.tw.cur || 'Ember'); // Fight opens the team screen first
     else if (act === 'prestige') {
@@ -3591,6 +3613,51 @@
 
   // ---------- summon ----------
   let lastType = 'fate';
+  // ----- the summon reveal: a Rare or better summon builds up before the result. The shard charges in blue and, one step
+  // at a time, turns violet for an Epic and gold for a Legendary, then bursts open on the hero. A 10x summon shows every
+  // Epic and Legendary (or its best Rare) this way, the best first, then the usual result. A tap while it charges jumps to
+  // the burst, Skip goes straight to the result.
+  function summonReveal(res, type, done) {
+    const best = Math.max(...res.map(r => r.rar));
+    let show = res.filter(r => r.rar >= 3); if (!show.length) show = [res.find(r => r.rar === best)];
+    show = show.slice().sort((a, b) => b.rar - a.rar);
+    const calmFx = matchMedia('(prefers-reduced-motion: reduce)').matches, STEP = calmFx ? 350 : 950;
+    const art = {}; show.forEach(r => SPR.loadHi(r.id).then(h => { if (h) art[r.id] = h.src; })); // the sharp picture (k = 4), on its way while the shard charges
+    const el = document.createElement('div'); el.className = 'sfx lv2 charge'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Summoning');
+    const motes = Array.from({ length: 28 }, () => { const a = Math.random() * 6.283, d = 34 + Math.random() * 30; return `<i style="--dx:${(Math.cos(a) * d).toFixed(1)}vmin;--dy:${(Math.sin(a) * d).toFixed(1)}vmin;animation-delay:${(-Math.random() * 1.2).toFixed(2)}s"></i>`; }).join('');
+    const sparks = Array.from({ length: 34 }, () => { const a = Math.random() * 6.283, d = 30 + Math.random() * 45; return `<i style="--dx:${(Math.cos(a) * d).toFixed(1)}vmin;--dy:${(Math.sin(a) * d).toFixed(1)}vmin;--s:${(0.5 + Math.random()).toFixed(2)}"></i>`; }).join('');
+    el.innerHTML = `<div class="sfx-motes">${motes}</div><div class="sfx-circle"></div><div class="sfx-glow"></div><img class="sfx-shard" src="${SHARD_ART[type + '0']}" alt=""><div class="sfx-sparks">${sparks}</div><div class="sfx-flash"></div><div class="sfx-stage"></div><button type="button" class="sfx-skip">Skip ›</button>`;
+    document.body.appendChild(el);
+    let T = [], phase = 'charge', idx = 0, shownAt = 0;
+    const at = (ms, f) => T.push(setTimeout(f, ms)), clear = () => { T.forEach(clearTimeout); T = []; };
+    const set = (r, ph) => { el.className = `sfx lv${r} ${ph}`; };
+    const flash = () => { const f = el.querySelector('.sfx-flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); };
+    const steps = [2, 3, 4].filter(r => r <= best);
+    SFX.sumCharge(steps.length);
+    steps.forEach((r, k) => { if (k) at(k * STEP, () => { set(r, 'charge'); flash(); SFX.sumStep(r); }); });
+    at(steps.length * STEP + 250, burst);
+    function burst() {
+      clear(); phase = 'burst'; set(best, 'burst'); flash(); SFX.sumBurst(best);
+      at(calmFx ? 150 : 520, () => reveal(0));
+    }
+    function reveal(n) {
+      const r = show[n], c = C[r.id]; idx = n; phase = 'reveal'; shownAt = Date.now();
+      if (n) { flash(); SFX.sumBurst(r.rar); }
+      el.querySelector('.sfx-stage').innerHTML = `<div class="sfx-hw"><div class="sfx-rays"></div><img class="sfx-hero" src="${art[r.id] || bossBig(r.id)}" alt=""></div>
+        <div class="sfx-info" style="--ec:${AFF_COL[c.aff]}"><small class="sfx-rar">${K.RARITIES[r.rar]}</small><h2>${esc(c.name)}</h2>${starStr(K.baseStars(r.id), r.rar + 1)}
+        <span class="sfx-id">${essBadge(c.aff)}<span>${c.aff} · ${roleStr(c)}</span></span>${r.isNew ? '<span class="sfx-new">New hero!</span>' : '<small class="sfx-dup">Spare copy: feed it to level a skill</small>'}</div>
+        <div class="sfx-tap">${show.length > 1 ? `${n + 1} / ${show.length} · ` : ''}Tap to continue</div>`;
+      set(r.rar, 'reveal' + (n ? ' again' : ''));
+    }
+    function finish() { clear(); document.removeEventListener('keydown', key, true); el.remove(); done(); }
+    function next() {
+      if (phase === 'charge') burst();
+      else if (phase === 'reveal' && Date.now() - shownAt > 450) { if (idx + 1 < show.length) reveal(idx + 1); else finish(); }
+    }
+    function key(e) { e.preventDefault(); e.stopPropagation(); if (e.key === 'Escape') finish(); else if (e.key === 'Enter' || e.key === ' ') next(); }
+    el.addEventListener('click', e => { e.stopPropagation(); if (e.target.closest('.sfx-skip')) finish(); else next(); });
+    document.addEventListener('keydown', key, true);
+  }
   function doSummon(n, type) {
     type = type || lastType; lastType = type;
     if ((S.fs[type] || 0) < n || !unlocked('altaar')) return;
@@ -3599,7 +3666,11 @@
     for (let i = 0; i < n; i++) res.push(K.summonOne(S, type));
     save(); render();
     const best = Math.max(...res.map(r => r.rar));
-    SFX.summon(best);
+    if (best >= 2) summonReveal(res, type, () => summonResult(res, type, best));
+    else { SFX.summon(best); summonResult(res, type, best); }
+  }
+  function summonResult(res, type, best) {
+    const n = res.length;
     const cards = res.map((r, i) => `<div class="sum-card rar-${r.rar}" style="animation-delay:${i * 0.12}s">${por(r.id)}<span class="nm">${esc(C[r.id].short)}</span><small class="rartxt">${K.RARITIES[r.rar]}</small>${r.isNew ? '<span class="new">NEW</span>' : '<small>Spare copy: feed it to level a skill</small>'}</div>`).join('');
     const m = $('#modal');
     m.innerHTML = `<div class="modal-box violet sum-box ${n > 1 ? 'wide' : ''}" role="dialog" aria-modal="true"><h2>${best >= 4 ? 'Legendary!' : best >= 3 ? 'Epic!' : 'Summoned'}</h2><p class="tag">${esc(K.SHARD[type].name)} · ${S.fs[type]} left</p><div class="summon-grid">${cards}</div>
@@ -3614,6 +3685,14 @@
   const HERO_POS = [[150, 188], [66, 206], [160, 250], [76, 266]];
   const ENEMY_POS = { 1: [[372, 236]], 2: [[344, 198], [352, 256]], 3: [[336, 190], [414, 220], [344, 258]], 4: [[334, 188], [414, 204], [328, 250], [408, 266]] };
   const BOSS_POS = [390, 244], GBOSS_POS = [372, 266], ADD_POS = [[306, 190], [310, 264], [282, 228]];
+  // the Siege: up to ten enemies in three loose columns over the deep courtyard, filled from the middle of the front
+  // column outwards; a boss wave puts its boss at the back and the guards in front
+  const SIEGE_POS = [[310, 212], [302, 166], [306, 258], [364, 190], [360, 236], [358, 146], [418, 210], [412, 164], [416, 256], [458, 232]];
+  const SIEGE_BOSS = [414, 228], SIEGE_FIG = 0.72, SIEGE_HERO = [[178, 176], [94, 192], [188, 232], [104, 248]];
+  function siegeLayout(enemies) {
+    const boss = enemies.find(u => u.isBoss); let k = 0;
+    enemies.forEach(u => place(u, u === boss ? SIEGE_BOSS : SIEGE_POS[boss ? [0, 1, 2, 4, 3][k++ % 5] : k++ % SIEGE_POS.length], 260));
+  }
   const R = { running: false, units: [], projs: [], parts: [], fx: [], ash: [], shake: 0, area: 0, hl: new Set(), hlKind: 'bad', active: null, dim: 0 };
   let B = null, pending = null, selSkill = 0, quitArm = 0;
   // battle speed: S.speed is the player's preferred speed, spd the speed this battle actually runs at.
@@ -3621,7 +3700,7 @@
   const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
   let spd = 1, speeds = [1];
   // arena fights are replays of a fight already decided, so every unlocked speed (also 5×) may be used
-  const beatenBefore = cfg => cfg.type === 'arena' || cfg.type === 'gboss' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
+  const beatenBefore = cfg => cfg.type === 'arena' || cfg.type === 'gboss' || cfg.type === 'siege' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
   function speedsFor(cfg) {
     const reached = S.cleared + 1, replay = beatenBefore(cfg);
     return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
@@ -3725,14 +3804,24 @@
     for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (d[(y * s.width + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     return (boxes[id] = { w: s.width, h: s.height, x0, x1, y0, y1 });
   }
+  // the share of a figure's box above its crown, for those whose staff, bow or flames reach well above the head (measured
+  // on their sharp art): their height and name bar go by the head, or they would stand about a fifth smaller than the rest
+  const CROWN = { celesthyr: 0.186, krogash: 0.222, elyndra: 0.195, oraneth: 0.178, theryn: 0.185 };
+  const crownH = (id, h) => h * (1 - (CROWN[id] || 0));
   const fits = {};
   function fitOf(id) {
     if (fits[id] != null) return fits[id];
     const want = BATTLE_H[id]; if (!want) return (fits[id] = 1);
-    const b = bbox(id), top = (b.y1 - b.y0) / SPR.k(id) * baseStretch(id)[1];
+    const b = bbox(id), top = crownH(id, b.y1 - b.y0) / SPR.k(id) * baseStretch(id)[1];
     return (fits[id] = top > 0 ? want / top : 1);
   }
-  const stretch = id => { const [x, y] = baseStretch(id), f = fitOf(id); return [x * f, y * f]; };
+  // FIG: the whole battle's figure scale (1; the Siege draws everyone smaller so ten enemies fit, SIEGE_FIG); a change
+  // drops every measured figure so the metrics follow
+  let FIG = 1;
+  const setFig = v => { if (v === FIG) return; FIG = v; for (const k in metrics) delete metrics[k]; };
+  // (a boss shrinks less, so it still towers over the rest)
+  const figOf = id => (FIG < 1 && K.BOSSES[id] ? Math.min(1, FIG * 1.3) : FIG);
+  const stretch = id => { const [x, y] = baseStretch(id), f = fitOf(id) * figOf(id); return [x * f, y * f]; };
   // sprite metrics: feet offset + content box, from the idle frame
   const metrics = {};
   // a character whose sharp art (sprites.js hires) was just switched on is measured again
@@ -3743,7 +3832,7 @@
     // a fine picture (manga figure) counts in game pixels; manga heroes are drawn a little taller and narrower (STRETCH),
     // and every figure is scaled to its BATTLE_H
     const k = SPR.k(id), [sx, sy] = stretch(id);
-    return (metrics[id] = { w: s.w / k * sx, h: s.h / k * sy, fy: y1 / k * sy, top: (y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
+    return (metrics[id] = { w: s.w / k * sx, h: s.h / k * sy, fy: y1 / k * sy, top: crownH(id, y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
   }
   function place(u, [x, y], off) {
     const m = info(u.id);
@@ -3763,7 +3852,9 @@
   }
   function layout(heroes, enemies) {
     const pos = formation(heroes);
-    heroes.forEach(u => place(u, HERO_POS[pos.get(u)], -220));
+    const siege = B && B.cfg.type === 'siege';
+    heroes.forEach(u => place(u, (siege ? SIEGE_HERO : HERO_POS)[pos.get(u)], -220));
+    if (siege) { siegeLayout(enemies); return; }
     const boss = enemies.find(u => u.big || u.id === 'morwenna');
     // the guild boss is huge: further right and lower, so it towers over the field and spills past the edge
     if (boss && boss.immortal) { place(boss, GBOSS_POS, 220); return; }
@@ -3817,7 +3908,7 @@
       // status badges (fxBadge): an icon per effect, turns left in the corner
       const chips = u.effects.map(e => e.k === 'enrage' ? fxBadge('enrage', null, `Enraged: +${Math.round(K.ENRAGE.atk * e.v * 100)}% Attack, growing every ${K.ENRAGE.every} of its turns`, '×' + e.v) : fxBadge(e.k, e.n));
       // a boss shows how many of its turns are left before it enrages
-      if (u.hall && u.alive && B && B.b && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxi clock ${left <= 3 ? 'soon' : ''}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳<i>${left}</i></span>`); }
+      if (u.hall && u.alive && B && B.b && (u.isBoss || B.cfg.type !== 'siege') && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxi clock ${left <= 3 ? 'soon' : ''}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳<i>${left}</i></span>`); }
       if (u.stacks.smids) chips.unshift(fxBadge('atkUp', null, `Blood Frenzy: +${u.stacks.smids * 10}% Attack`, '×' + u.stacks.smids));
       if (u.stacks.charge) chips.unshift(fxBadge('broken', null, 'Static Charge', u.stacks.charge));
       if (u.isBoss) {
@@ -4136,9 +4227,9 @@
     const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); BGPRE.set(img, { rs: RS, c }); return c;
   }
   function mangaPre(img, ak, kx, ky) {
-    const e = MCV.get(img); if (e && e.rs === RS) return e.c;
+    const e = MCV.get(img); if (e && e.rs === RS && e.kx === kx) return e.c;
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width / ak * kx * RS)); c.height = Math.max(1, Math.round(img.height / ak * ky * RS));
-    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); MCV.set(img, { rs: RS, c }); return c;
+    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); MCV.set(img, { rs: RS, kx, c }); return c;
   }
   // back from another app (phones): pictures the phone wiped while the game was hidden are drawn again (SPR.heal), the
   // copies made from them are made anew, and a screen with painted canvases is drawn again; once more a moment later,
@@ -4238,7 +4329,7 @@
         // an animated hero (sheets.js): this moment's frame of its move, feet on the spot, mirrored on the enemy side
         const img = sheetFrame(u, SH, now), sx = rs.x + rs.ox + (u.alive ? P.dx * dir : 0) + sh, sy = rs.y + rs.oy - rs.jump + (u.alive ? P.dy : 0) + shy;
         if (img) {
-          const f = fitOf(u.id), bx = -SH.w * f / 2, by = (-SH.h + 1 / SH.k) * f, bw = SH.w * f, bh = SH.h * f;
+          const f = fitOf(u.id) * figOf(u.id), bx = -SH.w * f / 2, by = (-SH.h + 1 / SH.k) * f, bw = SH.w * f, bh = SH.h * f;
           g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
           if (u.alive) castShadow(img, bx, by, bw, bh, sx, rs.y + rs.oy + shy, flip ? -1 : 1, a * 0.7);
           g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); drawFig(img, bx, by, bw, bh, statusFx(u), now); g.restore(); g.imageSmoothingEnabled = false;
@@ -4413,7 +4504,7 @@
     before: animBefore,
     after: animAfter,
     pause: ms => sleep(ms),
-    round: r => { $('#b-round').textContent = (B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r; },
+    round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r; },
     impact: (u, skill, t) => impactFx(u, skill, t),
     banner: async (u, skill) => {
       await bannerQ;
@@ -4705,7 +4796,7 @@
     runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], bg: chapterBg(Math.floor(bi * K.CHAPTERS.length / K.BOSS_ORDER.length)), title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
-  const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor, cfg.ids.length) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
+  const phaseUnits = (cfg, p) => cfg.type === 'siege' ? K.siegeUnits(cfg.from + p) : cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor, cfg.ids.length) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
     const alive = heroes.filter(u => u.alive), hi = SPR.hires([...heroes, ...enemies].map(u => u.id), 1800); // everyone is placed anew below
@@ -4734,10 +4825,12 @@
     else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false; document.body.classList.add('in-battle');
     $('#toast').hidden = true;
-    $('#b-title').textContent = cfg.title; $('#b-round').textContent = (nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
+    const siege = cfg.type === 'siege';
+    $('#b-title').textContent = cfg.title; $('#b-round').textContent = (siege ? `Wave ${cfg.from} · ` : nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
+    $('#battle').classList.toggle('siege', siege); setFig(siege ? SIEGE_FIG : 1);
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
     R.area = cfg.area; R.bg = cfg.bg;
-    const narrow = window.innerWidth < 640;
+    const narrow = window.innerWidth < 640 && !siege; // the Siege always shows its whole courtyard (ten enemies on the right)
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
     // the canvas is drawn at the screen's own resolution (RS device pixels per game pixel): pixel-art backgrounds stay
     // blocky (smoothing off), animated heroes are drawn smoothly from their finer frames
@@ -4747,7 +4840,8 @@
     speeds = speedsFor(cfg);
     // Auto ×10 runs may go 8× (only those), and show which battle of the run this is
     if (cfg.rep) speeds = [...speeds, 8];
-    $('#b-rep').hidden = !cfg.rep; if (cfg.rep) $('#b-rep').innerHTML = `Auto <b>${cfg.rep.k}</b> / ${cfg.rep.n}`;
+    $('#b-rep').hidden = !cfg.rep && !siege; if (cfg.rep) $('#b-rep').innerHTML = `Auto <b>${cfg.rep.k}</b> / ${cfg.rep.n}`;
+    if (siege) sgChip(cfg, cfg.from);
     spd = speeds.filter(x => x <= (S.speed || 1)).pop();
     // auto battle is remembered: once switched on it stays on for every battle until the player turns it off
     let b = new K.Battle(heroes, enemies, hooks);
@@ -4759,9 +4853,9 @@
     // sharp battle art (sprites.js hires): wait a moment for this fight's characters; the later phases' enemies load meanwhile
     if (!arena) for (let p = 1; p < nPh; p++) for (const u of phaseUnits(cfg, p)) SPR.loadHi(u.id);
     // and the chapter's sharp background ('h<chapter>'); one that has not arrived in time leaves the chapter's old one
-    const hiBg = /^h\d/.test(cfg.bg || '') ? preBg(+cfg.bg.slice(1)) : null;
+    const hiBg = /^h\d/.test(cfg.bg || '') ? preBg(+cfg.bg.slice(1)) : siege ? SPR.bgHi('hsiege', SIEGE_BG) : null;
     const [arts, bgOk] = await Promise.all([SPR.hires([...heroes, ...enemies].map(u => u.id), 2500), hiBg && Promise.race([hiBg, new Promise(r => setTimeout(r, 2500))])]);
-    forgetArt(arts); if (hiBg && !bgOk) R.bg = 'c' + CHAPTER_BG_OF[+cfg.bg.slice(1)];
+    forgetArt(arts); if (hiBg && !bgOk) R.bg = siege ? 'c2' : 'c' + CHAPTER_BG_OF[+cfg.bg.slice(1)];
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -4772,7 +4866,7 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
@@ -4782,7 +4876,13 @@
     const addStats = x => { addMeter(meter, x.meter); for (const k in x.stats.dmg) tot.dmg[k] = (tot.dmg[k] || 0) + x.stats.dmg[k]; tot.crits += x.stats.crits; tot.maxHit = Math.max(tot.maxHit, x.stats.maxHit); tot.turns += x.turns; };
     let res;
     for (let p = 0; p < nPh; p++) {
-      if (p) {
+      if (p && siege) {
+        // the Siege: the team holds its ground and the next wave walks in from the right
+        enemies = phaseUnits(cfg, p);
+        await siegeNext(heroes, enemies, cfg.from + p);
+        b = new K.Battle(heroes, enemies, hooks); b.auto = S.auto && autoOk();
+        B.b = b; B.ph = p;
+      } else if (p) {
         enemies = phaseUnits(cfg, p);
         await nextPhase(heroes, enemies, p);
         b = new K.Battle(heroes, enemies, hooks); b.auto = !!cfg.rep || (S.auto && autoOk());
@@ -4793,15 +4893,23 @@
         if (boss) log(`${boss.name} · ${E[boss.id].passiveName}: ${E[boss.id].passiveDesc}`, 'enemy');
         if (boss && boss.blight) { log(`Blight Aura: every turn of ${boss.name} costs each of your heroes ${Math.round(boss.blight * 100)}% of their max HP. Bring healing.`, 'enemy'); queueBanner('Blight Aura', `Every turn of the boss drains your whole team. Heal or fall.`, 'big enemy', 1100); }
       }
+      if (siege) for (const u of phaseUnits(cfg, p + 1 < nPh ? p + 1 : p)) SPR.loadHi(u.id); // the next wave's art, while this one fights
       res = await b.run();
       addStats(b);
       R.active = null; R.hl = new Set(); updateOverlay();
+      if (siege) sgWave(cfg, b, cfg.from + p, res === 'win' && !b.aborted);
       if (res !== 'win' || b.aborted) break;
     }
     if (arena) K.setRng(null);
     b.stats = tot; b.turns = tot.turns; b.meterAll = meter;
     // arena: the server's result counts (the replay should always agree; warn if it ever does not)
     if (gb) { finishGboss(cfg, b); return; }
+    if (siege) {
+      const run = cfg.run, won = run.last >= K.SIEGE.waves;
+      if (won) SFX.win(); else { SFX.lose(); R.dim = 0.4; }
+      await showBanner(won ? 'The siege is over!' : b.aborted ? 'Retreated' : 'The gate has fallen', run.last >= cfg.from ? `Wave ${run.last} held · ${run.kills} enemies defeated` : 'Not one wave held', won ? 'big' : 'big lose', 1100);
+      finishSiege(cfg, b); return;
+    }
     if (manualArena) {
       // the server replays the fight with the recorded moves; only its result counts
       const r = await arenaCall('finish', { moves: B.moves });
@@ -4913,6 +5021,155 @@
       ${twHead('<button type="button" class="btn small cl-back" data-act="twlist">‹ Towers</button>')}
       ${prog >= K.TOWER.floors ? `<p class="cl-hint">All ${K.TOWER.floors} floors of the ${twName(e)} are cleared. Few heroes ever stand here.</p>` : ''}
       <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}</div></div></div>`;
+  }
+  // ---------- The Siege (tab `siege`, engine K.SIEGE): an endless defence. The team holds its gate while waves of
+  // enemies walk at it (more of them and stronger every wave) until it falls. Every kill pays hero XP and Sigils at
+  // once (siegeKill), the first clear of every 25th wave pays a checkpoint reward (siegeReward), and a run may start
+  // just after a checkpoint SIEGE.back waves below the best. A run costs a Siege ticket: one comes back every
+  // SIEGE.ticketMin minutes, at most SIEGE.tickets (S.sgT, S.sgAt: like energy, filled lazily by sgTick).
+  // S.sg = { best, runs, kills }. The battle draws every figure smaller (SIEGE_FIG) on its own deep courtyard. ----------
+  const SIEGE_BG = 'backgrounds/siege.webp', SG_MS = K.SIEGE.ticketMin * 60000, SGV = { open: 0 };
+  function sgTick() {
+    const now = Date.now(), max = K.SIEGE.tickets;
+    if (S.sgT == null || !S.sgAt) { S.sgT = S.sgT ?? max; S.sgAt = now; }
+    if (S.sgT >= max) { S.sgAt = now; return; }
+    const n = Math.floor((now - S.sgAt) / SG_MS); if (n <= 0) return;
+    S.sgT = Math.min(max, S.sgT + n); S.sgAt = S.sgT >= max ? now : S.sgAt + n * SG_MS;
+  }
+  const sgFull = () => { sgTick(); return S.sgT >= K.SIEGE.tickets; };
+  // where a run may start: wave 1, or just after a checkpoint at least SIEGE.back waves below the best checkpoint reached
+  const sgStarts = () => { const top = Math.floor(S.sg.best / K.SIEGE.cp) * K.SIEGE.cp - K.SIEGE.back, out = [1]; for (let w = K.SIEGE.cp; w <= top; w += K.SIEGE.cp) out.push(w + 1); return out; };
+  const GATE_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 15V4.5h2V2.5h2v2h1.2v-2h2.6v2h1.2v-2h2v2h2V15H10v-3.6a2 2 0 0 0-4 0V15z"/></svg>';
+  const TICKET_SVG = '<svg class="sg-tk" viewBox="0 0 20 14" aria-hidden="true"><path d="M2 1h16v4a2 2 0 0 0 0 4v4H2V9a2 2 0 0 0 0-4z"/><path d="M7 3.5v7" stroke-dasharray="1.4 1.2"/></svg>';
+  function startSiege(from) {
+    sgTick();
+    const ids = teamIds('siege').filter(id => S.roster[id] && !onExp(id));
+    if (!unlocked('siege')) { render(); return; }
+    if (!ids.length) { toast('Pick a team for the Siege first.', true); render(); return; }
+    if (!sgStarts().includes(from)) { render(); return; }
+    if (S.sgT < 1) { toast(`No Siege tickets left. The next one comes in ${fmtLeft(S.sgAt + SG_MS - Date.now())}.`, true); render(); return; }
+    S.sgT--; useTeam('siege'); save();
+    runBattle({ type: 'siege', from, ids, nPh: K.SIEGE.waves - from + 1, lvl: K.siegeWave(from).lvl, area: 4, bg: 'hsiege', title: 'The Siege',
+      run: { last: from - 1, kills: 0, xp: 0, silver: 0, fs: {}, st: {}, elx: 0, ups: {}, best0: S.sg.best } });
+  }
+  // the wave chip on the battlefield: which wave, and the best so far
+  function sgChip(cfg, n) { const el = $('#b-rep'); el.hidden = false; el.innerHTML = `Wave <b>${n}</b>${S.sg.best ? ` · best ${Math.max(S.sg.best, cfg.run.last)}` : ''}`; }
+  // between waves: the survivors stay where they stand and recover a little, the fallen are gone, and the next wave
+  // walks in from the right (a boss wave with a banner)
+  async function siegeNext(heroes, enemies, n) {
+    const hi = SPR.hires(enemies.map(u => u.id), 1500);
+    K.siegeRest(heroes);
+    forgetArt(await hi);
+    const keep = new Map(heroes.map(u => [u, u._rs]));
+    setupRender(heroes, enemies);
+    heroes.forEach(u => { const o = keep.get(u); if (o) { u._rs.x = o.x; u._rs.y = o.y; } u._rs.ox = 0; if (!u.alive) u._rs.gone = true; });
+    sgChip(B.cfg, n);
+    enemies.forEach(u => (u._rs.walking = true));
+    await tween(1000, k => { const e = ease(k); enemies.forEach(u => { u._rs.ox = 260 * (1 - e); }); updateOverlay(); });
+    enemies.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
+    updateOverlay();
+    const boss = enemies.find(u => u.isBoss);
+    if (boss) await showBanner(`Wave ${n} · ${boss.name}`, `Boss wave · ${boss.aff}`, 'big', 800);
+    else if (n % 10 === 0) queueBanner(`Wave ${n}`, `${enemies.length} enemies`, '', 600);
+  }
+  // a wave ends: every enemy that fell pays its kill at once (XP for each hero in the team, Sigils), and the first
+  // clear of a checkpoint wave pays its reward; the best wave is saved after every wave
+  function sgWave(cfg, b, n, won) {
+    const run = cfg.run;
+    let xp = 0, silver = 0, kills = 0;
+    for (const u of b.enemies) if (!u.alive) { const k = K.siegeKill(n, u.isBoss); xp += k.xp; silver += k.silver; kills++; }
+    run.kills += kills; run.xp += xp; run.silver += silver; S.silver += silver; S.sg.kills += kills;
+    grantXp(xp, cfg.ids).forEach(([id, l]) => (run.ups[id] = l));
+    if (won) {
+      run.last = n;
+      if (n > S.sg.best) {
+        if (n % K.SIEGE.cp === 0) {
+          const r = K.siegeReward(n);
+          S.silver += r.silver; run.silver += r.silver; addStones(r.st);
+          for (const [t, c] of Object.entries(r.fs)) { S.fs[t] = (S.fs[t] || 0) + c; run.fs[t] = (run.fs[t] || 0) + c; }
+          for (const [t, c] of Object.entries(r.st)) run.st[t] = (run.st[t] || 0) + c;
+          if (r.elx) { S.elx.Aether = (S.elx.Aether || 0) + r.elx; run.elx += r.elx; }
+          queueBanner(`Checkpoint ${n}`, 'First clear: shards and stones', 'big', 900);
+        }
+        S.sg.best = n;
+      }
+      sgChip(cfg, n + 1);
+    }
+    save();
+  }
+  // the end of a run: what it paid (paid already, wave by wave), the heroes and the way to the next run
+  function finishSiege(cfg, b) {
+    const run = cfg.run, best = run.last > run.best0, n0 = v => Math.round(v).toLocaleString('en-US');
+    S.sg.runs = (S.sg.runs || 0) + 1; if (run.kills) track('siege');
+    save(); sgTick();
+    let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
+    const tile = (icon, amount, title, cls) => `<li class="rt ${cls || ''}" title="${esc(title)}" ${d()}><span class="rt-ic">${icon}</span>${amount !== '' ? `<b>${amount}</b>` : ''}</li>`;
+    const tiles = [
+      tile('<span class="rt-t sg-k">✕</span>', run.kills.toLocaleString('en-US'), 'Enemies defeated'),
+      run.silver ? tile(ic('coin'), n0(run.silver), 'Sigils') : '',
+      run.xp ? tile('<span class="rt-t xp">XP</span>', n0(run.xp), 'XP for every hero in the team') : '',
+      ...Object.entries(run.fs).map(([t, c]) => tile(shardIc(t), c, K.SHARD[t].name, `rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}`)),
+      ...Object.entries(run.st).filter(([, c]) => c > 0).map(([t, c]) => tile(stoneIc(t), c, stoneName(t, c))),
+      run.elx ? tile(elxIc('Aether'), run.elx, `${elxName('Aether', run.elx)}: any hero drinks it for XP`) : '',
+    ].filter(Boolean);
+    const meter = b.meterAll || {};
+    const heroCards = b.heroes.map(u => {
+      const r = S.roster[u.id], up = run.ups[u.id], x = meter[u.uid] || { dmg: {}, heal: {}, taken: 0 }, cap = r && r.lvl >= K.maxLvl(r.stars, u.id);
+      return `<div class="rs-h ${u.alive ? '' : 'fell'}"><span class="rs-hl ${up ? 'up' : ''}">${up ? (cap ? 'Max level' : 'Level up!') : cap ? 'Max level' : '&nbsp;'}</span>${r ? `<i class="rs-xp"><i style="width:${cap ? 100 : Math.round(r.xp / K.xpNeed(r.lvl) * 100)}%"></i></i>` : ''}
+        <span class="pp-c rar-${C[u.id] ? C[u.id].rar : 0}" style="--ec:${AFF_COL[u.aff]};--rc:var(--r${C[u.id] ? C[u.id].rar : 0})">${por(u.id)}${essBadge(u.aff)}<span class="hx-lv">${r ? r.lvl : ''}</span>${r ? `<span class="hx-st">${'★'.repeat(r.stars)}</span>` : ''}</span>
+        <b class="rs-nm">${esc(u.name)}</b><span class="rs-n dmg" title="Damage dealt">${n0(sumOf(x.dmg))}</span><span class="rs-n tak" title="Damage taken">${n0(x.taken)}</span><span class="rs-n heal" title="Healed">${n0(sumOf(x.heal))}</span></div>`;
+    }).join('');
+    const nav = `<div class="rs-nav"><button class="rs-rb" data-act="modal" data-go="open-home" title="Home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg><small>Home</small></button><button class="rs-rb" data-act="modal" data-go="back" title="The Siege">${GATE_SVG}<small>Siege</small></button><button class="rs-rb" data-act="modal" data-go="champs" title="Heroes"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-6 6-6s6 2.5 6 6z"/></svg><small>Heroes</small></button></div>`;
+    const big = (go, label, icon, extra, cls) => `<button class="btn rs-big ${cls || ''}" data-act="modal" data-go="${go}"><span class="rs-bi">${icon}</span><span>${label}${extra || ''}</span></button>`;
+    const acts = big('again', 'New run', '↻', `<span class="rs-en">${TICKET_SVG}1</span>`, 'primary') + big('prep', 'Edit team', '⇄');
+    const reached = run.last >= cfg.from ? run.last : 0;
+    const m = $('#modal');
+    m.innerHTML = `<div class="modal-box result rs2 sg-res ${reached >= K.SIEGE.waves ? '' : 'lose'}" role="dialog" aria-modal="true" aria-label="The Siege">
+      <div class="rs-top"><div class="rs-stage"><b>The Siege</b><small>From wave ${cfg.from} · ${b.turns} turns${best ? ' · new best!' : ''}</small></div>
+        <div class="rs-ban"><h2>${reached ? `Wave ${reached}` : 'Fallen'}</h2></div><span class="rs-sp"></span></div>
+      <div class="rs-strip"><span class="rs-lbl">${best ? `New best: wave ${S.sg.best}` : `Best: wave ${S.sg.best}`} · ${S.sgT} / ${K.SIEGE.tickets} tickets</span></div>
+      <ul class="rewards rs-rw">${tiles.join('')}</ul>
+      <div class="rs-heroes">${heroCards}</div>
+      ${meterHtml(b)}
+      <div class="rs-foot">${nav}<div class="rs-acts">${acts}</div></div></div>`;
+    m.hidden = false;
+    const f = m.querySelector('.btn'); if (f) f.focus();
+    setTimeout(() => showUnlocks(newUnlocks()), 500);
+  }
+  // the Siege screen, laid out like the Tower's floors: on the left the courtyard with the best wave, the tickets, the
+  // team, the checkpoints ahead and the rules; on the right a row per wave a run may start at (its foes, Start)
+  function siegeHtml() {
+    sgTick(); S.seen.siege = true; // opening it is its unlock message enough
+    const best = S.sg.best, ids = teamIds('siege').filter(id => S.roster[id]), starts = sgStarts(), max = K.SIEGE.tickets, t = S.sgT;
+    const nextIn = t >= max ? 'Full' : `Next in ${fmtLeft(S.sgAt + SG_MS - Date.now())}`;
+    const ahead = []; for (let w = (Math.floor(best / K.SIEGE.cp) + 1) * K.SIEGE.cp; w <= K.SIEGE.waves && ahead.length < 3; w += K.SIEGE.cp) ahead.push(w);
+    // the checkpoints ahead as rows under the starts: the boss of that wave and what its first clear pays
+    const ms = ahead.map(w => { const F = K.siegeWave(w), boss = K.siegeFoes(w)[0]; return `<div class="sv-row locked boss sg-cp">
+        <span class="tw-rfl">${w}</span>
+        <span class="sv-t"><b>Checkpoint ${w}</b><small>${esc(E[boss].name)} · Lv ${F.lvl} · ${w - best} waves to go</small></span>
+        <span class="sv-foes"><span class="cv-foe boss" title="${esc(E[boss].name)}">${por(boss)}</span></span>
+        <span class="sv-go"><span class="tw-msi tw-rw">${twBigIc(K.siegeReward(w))}</span></span></div>`; }).join('');
+    const side = `<aside class="sv-side tw-sidec sg-side">
+      <div class="sv-ch" style="--art:url(${SIEGE_BG})"><small>Best wave</small><h3>${best ? `Wave ${best}` : 'Not defended yet'}</h3><span class="tl-bar"><i style="width:${best / K.SIEGE.waves * 100}%"></i></span><small>${best} / ${K.SIEGE.waves} waves · ${(S.sg.kills || 0).toLocaleString('en-US')} enemies defeated</small></div>
+      <section class="sv-box sg-tix"><h4>Siege tickets</h4><div class="sg-tks">${Array.from({ length: max }, (_, i) => `<i class="${i < t ? 'on' : ''}">${TICKET_SVG}</i>`).join('')}<b>${t} / ${max}</b></div><small class="sv-note">A run costs one ticket. One comes back every ${K.SIEGE.ticketMin / 60} hours, at most ${max}. ${nextIn}.</small></section>
+      <section class="sv-box sv-team"><h4>Your team</h4><div class="cv-heroes">${ids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('') || '<p class="empty-note">No heroes picked yet.</p>'}</div>
+        <div class="sv-pw"><span>Power <b>${teamPower(ids).toLocaleString('en-US')}</b></span><button class="btn small" data-act="editteam" data-mode="siege">Edit team</button></div></section>
+      <section class="sv-box"><h4>The rules</h4><small class="sv-note">Waves of enemies walk at your gate, more and stronger every wave, until your team falls. Between waves your heroes recover ${Math.round(K.SIEGE.rest * 100)}% HP; skills and effects carry on. Every kill pays XP and Sigils at once. Every ${K.SIEGE.cp}th wave is a boss wave and a checkpoint: its first clear pays shards and stones, and later runs may start ${K.SIEGE.back} waves below your best checkpoint.</small></section></aside>`;
+    // the four furthest starts and the very first wave (the starts in between are rarely wanted)
+    const shown = starts.slice().reverse().filter((w, i) => i < 4 || w === 1);
+    const rows = shown.map((w, i) => {
+      const F = K.siegeWave(w), foes = K.siegeFoes(w), isOpen = SGV.open === w;
+      return `<div class="sv-row ${i === 0 ? 'next' : 'start'} ${isOpen ? 'open' : ''}">
+        <button type="button" class="sv-sel" data-act="sgrow" data-n="${w}" aria-expanded="${isOpen}" aria-label="Wave ${w}: show its first enemies"></button>
+        <span class="tw-rfl">${w}</span>
+        <span class="sv-t"><b>${w === 1 ? 'From the start' : `From wave ${w}`}</b><small>Lv ${F.lvl} · ${F.count} ${F.count === 1 ? 'enemy' : 'enemies'} a wave${i === 0 && w > 1 ? ' · <span class="sv-nx">furthest start</span>' : ''}</small></span>
+        <span class="sv-foes">${foes.slice(0, 4).map(x => `<span class="cv-foe ${K.BOSSES[x] ? 'boss' : ''}" title="${esc(E[x].name)}">${por(x)}</span>`).join('')}${foes.length > 4 ? `<span class="sg-more">+${foes.length - 4}</span>` : ''}</span>
+        <span class="sv-go"><button class="btn ${i === 0 ? 'primary' : ''}" data-act="sggo" data-n="${w}" ${ids.length && t > 0 ? '' : `disabled title="${ids.length ? 'No tickets left' : 'Pick heroes first'}"`}>Start <span class="sg-cost">${TICKET_SVG}1</span></button></span>
+        ${isOpen ? `<div class="sv-more"><div class="tw-foes">${foes.map(x => `<span class="tw-foe ${K.BOSSES[x] ? 'boss' : ''}" title="${esc(E[x].name)} · ${E[x].aff}">${por(x)}${affChip(E[x].aff)}<small>${esc(E[x].name)}</small></span>`).join('')}</div><p class="empty-note">The first wave of this run. Later waves bring more enemies; every ${K.SIEGE.cp}th wave a boss.</p></div>` : ''}</div>`;
+    }).join('');
+    return `<div class="campaign cv sv tws sgs">
+      <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.siege})" aria-hidden="true"></span><div class="cv-ht"><h2>The Siege</h2><p>Hold your gate against endless waves. How far can your team get?</p></div></div>
+      <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}${ms ? `<h4 class="sg-lh">Checkpoints ahead</h4>${ms}` : ''}</div></div></div>`;
   }
   // ---------- Expeditions (the ship, tab `expedition`, K.EXPEDITIONS) ----------
   // S.exp = { k, ids, start, end, lvl } while a trip is out; heroes on it are away: not addable to a team, not fed
@@ -5028,6 +5285,7 @@
     arena: 'Fight the teams of other players, climb the ranking and earn weekly rewards.',
     guild: 'Create or join a guild in Social → Guild, fight the guild boss every day and earn a weekly Guild Chest.',
     kerkers: 'Challenge the bosses of the Boss Hall for their rare gear sets.',
+    siege: 'Hold your gate in the Siege: endless waves of enemies, more and stronger every wave. Every kill pays XP and Sigils; see how far your team gets.',
   };
   function newUnlocks() {
     const out = [];
@@ -5247,6 +5505,7 @@
     R.running = false; pending = null; document.body.classList.remove("in-battle"); { const t = $("#b-chat"); if (t) t.hidden = true; }
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
+    $('#battle').classList.remove('siege'); setFig(1);
   }
   // the hero a piece of gear helps most: the biggest gain in power (as a share of the hero's power, so a low-level hero
   // is not passed over) if it replaced what that hero wears in that slot; heroes in a team first, then the rest
@@ -5345,6 +5604,7 @@
     endBattleView(); B = null;
     if (!cfg) { render(); return; }
     if (go.startsWith('open-')) setTab(go.slice(5));
+    else if (cfg.type === 'siege') { if (go === 'again') startSiege(cfg.from); else if (go === 'prep') { useTeam('siege'); setTab('team'); } else if (go === 'champs') setTab('team'); else setTab('siege'); }
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'auto10') { if (cfg.type === 'stage') startCampaign(cfg.i, { n: 10, k: 1, won: 0 }); else startDungeon(cfg.id, cfg.n, { n: 10, k: 1, won: 0 }); }

@@ -971,6 +971,49 @@ const K = (function () {
     if (f === TOWER.floors) o.fs.mythic = 1;
     return o;
   }
+  // ---------- The Siege: an endless defence. The team holds its ground while waves of enemies walk at it, more and
+  // stronger every wave, until it falls; every kill pays hero XP and Sigils. 500 waves; every 25th is a boss wave and
+  // a checkpoint (a run may start just after a checkpoint SIEGE.back waves below the best one reached). Between waves
+  // the survivors recover SIEGE.rest of their HP and keep their cooldowns and effects, so the run wears the team down.
+  // Enemies come from the chapter pools (the pool moves on every 50 waves; elites more often higher up); a wave of
+  // many foes makes each one a little weaker (SIEGE.crowd), so the threat grows smoothly with the count.
+  // curve: [wave, enemy level, strength] points, straight lines in between; count: [from wave, enemies]
+  const SIEGE = {
+    waves: 500, cp: 25, back: 50, rest: 0.1, tickets: 5, ticketMin: 120, boss: 0.45, crowd: 0.55, kill: 1 / 30, killXp: 1 / 20,
+    curve: [[1, 1, 0.75], [50, 22, 1.7], [100, 40, 3.3], [200, 62, 6], [300, 78, 8.6], [500, 95, 14]],
+    count: [[1, 1], [11, 2], [26, 3], [51, 4], [81, 5], [111, 6], [141, 7], [171, 8], [201, 9], [231, 10]],
+  };
+  function siegeWave(n) {
+    const c = SIEGE.curve, i = Math.max(1, c.findIndex(p => p[0] >= n)), [w0, l0, s0] = c[i - 1], [w1, l1, s1] = c[i], k = (n - w0) / (w1 - w0);
+    let cnt = 1; for (const [w, m] of SIEGE.count) if (n >= w) cnt = m;
+    return { lvl: Math.round(l0 + (l1 - l0) * k), str: s0 + (s1 - s0) * k, count: cnt, boss: n % SIEGE.cp === 0, t: (n - 1) / (SIEGE.waves - 1) };
+  }
+  // the enemies of wave n: the same every time (picked with a hash of the wave); a boss wave leads with a Boss Hall boss
+  function siegeFoes(n) {
+    const F = siegeWave(n), ch = CHAPTERS[Math.floor((n - 1) / 50) % CHAPTERS.length], out = [];
+    const h = j => { let x = (n * 104729 + j * 1299709 + 7919) | 0; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; };
+    for (let j = 0; j < F.count; j++) { const pool = h(j * 2) < 0.15 + 0.4 * F.t ? ch.pool[1] : ch.pool[0]; out.push(pool[Math.floor(h(j * 2 + 1) * pool.length)]); }
+    if (F.boss) { out.splice(5); out[0] = BOSS_ORDER[(n / SIEGE.cp - 1) % BOSS_ORDER.length]; }
+    return out;
+  }
+  function siegeUnits(n) {
+    const F = siegeWave(n), foes = siegeFoes(n), st = { chapter: n >= 60 ? TUNE.hitFrom : 0 }, crowd = Math.pow(3 / Math.max(3, foes.length), SIEGE.crowd);
+    // every foe enrages like a Boss Hall boss (u.hall), so a wave that neither side can win still ends
+    return foes.map(id => { const u = attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * crowd * (BOSSES[id] ? SIEGE.boss : 1)), st); u.hall = true; return u; });
+  }
+  // what one kill pays every hero (XP) and the player (Sigils); a boss counts as five
+  const siegeKill = (n, boss) => { const l = siegeWave(n).lvl, m = boss ? 5 : 1; return { xp: Math.round(winXp(l) * SIEGE.killXp * m), silver: Math.round(winSilver(l) * SIEGE.kill * m) }; };
+  // the first time a checkpoint wave (every 25th) is cleared: Sigils, shards, stones and now and then an elixir
+  function siegeReward(n) {
+    const o = { silver: winSilver(siegeWave(n).lvl) * 2, fs: { fate: 1 }, st: { lesser: 3 }, elx: 0 };
+    if (n % 50 === 0) { o.fs.greater = 1; o.st.greater = 1; }
+    if (n % 100 === 0) { o.fs.ancient = 1; o.elx = 1; }
+    if (n % 250 === 0) o.st.ancient = 1;
+    if (n === SIEGE.waves) { o.fs.mythic = 1; o.st.ancient = 2; }
+    return o;
+  }
+  // between waves: the survivors recover a little; cooldowns, buffs and debuffs carry on
+  function siegeRest(heroes) { for (const u of heroes) if (u.alive) u.hp = Math.min(u.maxHp, Math.round(u.hp + u.maxHp * SIEGE.rest)); }
   // between phases: survivors recover 15% HP, cooldowns reset, buffs and debuffs end; the fallen stay down
   function phaseRest(heroes) {
     for (const u of heroes) {
@@ -2238,7 +2281,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
