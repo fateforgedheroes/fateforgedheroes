@@ -494,7 +494,13 @@ const SPR = (function () {
   }
   const bgs = {};
   // a number is one of the drawn areas; 'c3' is chapter background 3 (CHAPTER_BG)
-  function bg(area) { if (typeof area === 'string' && area[0] === 'c' && chBg[+area.slice(1)]) return chBg[+area.slice(1)]; if (typeof area === 'string') area = 0; return typeof SPR_BG !== 'undefined' ? SPR_BG.bg(area) : (bgs[area] || (bgs[area] = up2(background(area)))); }
+  // a chapter's sharp painted background (backgrounds/ch<n>.webp, 16:9, about 1536 x 864): loaded before a battle in that
+  // chapter (bgHi) and asked for as 'h<chapter>'; app.js draws it smoothly at the screen's resolution
+  const HIBG = {}, hiBgWant = {};
+  function bgHi(key, src) {
+    return (hiBgWant[key] = hiBgWant[key] || new Promise(res => { const i = new Image(); i.onload = () => { HIBG[key] = i; res(i); }; i.onerror = () => res(null); i.src = src; }));
+  }
+  function bg(area) { if (typeof area === 'string' && area[0] === 'h' && HIBG[area]) return HIBG[area]; if (typeof area === 'string' && area[0] === 'c' && chBg[+area.slice(1)]) return chBg[+area.slice(1)]; if (typeof area === 'string') area = 0; return typeof SPR_BG !== 'undefined' ? SPR_BG.bg(area) : (bgs[area] || (bgs[area] = up2(background(area)))); }
 
   function icon(W, H, fn) { const c = canvas(W, H), g = c.getContext('2d'); fn((x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); }); return c; }
   const ICONS = {
@@ -506,5 +512,5 @@ const SPR = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, preload, heal, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || null, hires, loadHi, BG_W: 480, BG_H: 270, LOOK };
+  return { frame, get, url, bg, iconUrl, preload, heal, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || null, hires, loadHi, bgHi, BG_W: 480, BG_H: 270, LOOK };
 })();

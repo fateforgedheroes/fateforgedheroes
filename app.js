@@ -23,7 +23,13 @@
   // the painted background (CHAPTER_BG index) of each campaign chapter: every stage of a chapter shares it; the moonlit
   // town of Chapter I returns for the last chapter
   const CHAPTER_BG_OF = [0, 6, 3, 2, 5, 8, 1, 7, 4, 0];
-  const chapterBg = c => 'c' + CHAPTER_BG_OF[Math.max(0, Math.min(CHAPTER_BG_OF.length - 1, c))];
+  // the new painted backgrounds, one per chapter as they come (backgrounds/ch<n>.webp, 16:9): sharp and drawn smoothly in a
+  // battle ('h<chapter>', loaded before the battle starts), also the chapter's art on the campaign and Boss Hall screens;
+  // a chapter without one keeps its CHAPTER_BG
+  const CHAPTER_HI = { 0: 'backgrounds/ch1.webp', 1: 'backgrounds/ch2.webp', 2: 'backgrounds/ch3.webp', 3: 'backgrounds/ch4.webp', 4: 'backgrounds/ch5.webp', 5: 'backgrounds/ch6.webp', 6: 'backgrounds/ch7.webp', 7: 'backgrounds/ch8.webp', 8: 'backgrounds/ch9.webp', 9: 'backgrounds/ch10.webp' };
+  const chapterBg = c => { c = Math.max(0, Math.min(CHAPTER_BG_OF.length - 1, c)); return CHAPTER_HI[c] ? 'h' + c : 'c' + CHAPTER_BG_OF[c]; };
+  const chapterArt = c => CHAPTER_HI[c] || (typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[c]] : '');
+  const preBg = c => (CHAPTER_HI[c] ? SPR.bgHi('h' + c, CHAPTER_HI[c]) : null); // starts loading it (the team screen before Fight)
 
   // the painted page background behind every screen (shell.html body::before)
   if (typeof PAGE_BG !== 'undefined') document.documentElement.style.setProperty('--page-bg', `url(${PAGE_BG})`);
@@ -819,7 +825,7 @@
       const open = c <= maxChap, done = K.STAGES.filter((s, i) => s.chapter === c && i <= cleared).length, cur = open && c === maxChap && done < 7;
       const SS = K.SETS[ch.set], [need, bonus] = SS.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length;
       const boss = (K.STAGES.find(s => s.chapter === c && s.n === 6) || {}).boss, chest = done === 7 && !chrClaimed(c, d);
-      return `<button type="button" class="cl-ch ${open ? '' : 'locked'} ${cur ? 'cur' : ''} ${done === 7 ? 'done' : ''}" data-act="chopen" data-n="${c}" style="--art:url(${CHAPTER_BG[CHAPTER_BG_OF[c]]})" ${open ? '' : 'disabled'}>
+      return `<button type="button" class="cl-ch ${open ? '' : 'locked'} ${cur ? 'cur' : ''} ${done === 7 ? 'done' : ''}" data-act="chopen" data-n="${c}" style="--art:url(${chapterArt(c)})" ${open ? '' : 'disabled'}>
         <span class="cl-num">${ROMAN[c]}</span>
         <span class="cl-t"><small>Chapter ${ROMAN[c]}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${esc(ch.name)}</b><span class="cl-desc">${esc(ch.desc)}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${[0, 1, 2, 3, 4, 5, 6].map(k => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</span>${done}/7${chest ? ' · <b class="cl-chest">Reward ready</b>' : ''}` : `${LOCK_SVG} Clear Chapter ${ROMAN[c - 1]} first`}${boss ? `<span class="cl-boss">Boss: ${esc(boss)}</span>` : ''}</span></span>
@@ -839,7 +845,7 @@
     const sel = idx.includes(campSel) ? campSel : idx.includes(next) ? next : idx.filter(i => i <= cleared).pop() ?? idx[0];
     const st = K.STAGES[sel], stateOf = i => i <= cleared ? 'cleared' : i === next ? 'next' : 'locked', state = stateOf(sel);
     const diffOk = diffOpen;
-    const art = typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[chap]] : '';
+    const art = chapterArt(chap);
     const chapDone = cleared >= chap * 7 + 6, cdone = idx.filter(i => i <= cleared).length;
     // drop icons from the gear sheet (GEAR_TILE), one per rarity that can drop on this difficulty
     const dropIc = s => D.rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[s.slot || 'random'][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${esc(dropName(s).toLowerCase())}">`).join('');
@@ -923,7 +929,7 @@
   // set and the team for its essence; on the right a row per level (difficulty, enemy level, drops, Auto ×10, Fight);
   // tapping a row shows its phases. Fight opens the team screen first (openBossPrep, like the Campaign's prepHtml).
   const BV = { view: 'bosses', open: -1 };
-  const bhArt = ci => typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length))]] : '';
+  const bhArt = ci => chapterArt(Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length)));
   const bhLockTxt = ci => ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign first` : `Defeat ${K.BOSSES[K.BOSS_ORDER[ci - 1]].name} on level 1 first`;
   const bhDrops = n => K.bossLoot(n).rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE.random[Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear, a random slot">`).join('');
   function bossListHtml() {
@@ -4056,7 +4062,79 @@
     c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const cg = c.getContext('2d'); cg.drawImage(img, 0, 0);
     cg.globalCompositeOperation = 'source-atop'; cg.fillStyle = kind === 'white' ? '#fff6e0' : 'rgba(8,6,12,0.55)'; cg.fillRect(0, 0, c.width, c.height); TINT[kind].set(img, c); return c;
   }
+  // ----- standing in the scene: shadows on the floor, and the glow of a burning, bleeding or poisoned unit -----
+  // a blurred one-colour copy of a picture (its silhouette) with a margin p around it, made once per picture and colour
+  let SIL = new WeakMap();
+  function silhouette(img, col, blur) {
+    let m = SIL.get(img); if (!m) SIL.set(img, (m = {}));
+    const key = col + ':' + blur; if (m[key]) return m[key];
+    const p = Math.ceil(blur * 1.6), c = document.createElement('canvas'); c.width = img.width + 2 * p; c.height = img.height + 2 * p;
+    const cg = c.getContext('2d'); cg.shadowColor = col; cg.shadowBlur = blur; cg.shadowOffsetX = c.width + 20; cg.drawImage(img, p - c.width - 20, p);
+    return (m[key] = { c, p });
+  }
+  // a picture filled with one colour (sharp): the status tint laid over a figure
+  let TINTC = new WeakMap();
+  function tintCol(img, col) {
+    let m = TINTC.get(img); if (!m) TINTC.set(img, (m = {})); if (m[col]) return m[col];
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; const cg = c.getContext('2d'); cg.drawImage(img, 0, 0);
+    cg.globalCompositeOperation = 'source-atop'; cg.fillStyle = col; cg.fillRect(0, 0, c.width, c.height); return (m[col] = c);
+  }
+  // the status a unit shows (burning before bleeding before poisoned): a pulsing glow around its silhouette in that colour,
+  // a tint over it and a few particles (embers, drops, bubbles); bleeding also leaves a pool of blood under it
+  const STATUS_FX = {
+    burn: { glow: 'rgb(255,80,20)', tint: 'rgb(255,96,32)', ta: 0.17, parts: ['#ff8a2a', '#ffd060', '#ff5a1e'] },
+    bleed: { glow: 'rgb(110,0,12)', tint: 'rgb(96,0,10)', ta: 0.22, parts: ['#a0101c', '#6a0008'] },
+    poison: { glow: 'rgb(96,224,72)', tint: 'rgb(96,214,64)', ta: 0.15, parts: ['#a8e060', '#6a9a3a', '#c8ff90'] },
+  };
+  const statusFx = u => (u.alive && ['burn', 'bleed', 'poison'].find(k => u.effects.some(e => e.k === k))) || null;
+  // draws a picture at (x, y, w, h) in the current transform, with the status glow behind it and its tint over it
+  function drawFig(img, x, y, w, h, st, now) {
+    if (!st) { g.drawImage(img, x, y, w, h); return; }
+    const F = STATUS_FX[st], s = w / img.width, a = g.globalAlpha, pulse = 0.68 + 0.32 * Math.sin(now / 230);
+    const S = silhouette(img, F.glow, Math.max(4, Math.round(img.height / 24)));
+    g.globalAlpha = a * pulse; for (let n = st === 'bleed' ? 2 : 1; n > 0; n--) g.drawImage(S.c, x - S.p * s, y - S.p * s, S.c.width * s, S.c.height * s);
+    g.globalAlpha = a; g.drawImage(img, x, y, w, h);
+    g.globalAlpha = a * F.ta * (0.75 + 0.25 * pulse); g.drawImage(tintCol(img, F.tint), x, y, w, h); g.globalAlpha = a;
+  }
+  // a figure's shadow cast over the floor: its silhouette flattened and flipped down from the feet (fx, fy), leaning away
+  // from the middle of the field (the light comes from the painted background behind it); (x, y, w, h) is the picture's
+  // place around the feet, mir -1 for a picture mirrored in drawing
+  function castShadow(img, x, y, w, h, fx, fy, mir, a) {
+    const S = silhouette(img, 'rgb(0,0,0)', Math.max(3, Math.round(img.height / 34))), s = w / img.width, lean = fx < 240 ? 0.34 : -0.34;
+    g.save(); g.globalAlpha = a; g.translate(fx, fy); g.transform(1, 0, lean, -0.3, 0, 0); g.scale(mir, 1);
+    g.drawImage(S.c, x - S.p * s, y - S.p * s, S.c.width * s, S.c.height * s); g.restore();
+  }
+  // the soft dark patch right under the feet, and a pool of blood under a bleeding unit
+  function softShadow(x, y, rx, ry, a) {
+    g.save(); g.translate(x, y); g.scale(1, ry / rx); const gr = g.createRadialGradient(0, 0, 0, 0, 0, rx);
+    gr.addColorStop(0, 'rgba(0,0,0,' + a + ')'); gr.addColorStop(0.55, 'rgba(0,0,0,' + a * 0.55 + ')'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+  function bloodPool(x, y, cw, now, ph) {
+    const r = cw * 0.46 * (0.93 + 0.07 * Math.sin(now / 700 + ph * 3));
+    g.save(); g.translate(x + 3, y + 1); g.scale(1, 0.26); const gr = g.createRadialGradient(0, 0, 0, 0, 0, r);
+    gr.addColorStop(0, 'rgba(118,0,10,.9)'); gr.addColorStop(0.62, 'rgba(84,0,8,.78)'); gr.addColorStop(0.85, 'rgba(50,0,4,.35)'); gr.addColorStop(1, 'rgba(30,0,0,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,140,140,.22)'; g.beginPath(); g.ellipse(-r * 0.25, -r * 0.18, r * 0.28, r * 0.1, 0, 0, Math.PI * 2); g.fill(); g.restore();
+  }
+  // now and then a particle of the unit's status: embers rising, bubbles rising, drops of blood falling
+  function statusParts(u, st) {
+    if (!st || calm() || Math.random() > 0.08) return;
+    const rs = u._rs, m = rs.m, P = STATUS_FX[st].parts, x = rs.x + rs.ox + (Math.random() - 0.5) * m.cw * 0.6;
+    if (st === 'bleed') part(x, rs.y - m.top * (0.3 + Math.random() * 0.3), (Math.random() - 0.5) * 0.15, 0.2, P[Math.random() * P.length | 0], 26, 1, 0.08);
+    else rise(x, rs.y - m.top * (0.2 + Math.random() * 0.5), P, 1, 6);
+  }
   let MCV = new WeakMap();
+  // a sharp painted background, scaled once to the battle canvas's resolution (high quality), so a frame draws it 1:1
+  let BGPRE = new WeakMap();
+  // a soft dark band over the top of a painted background: the title, the turn order and the corners stay readable on a bright sky
+  let BG_SHADE = null;
+  const topShade = () => { const s = g.createLinearGradient(0, 0, 0, 70); s.addColorStop(0, "rgba(8,6,12,.55)"); s.addColorStop(1, "rgba(8,6,12,0)"); return s; };
+  function bgPre(img) {
+    const e = BGPRE.get(img); if (e && e.rs === RS) return e.c;
+    const c = document.createElement('canvas'); c.width = 480 * RS; c.height = 270 * RS;
+    const cg = c.getContext('2d'); cg.imageSmoothingQuality = 'high'; cg.drawImage(img, 0, 0, c.width, c.height); BGPRE.set(img, { rs: RS, c }); return c;
+  }
   function mangaPre(img, ak, kx, ky) {
     const e = MCV.get(img); if (e && e.rs === RS) return e.c;
     const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width / ak * kx * RS)); c.height = Math.max(1, Math.round(img.height / ak * ky * RS));
@@ -4067,7 +4145,7 @@
   // in case the phone hands the canvases back only after the page shows
   function healArt() {
     if (document.hidden) return;
-    SPR.heal(); MCV = new WeakMap(); TINT.white = new WeakMap(); TINT.dark = new WeakMap();
+    SPR.heal(); MCV = new WeakMap(); BGPRE = new WeakMap(); SIL = new WeakMap(); TINTC = new WeakMap(); TINT.white = new WeakMap(); TINT.dark = new WeakMap();
     if (!B && S && !noHero() && document.querySelector('#screen canvas')) render();
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { healArt(); setTimeout(healArt, 1200); } });
@@ -4088,7 +4166,7 @@
       g.save(); g.globalAlpha = al; g.translate(o.px, o.py); if (o.rot) g.rotate(o.rot * dir); g.scale(o.sx * mir, o.sy);
       g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
       if (gl > 0.02) { g.shadowColor = ess; g.shadowBlur = gl * 18 * RS; g.drawImage(pre, x0, y0, W, H); if (gl > 0.4) g.drawImage(pre, x0, y0, W, H); g.shadowBlur = 0; }
-      else g.drawImage(pre, x0, y0, W, H);
+      else drawFig(pre, x0, y0, W, H, o.st, now);
       g.restore();
     };
     // a character with real poses (pose sheet) shows the pose for what it does; its pictures face right and are mirrored here
@@ -4104,7 +4182,8 @@
       }
     }
     rs.trail.forEach((p, i) => fig(base, a * 0.3 * (i + 1) / rs.trail.length, p, 0));
-    fig(base, a, cur, glow);
+    if (u.alive) { const pre = mangaPre(base, ak, kx, ky); castShadow(pre, -m.w / 2, -m.fy, pre.width / RS, pre.height / RS, cur.px, rs.y + rs.oy + shy, mir, a * 0.7); }
+    fig(base, a, Object.assign({}, cur, { st: statusFx(u) }), glow);
     if (P.dim > 0) fig(PZ ? tint(base, 'dark') : SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim, cur, 0);
     if (rs.flash > 0.02 && u.alive) { fig(PZ ? tint(base, 'white') : SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash), cur, 0); rs.flash *= FADE; }
     // the slash of a melee strike: a crescent sweeping down in front of the figure, white in the middle, the essence colour around
@@ -4132,7 +4211,7 @@
     FADE = Math.pow(0.8, Math.min(6, Math.max(0.5, (now - (R.lastNow || now - 16.7)) / 16.7))); R.lastNow = now;
     g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0); g.imageSmoothingEnabled = false; // set every frame: a context the phone restored starts from defaults
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
-    g.drawImage(SPR.bg(R.bg || R.area), sh, shy);
+    { const bgc = SPR.bg(R.bg || R.area); if (bgc.width > 480) { g.imageSmoothingEnabled = true; g.drawImage(bgPre(bgc), sh, shy, 480, 270); g.imageSmoothingEnabled = false; g.fillStyle = BG_SHADE || (BG_SHADE = topShade()); g.fillRect(0, 0, 480, 70); } else g.drawImage(bgc, sh, shy); }
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
     g.fillStyle = ashCol;
     for (const a of R.ash) { a.x += a.vx; a.y += R.area === 4 ? -a.vy : a.vy; if (a.y > H) a.y = -2; if (a.y < -2) a.y = H; if (a.x < 0) a.x = W; g.fillRect(Math.round(a.x), Math.round(a.y), 1, 1); }
@@ -4141,7 +4220,8 @@
     for (const u of sorted) {
       const rs = u._rs, rx = Math.round(rs.m.cw / 2.6);
       if (!u.alive && !R.hl.has(u)) continue;
-      pxEllipse(Math.round(rs.x + rs.ox) + sh, rs.y, rx, 3, 'rgba(0,0,0,.42)');
+      if (u.alive && u.effects.some(e => e.k === 'bleed')) bloodPool(rs.x + rs.ox + sh, rs.y, rs.m.cw, now, rs.phase);
+      softShadow(rs.x + rs.ox + sh, rs.y + 0.5, rx * 1.45, 6.5, 0.85);
       if (R.hl.has(u)) { g.globalAlpha = pulse; pxEllipse(Math.round(rs.x + rs.ox) + sh, rs.y, rx + 4, 4, R.hlKind === 'good' ? '#7cc35a' : '#d9b45a', true); g.globalAlpha = 1; }
     }
     for (const u of sorted) {
@@ -4157,7 +4237,12 @@
       if (SH) {
         // an animated hero (sheets.js): this moment's frame of its move, feet on the spot, mirrored on the enemy side
         const img = sheetFrame(u, SH, now), sx = rs.x + rs.ox + (u.alive ? P.dx * dir : 0) + sh, sy = rs.y + rs.oy - rs.jump + (u.alive ? P.dy : 0) + shy;
-        if (img) { g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high'; const f = fitOf(u.id); g.drawImage(img, -SH.w * f / 2, (-SH.h + 1 / SH.k) * f, SH.w * f, SH.h * f); g.restore(); g.imageSmoothingEnabled = false; }
+        if (img) {
+          const f = fitOf(u.id), bx = -SH.w * f / 2, by = (-SH.h + 1 / SH.k) * f, bw = SH.w * f, bh = SH.h * f;
+          g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+          if (u.alive) castShadow(img, bx, by, bw, bh, sx, rs.y + rs.oy + shy, flip ? -1 : 1, a * 0.7);
+          g.globalAlpha = a; g.save(); g.translate(sx, sy); if (flip) g.scale(-1, 1); drawFig(img, bx, by, bw, bh, statusFx(u), now); g.restore(); g.imageSmoothingEnabled = false;
+        }
         if (rs.flash > 0.02) rs.flash *= FADE;
       } else if (SPR.manga(u.id)) drawManga(u, P, now, a, flip, dir, fr, sh, shy);
       else {
@@ -4165,6 +4250,7 @@
         if (P.dim > 0) draw(SPR.frame(u.id, 'dim', flip ? 'flip' : ''), a * P.dim);
         if (rs.flash > 0.02 && u.alive) { draw(SPR.frame(u.id, fr, flip ? 'whiteflip' : 'white'), Math.min(1, rs.flash)); rs.flash *= FADE; }
       }
+      statusParts(u, statusFx(u));
       if (rs.glow > 0.02) { g.globalAlpha = rs.glow * 0.8; pxEllipse(Math.round(rs.x + rs.ox) + sh, Math.round(rs.y - m.top / 2), Math.round(m.cw / 2) + 4, Math.round(m.top / 2) + 3, AFF_COL[u.aff], true); }
       g.globalAlpha = 1;
       if (R.active === u && u.alive && !rs.walking) {
@@ -4548,8 +4634,8 @@
   // stage edits the Campaign's team (S.modeTeam.campaign), a boss level the team for the boss's essence (S.bossTeam,
   // else the Boss Hall team). A new player's first battle skips it. PREP = { stage, ph, boss, n }
   const PREP = { stage: 0, ph: 0, boss: null, n: 1, tower: null };
-  function openPrep(i) { Object.assign(PREP, { stage: i, ph: 0, boss: null, tower: null }); useTeam('campaign'); setTab('prep'); window.scrollTo({ top: 0 }); }
-  function openBossPrep(id, n) { Object.assign(PREP, { boss: id, n, ph: 0, tower: null }); S.bhCur = id; useBossTeam(K.BOSSES[id].aff); setTab('prep'); window.scrollTo({ top: 0 }); }
+  function openPrep(i) { Object.assign(PREP, { stage: i, ph: 0, boss: null, tower: null }); preBg(K.STAGES[i].chapter); useTeam('campaign'); setTab('prep'); window.scrollTo({ top: 0 }); }
+  function openBossPrep(id, n) { Object.assign(PREP, { boss: id, n, ph: 0, tower: null }); preBg(Math.floor(K.BOSS_ORDER.indexOf(id) * K.CHAPTERS.length / K.BOSS_ORDER.length)); S.bhCur = id; useBossTeam(K.BOSSES[id].aff); setTab('prep'); window.scrollTo({ top: 0 }); }
   function openTowerPrep(e) { Object.assign(PREP, { tower: e, boss: null, ph: 0 }); S.tw.cur = e; setTab('prep'); window.scrollTo({ top: 0 }); }
   function prepHtml() {
     const tower = PREP.tower && K.TOWERS.includes(PREP.tower) ? PREP.tower : null, boss = !tower && PREP.boss && K.BOSSES[PREP.boss] ? PREP.boss : null;
@@ -4672,7 +4758,10 @@
     B = { b, cfg, ph: 0, nPh, moves: [] }; paintVersion();
     // sharp battle art (sprites.js hires): wait a moment for this fight's characters; the later phases' enemies load meanwhile
     if (!arena) for (let p = 1; p < nPh; p++) for (const u of phaseUnits(cfg, p)) SPR.loadHi(u.id);
-    forgetArt(await SPR.hires([...heroes, ...enemies].map(u => u.id), 2500));
+    // and the chapter's sharp background ('h<chapter>'); one that has not arrived in time leaves the chapter's old one
+    const hiBg = /^h\d/.test(cfg.bg || '') ? preBg(+cfg.bg.slice(1)) : null;
+    const [arts, bgOk] = await Promise.all([SPR.hires([...heroes, ...enemies].map(u => u.id), 2500), hiBg && Promise.race([hiBg, new Promise(r => setTimeout(r, 2500))])]);
+    forgetArt(arts); if (hiBg && !bgOk) R.bg = 'c' + CHAPTER_BG_OF[+cfg.bg.slice(1)];
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);

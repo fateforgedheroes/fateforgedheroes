@@ -65,12 +65,13 @@ for (const f of ['privacy.html', 'favicon.png', 'email-logo.png', 'manifest.webm
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);
 }
-// Animated characters (sheets/<id>.js: every move) and the sharp battle art of the manga characters (hi/<id>.js: the
-// figure at k = 4 and its poses), loaded by the game when that character is in a battle
-for (const dirName of ['sheets', 'hi']) {
+// Animated characters (sheets/<id>.js: every move), the sharp battle art of the manga characters (hi/<id>.js: the
+// figure at k = 4 and its poses) and the painted chapter backgrounds (backgrounds/ch<n>.webp), loaded by the game when a
+// battle needs them
+for (const dirName of ['sheets', 'hi', 'backgrounds']) {
   const dir = DIRS.find(d => existsSync(new URL(d + dirName + '/', import.meta.url)));
   if (!dir) { console.warn(`Note: / not found, those characters use their still picture.`); continue; }
   mkdirSync(new URL(dirName + '/', out), { recursive: true });
-  for (const f of readdirSync(new URL(dir + dirName + '/', import.meta.url))) if (f.endsWith('.js')) copyFileSync(new URL(dir + dirName + '/' + f, import.meta.url), new URL(dirName + '/' + f, out));
+  for (const f of readdirSync(new URL(dir + dirName + '/', import.meta.url))) if (/\.(js|webp)$/.test(f)) copyFileSync(new URL(dir + dirName + '/' + f, import.meta.url), new URL(dirName + '/' + f, out));
 }
 console.log(`Built dist/index.html, build ${build} (${config.supabaseUrl ? 'online: ' + config.supabaseUrl : 'offline mode, no SUPABASE_URL set'})`);
