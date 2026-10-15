@@ -297,13 +297,36 @@ const SPR = (function () {
     for (const k of ['idle', 'atk1', 'atk2', 'block', 'skill', 'hurt', 'dead']) if (sh[k]) out[k] = await Promise.all(sh[k].map(loadImg)); // block and skill are optional
     if (out.idle && out.idle[0] && out.atk1 && out.atk2 && out.hurt && out.dead) SHEETS[id] = out;
   };
-  // characters drawn with real poses (a pose sheet: manga.js entry with poses: 1): their attack, skill, block, hurt and dead
-  // pictures are in poses/<id>.js and load the first time a battle asks for them (SPR.poses answers null until then)
-  const POSES = {}, poseWant = {};
-  window.FFH_POSES = async (id, p) => { const o = {}; for (const k of ['atk1', 'atk2', 'block', 'hurt', 'dead']) if (p[k]) o[k] = await loadImg(p[k]); POSES[id] = o; };
-  function loadPoses(id) {
-    if (typeof MANGA_ART === 'undefined' || !MANGA_ART[id] || !MANGA_ART[id].poses || poseWant[id]) return;
-    poseWant[id] = true; const s = document.createElement('script'); s.src = `poses/${id}.js`; s.async = true; document.head.appendChild(s);
+  // Sharp battle art: every manga character (manga.js, k = 2 for every screen) has hi/<id>.js with its figure at k = 4
+  // and, for a character with poses (poses: 1), its attack 1, attack 2, block, hurt and dead pictures on the same canvas.
+  // A battle asks for its characters before it starts (hires: loads them, waits up to a moment, then switches every
+  // loaded one over: its picture, ART_K and poses; the frames made from the old picture are dropped). A character
+  // switches only there, never in the middle of a fight, so its battle metrics stay right; one whose file is still on its
+  // way fights with its k = 2 picture and no poses, and is sharp from the next battle on.
+  const POSES = {}, HI = {}, hiWant = {};
+  window.FFH_HI = async (id, p) => { const o = { k: p.k, src: p.body, body: await loadImg(p.body) }; for (const k of ['atk1', 'atk2', 'block', 'hurt', 'dead']) if (p[k]) o[k] = await loadImg(p[k]); if (o.body) HI[id] = o; };
+  function loadHi(id) {
+    if (typeof MANGA_ART === 'undefined' || !MANGA_ART[id]) return Promise.resolve(null);
+    return (hiWant[id] = hiWant[id] || new Promise(res => {
+      const s = document.createElement('script'); s.src = `hi/${id}.js`; s.async = true;
+      const done = () => { const t = setInterval(() => { if (HI[id]) { clearInterval(t); res(HI[id]); } }, 50); setTimeout(() => { clearInterval(t); res(HI[id] || null); }, 15000); };
+      s.onload = done; s.onerror = () => res(null); document.head.appendChild(s);
+    }));
+  }
+  function useHi(id) {
+    const h = HI[id]; if (!h || ART_K[id] === h.k) return false;
+    const c = canvas(h.body.width, h.body.height), g = c.getContext('2d');
+    heroCv[id] = keep(c, () => { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, c.width, c.height); g.drawImage(h.body, 0, 0); });
+    ART_K[id] = h.k; ART[id].full = h.src;
+    if (MANGA_ART[id].poses) { const o = {}; for (const k of ['atk1', 'atk2', 'block', 'hurt', 'dead']) if (h[k]) o[k] = h[k]; POSES[id] = o; }
+    for (const k in cache) if (k.startsWith(id + ':')) delete cache[k];
+    return true;
+  }
+  // load the sharp art of these characters, wait at most ms, switch over what arrived; answers the ids that switched
+  async function hires(ids, ms) {
+    const want = [...new Set(ids)].filter(id => typeof MANGA_ART !== 'undefined' && MANGA_ART[id] && !(HI[id] && ART_K[id] === HI[id].k));
+    if (want.length) await Promise.race([Promise.all(want.map(loadHi)), new Promise(r => setTimeout(r, ms || 2500))]);
+    return want.filter(useHi);
   }
   function loadSheet(id) {
     if (typeof HERO_SHEET === 'undefined' || !HERO_SHEET[id]) return Promise.resolve(null);
@@ -483,5 +506,5 @@ const SPR = (function () {
   const iconUrls = {};
   function iconUrl(name, k) { const key = name + k; if (iconUrls[key]) return iconUrls[key]; const s = ICONS[name](), c = canvas(s.width * k, s.height * k), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(s, 0, 0, c.width, c.height); return (iconUrls[key] = c.toDataURL()); }
 
-  return { frame, get, url, bg, iconUrl, preload, heal, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || (loadPoses(id), null), BG_W: 480, BG_H: 270, LOOK };
+  return { frame, get, url, bg, iconUrl, preload, heal, isHero, sheet: id => SHEETS[id] || (loadSheet(id), null), loadSheet, k: SHEET_K, manga: id => !!ART_K[id], poses: id => POSES[id] || null, hires, loadHi, BG_W: 480, BG_H: 270, LOOK };
 })();

@@ -65,9 +65,9 @@ for (const f of ['privacy.html', 'favicon.png', 'email-logo.png', 'manifest.webm
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);
 }
-// Animated heroes (sheets/<id>.js: every move) and characters with pose pictures (poses/<id>.js), loaded by the game when
-// that character is in a battle
-for (const dirName of ['sheets', 'poses']) {
+// Animated characters (sheets/<id>.js: every move) and the sharp battle art of the manga characters (hi/<id>.js: the
+// figure at k = 4 and its poses), loaded by the game when that character is in a battle
+for (const dirName of ['sheets', 'hi']) {
   const dir = DIRS.find(d => existsSync(new URL(d + dirName + '/', import.meta.url)));
   if (!dir) { console.warn(`Note: / not found, those characters use their still picture.`); continue; }
   mkdirSync(new URL(dirName + '/', out), { recursive: true });

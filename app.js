@@ -3729,6 +3729,8 @@
   const stretch = id => { const [x, y] = baseStretch(id), f = fitOf(id); return [x * f, y * f]; };
   // sprite metrics: feet offset + content box, from the idle frame
   const metrics = {};
+  // a character whose sharp art (sprites.js hires) was just switched on is measured again
+  const forgetArt = ids => { for (const id of ids || []) { delete metrics[id]; delete boxes[id]; delete fits[id]; } };
   function info(id) {
     if (metrics[id]) return metrics[id];
     const s = bbox(id), { x0, x1, y0, y1 } = s;
@@ -4576,6 +4578,8 @@
       auto = clearedOn(d) >= i ? `<button type="button" class="btn ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>` : '';
     }
     const tids = tower ? twTeam(tower) : S.team, foes = ph[PREP.ph] || ph[0];
+    // the sharp battle art of this fight starts loading while the team is picked (sprites.js hires)
+    for (const id of [...tids, ...ph.flat()]) SPR.loadHi(id);
     const card = (id, cls, act) => `<button type="button" class="pp-c ${cls || ''} rar-${C[id].rar}" style="--ec:${AFF_COL[C[id].aff]};--rc:var(--r${C[id].rar})" ${act || ''} title="${esc(C[id].name)}">${por(id)}${essBadge(C[id].aff)}<span class="hx-lv">${S.roster[id].lvl}</span><span class="hx-st">${'★'.repeat(S.roster[id].stars)}</span></button>`;
     const slots = [0, 1, 2, 3].map(k => tids[k] ? card(tids[k], 'pp-slot', `data-act="${act}" data-id="${tids[k]}"`) : '<div class="pp-c pp-slot empty"><small>Empty</small></div>').join('');
     const foeCard = f => { const u = E[f]; return `<span class="pp-c foe ${K.BOSSES[f] ? 'boss' : ''}" style="--ec:${AFF_COL[u.aff]}" title="${esc(u.name)}">${por(f)}${essBadge(u.aff)}<span class="hx-lv">${lvl}</span></span>`; };
@@ -4618,12 +4622,13 @@
   const phaseUnits = (cfg, p) => cfg.type === 'tower' ? K.towerUnits(cfg.ess, cfg.floor, cfg.ids.length) : cfg.stage ? K.stageUnits(cfg.stage, cfg.lvl, p, cfg.diff) : K.bossUnits(cfg.id, cfg.n, p);
   // phase cleared: the survivors walk off to the right, then everyone walks in for the next phase
   async function nextPhase(heroes, enemies, p) {
-    const alive = heroes.filter(u => u.alive);
+    const alive = heroes.filter(u => u.alive), hi = SPR.hires([...heroes, ...enemies].map(u => u.id), 1800); // everyone is placed anew below
     await showBanner(`Phase ${p} cleared`, 'Onward!', '', 700);
     if (TUT.on && p === 1) await coach(`<b>Phase 1 cleared!</b> Two more to go. Your heroes walk on with the HP they have left and recover 15%. Skills that were recharging are ready again.`, 'Continue');
     alive.forEach(u => (u._rs.walking = true));
     await tween(1100, k => { const e = k * k; alive.forEach(u => { u._rs.ox = e * 420; }); updateOverlay(); });
     K.phaseRest(heroes);
+    forgetArt(await hi);
     setupRender(heroes, enemies);
     heroes.filter(u => !u.alive).forEach(u => (u._rs.gone = true));
     R.units.forEach(u => (u._rs.walking = true));
@@ -4650,7 +4655,7 @@
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
     // the canvas is drawn at the screen's own resolution (RS device pixels per game pixel): pixel-art backgrounds stay
     // blocky (smoothing off), animated heroes are drawn smoothly from their finer frames
-    RS = Math.max(1, Math.min(3, Math.ceil((cvs.getBoundingClientRect().width || VIEW.w * 2) * (window.devicePixelRatio || 1) / VIEW.w)));
+    RS = Math.max(1, Math.min(4, Math.ceil((cvs.getBoundingClientRect().width || VIEW.w * 2) * (window.devicePixelRatio || 1) / VIEW.w)));
     cvs.width = VIEW.w * RS; cvs.height = H * RS; g.imageSmoothingEnabled = false;
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
     speeds = speedsFor(cfg);
@@ -4665,6 +4670,9 @@
     b.auto = manualArena ? false : arena || !!cfg.rep || (S.auto && autoOk());
     if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
     B = { b, cfg, ph: 0, nPh, moves: [] }; paintVersion();
+    // sharp battle art (sprites.js hires): wait a moment for this fight's characters; the later phases' enemies load meanwhile
+    if (!arena) for (let p = 1; p < nPh; p++) for (const u of phaseUnits(cfg, p)) SPR.loadHi(u.id);
+    forgetArt(await SPR.hires([...heroes, ...enemies].map(u => u.id), 2500));
     setupRender(heroes, enemies);
     setAutoBtn(); setSpeedBtn();
     R.running = true; requestAnimationFrame(frame);
@@ -5346,6 +5354,6 @@
     else if (m7) { save(); toast(`New: player levels. Win battles to level up. The Fate Altar opens at level ${PLAYER_UNLOCK.altaar}, the Boss Hall after Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]}. Tap your avatar for your profile.`, false, 7000); }
   }
   window.claude?.hot?.snapshot?.(() => ({ S }));
-  const boot = data => SPR.preload().then(() => { start(data); if (S.hero) SPR.loadSheet(S.hero.id); }); // the own hero's moves load in the background
+  const boot = data => SPR.preload().then(() => { start(data); if (S.hero) SPR.loadSheet(S.hero.id); if (S && S.team) S.team.forEach(id => SPR.loadHi(id)); }); // the own hero's moves and the team's sharp art load in the background
   if (window.claude?.hot?.ready) window.claude.hot.ready(boot); else boot(window.claude?.hot?.data ?? {});
 })();
