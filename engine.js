@@ -979,7 +979,7 @@ const K = (function () {
   // many foes makes each one a little weaker (SIEGE.crowd), so the threat grows smoothly with the count.
   // curve: [wave, enemy level, strength] points, straight lines in between; count: [from wave, enemies]
   const SIEGE = {
-    waves: 500, cp: 25, back: 50, rest: 0.1, tickets: 5, ticketMin: 120, boss: 0.45, crowd: 0.55, kill: 1 / 30, killXp: 1 / 20,
+    waves: 500, cp: 25, back: 25, rest: 0.1, tickets: 5, ticketMin: 120, boss: 0.45, crowd: 0.55, kill: 1 / 30, killXp: 1 / 20,
     curve: [[1, 1, 0.75], [50, 22, 1.7], [100, 40, 3.3], [200, 62, 6], [300, 78, 8.6], [500, 95, 14]],
     count: [[1, 1], [11, 2], [26, 3], [51, 4], [81, 5], [111, 6], [141, 7], [171, 8], [201, 9], [231, 10]],
   };
