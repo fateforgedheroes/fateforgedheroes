@@ -966,7 +966,7 @@ const K = (function () {
     const F = towerFloor(f), o = { silver: Math.round(winSilver(F.lvl) * 0.6), xp: winXp(F.lvl), fs: {}, st: {} };
     if (F.boss) { o.fs.fate = 1; o.st.lesser = 2; }
     if (f % 30 === 0) { o.fs.greater = 1; o.st.greater = 1; }
-    if (f % 50 === 0) o.fs.ancient = 1;
+    if (f % 25 === 0) o.fs.ancient = 1;
     if (f % 100 === 0) o.st.ancient = 1;
     if (f === TOWER.floors) o.fs.mythic = 1;
     return o;
@@ -1006,8 +1006,8 @@ const K = (function () {
   // the first time a checkpoint wave (every 25th) is cleared: Sigils, shards, stones and now and then an elixir
   function siegeReward(n) {
     const o = { silver: winSilver(siegeWave(n).lvl) * 2, fs: { fate: 1 }, st: { lesser: 3 }, elx: 0 };
-    if (n % 50 === 0) { o.fs.greater = 1; o.st.greater = 1; }
-    if (n % 100 === 0) { o.fs.ancient = 1; o.elx = 1; }
+    if (n % 50 === 0) { o.fs.greater = 1; o.fs.ancient = 1; o.st.greater = 1; }
+    if (n % 100 === 0) { o.fs.ancient = 2; o.elx = 1; }
     if (n % 250 === 0) o.st.ancient = 1;
     if (n === SIEGE.waves) { o.fs.mythic = 1; o.st.ancient = 2; }
     return o;
@@ -1383,7 +1383,7 @@ const K = (function () {
   const FATE_SHARDS = [
     { id: 'fate', name: 'Fate Shard', drop: 0.15, rates: [0, 75, 25, 0, 0], desc: 'Normal summon: Uncommon, with a chance of Rare.' },
     { id: 'greater', name: 'Greater Fate Shard', drop: 0.03, rates: [0, 55, 40, 5, 0], desc: 'Better pool: Uncommon, a bigger chance of Rare and a small chance of Epic.' },
-    { id: 'ancient', name: 'Ancient Fate Shard', drop: 0.01, rates: [0, 0, 79, 20, 1], desc: 'Guaranteed Rare, with a chance of Epic and a 1% chance of Legendary.' },
+    { id: 'ancient', name: 'Ancient Fate Shard', drop: 0.02, rates: [0, 0, 79, 20, 1], desc: 'Guaranteed Rare, with a chance of Epic and a 1% chance of Legendary.' },
     { id: 'mythic', name: 'Mythic Fate Shard', drop: 0.0015, rates: [0, 0, 0, 95, 5], desc: 'Guaranteed Epic, with a small chance of Legendary.' },
     { id: 'legendary', name: 'Legendary Fate Shard', drop: 0.00025, rates: [0, 0, 0, 35, 65], desc: 'Guaranteed Epic or better, with a big chance of Legendary.' },
   ];
@@ -1392,7 +1392,8 @@ const K = (function () {
   function rollShards() { return FATE_SHARDS.filter(f => rnd() < f.drop).map(f => f.id); }
   // pity: after PITY_EPIC summons in a row without an Epic or better, the next one is at least Epic (st.pity counts).
   // Only shards in PITY_SHARDS (Ancient and up) count and can trigger it; Fate and Greater Fate Shards leave it alone.
-  const PITY_EPIC = 40;
+  // Legendary pity: after PITY_LEG of those summons without a Legendary, the next one is Legendary (st.lpity counts)
+  const PITY_EPIC = 40, PITY_LEG = 75;
   const PITY_SHARDS = ['ancient', 'mythic', 'legendary'];
   function summonOne(st, type) {
     const T = SHARD[type || 'fate'];
@@ -1400,6 +1401,8 @@ const K = (function () {
     for (let i = 4; i >= 0; i--) { if (!T.rates[i]) continue; acc += T.rates[i]; if (r < acc) { rar = i; break; } }
     if (acc < 100 && r >= acc) rar = T.rates.findIndex(x => x > 0);
     if (PITY_SHARDS.includes(T.id)) {
+      if (rar < 4 && (st.lpity || 0) + 1 >= PITY_LEG) rar = 4;
+      st.lpity = rar >= 4 ? 0 : (st.lpity || 0) + 1;
       if (rar < 3 && (st.pity || 0) + 1 >= PITY_EPIC) rar = 3;
       st.pity = rar >= 3 ? 0 : (st.pity || 0) + 1;
     }
@@ -2240,9 +2243,9 @@ const K = (function () {
   const ARENA_TIERS = [
     { name: 'Bronze', min: 0, silver: 2000, fs: {} },
     { name: 'Silver', min: 1100, silver: 4000, fs: { greater: 1 } },
-    { name: 'Gold', min: 1300, silver: 7000, fs: { greater: 2 }, st: { greater: 2 } },
-    { name: 'Platinum', min: 1500, silver: 10000, fs: { ancient: 1 }, st: { greater: 3 } },
-    { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 2 }, st: { ancient: 1 } },
+    { name: 'Gold', min: 1300, silver: 7000, fs: { greater: 2, ancient: 1 }, st: { greater: 2 } },
+    { name: 'Platinum', min: 1500, silver: 10000, fs: { ancient: 2 }, st: { greater: 3 } },
+    { name: 'Legend', min: 1700, silver: 15000, fs: { ancient: 3 }, st: { ancient: 1 } },
   ];
   const arenaTier = rating => ARENA_TIERS.filter(t => rating >= t.min).pop();
   // extra weekly reward for the top 5 (rank among everyone who fought that week), on top of the tier reward
@@ -2283,7 +2286,7 @@ const K = (function () {
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
-    PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_SHARDS,
+    PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_LEG, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,
   };
 })();

@@ -810,7 +810,8 @@
   // Chapter rewards: once per chapter and difficulty, when all seven of its stages are cleared there (S.chr[d] = claimed chapters)
   function chapterReward(c, d) {
     const r = { silver: 2000 * (c + 1) * (d + 1), gems: 5 * (d + 1), fs: d ? { greater: d >= 3 ? 2 : 1 } : { fate: 2 }, stones: 2 + Math.floor(c / 3) };
-    if (d >= 2 && (c === 4 || c === 9)) r.fs.ancient = 1;
+    // an Ancient Fate Shard in every chapter chest from Normal on, two in Chapters V and X from Hard
+    if (d >= 1) r.fs.ancient = d >= 2 && (c === 4 || c === 9) ? 2 : 1;
     return r;
   }
   const chrClaimed = (c, d) => ((S.chr || {})[d] || []).includes(c);
@@ -1020,7 +1021,8 @@
         <div class="altar-stage">${shardAnim('legendary').replace('class="fs-anim"', 'class="fs-anim big"')}
           <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${sigils(K.SHARD_PRICE)}</button></div>
           <span class="empty-note">Fate Shards drop from every victory in the campaign and the Boss Hall. First clears give a guaranteed shard.</span>
-          <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><small class="empty-note">Only Ancient, Mythic and Legendary Fate Shards count towards this.</small><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div></div>
+          <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><small class="empty-note">Only Ancient, Mythic and Legendary Fate Shards count towards this.</small><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div>
+            <span class="tag pity-leg">Legendary guaranteed in ${K.PITY_LEG - (S.lpity || 0)} ${K.PITY_LEG - (S.lpity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar leg"><i style="width:${Math.round((S.lpity || 0) / K.PITY_LEG * 100)}%"></i></div></div>
         </div>
         <div class="fs-grid">${cards}</div>
       </div>`;
@@ -2194,7 +2196,7 @@
   // a reward's stones as { lesser, greater, ancient }: the old field `stones` is Lesser, `st` holds the others
   const rewardStones = r => Object.assign({}, +r.stones > 0 ? { lesser: +r.stones } : {}, r.st || {});
   const stoneParts = r => Object.entries(rewardStones(r)).filter(([, n]) => n > 0);
-  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { silver: 5000 }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 }, gems: 30 }];
+  const LOGIN_REWARDS = [{ silver: 2000 }, { fs: { greater: 2 } }, { fs: { greater: 2 } }, { fs: { ancient: 1 } }, { silver: 10000 }, { stones: 5, st: { greater: 2 } }, { fs: { ancient: 1 }, gems: 30 }];
   const loginReward = n => LOGIN_REWARDS[n % 7];
   const loginDue = () => !noHero() && S.seen.home && S.seen.tour && (S.login ? S.login.last : -1) < today();
   let loginShown = false;
@@ -2257,7 +2259,7 @@
   const qOpen = t => (!t.u || unlocked(t.u)) && (!t.open || t.open()) && (!t.acc || signedIn());
   const qNeed = t => (t.u && !unlocked(t.u) ? `Opens after ${needTxt(t.u)}` : t.open && !t.open() ? `Opens after ${t.need}` : t.acc && !signedIn() ? 'Needs an account: sign in first' : '');
   const DAILY_CHESTS = [{ at: 30, r: { energy: 10, silver: 2000 } }, { at: 60, r: { energy: 20, fs: { fate: 1 } } }, { at: 100, r: { energy: 30, fs: { greater: 1 }, gems: 10 } }];
-  const WEEKLY_CHESTS = [{ at: 250, r: { energy: 40, fs: { greater: 2 }, gems: 15 } }, { at: 450, r: { energy: 60, fs: { greater: 3 }, gems: 25 } }, { at: 650, r: { energy: 80, fs: { ancient: 1 }, gems: 40 } }];
+  const WEEKLY_CHESTS = [{ at: 250, r: { energy: 40, fs: { greater: 2 }, gems: 15 } }, { at: 450, r: { energy: 60, fs: { greater: 3, ancient: 1 }, gems: 25 } }, { at: 650, r: { energy: 80, fs: { ancient: 2 }, gems: 40 } }];
   function qState() {
     const q = S.q || (S.q = {}), d = today(), w = weekNo();
     q.tot = q.tot || {}; q.m = q.m || {}; q.col = q.col || {}; q.a = q.a || {}; q.hs = q.hs || {}; q.be = q.be || {};
@@ -2592,7 +2594,7 @@
     { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar (you can hold up to twice your bar). Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
     { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
     { id: 'greater', group: 'Fate Shards', name: K.SHARD.greater.name, desc: 'Better odds on Rare and Epic heroes.', r: { fs: { greater: 1 } }, price: 90, limit: 3, per: 'day' },
-    { id: 'ancient', group: 'Fate Shards', name: K.SHARD.ancient.name, desc: 'Epic and Legendary heroes; counts for the Epic pity.', r: { fs: { ancient: 1 } }, price: 300, limit: 1, per: 'week' },
+    { id: 'ancient', group: 'Fate Shards', name: K.SHARD.ancient.name, desc: 'Epic and Legendary heroes; counts for the Epic pity.', r: { fs: { ancient: 1 } }, price: 300, limit: 3, per: 'week' },
     { id: 'sil10', group: 'Sigils', name: '10,000 Sigils', desc: 'For gear upgrades, ascending and Fate Shards.', r: { silver: 10000 }, price: 25, limit: 5, per: 'day' },
     { id: 'sil50', group: 'Sigils', name: '50,000 Sigils', desc: 'A big pouch: a little cheaper per Sigil.', r: { silver: 50000 }, price: 110, limit: 2, per: 'day' },
     { id: 'stl', group: 'Ascension Stones', name: '10 Lesser Ascension Stones', desc: 'Ascend heroes to 2-4★.', r: { stones: 10 }, price: 30, limit: 3, per: 'day' },
@@ -2753,7 +2755,7 @@
         row(`${ic('coin')} Sigils`, `The main currency: gear upgrades, ascending, Fate Shards (${K.SHARD_PRICE.toLocaleString('en-US')} each) and name changes.`),
         row(`${ic('stone')} Ascension Stones`, 'Needed to ascend heroes (extra stars), in three kinds by the star: Lesser (to 2-4★) drop everywhere; Greater (to 5★) from boss stages, Normal and harder, and Boss Hall level 3 on; Ancient (to 6★) only from Brutal and Nightmare boss stages, Boss Hall levels 9-10 and the weekly arena rewards.'),
         ...K.FATE_SHARDS.map(f => row(`${shardIc(f.id)} ${esc(f.name)}`, esc(f.desc))),
-        row('Pity', `After ${K.PITY_EPIC} summons without an Epic or better, the next one is at least Epic. Only Ancient, Mythic and Legendary Fate Shards count.`),
+        row('Pity', `After ${K.PITY_EPIC} summons without an Epic or better, the next one is at least Epic, and after ${K.PITY_LEG} summons without a Legendary, the next one is Legendary. Only Ancient, Mythic and Legendary Fate Shards count.`),
       ]),
       sec('modes', 'Game modes', [
         row('Campaign', `10 chapters of 7 stages. Each stage drops one gear slot; stage 7 has the chapter boss. Replay cleared stages to farm.`),
@@ -5354,6 +5356,7 @@
         stones = K.bossStones(cfg.n, first);
         if (first && cfg.n === 1) gotShards.push('fate');
         if (first && cfg.n === 5) gotShards.push('greater');
+        if (first && cfg.n === 7) gotShards.push('ancient');
         if (first && cfg.n === 10) gotShards.push('ancient');
         const drops = 1 + (cfg.n >= 5 ? 1 : 0) + (first ? 1 : 0);
         for (let i = 0; i < drops; i++) loot.push(K.genGear({ il: lvl, ...K.bossLoot(cfg.n), sets: K.bossSets(cfg.bi) }, S.nid++));
