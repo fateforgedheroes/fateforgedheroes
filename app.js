@@ -3910,7 +3910,7 @@
       // status badges (fxBadge): an icon per effect, turns left in the corner
       const chips = u.effects.map(e => e.k === 'enrage' ? fxBadge('enrage', null, `Enraged: +${Math.round(K.ENRAGE.atk * e.v * 100)}% Attack, growing every ${K.ENRAGE.every} of its turns`, '×' + e.v) : fxBadge(e.k, e.n));
       // a boss shows how many of its turns are left before it enrages
-      if (u.hall && u.alive && B && B.b && (u.isBoss || B.cfg.type !== 'siege') && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxi clock ${left <= 3 ? 'soon' : ''}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳<i>${left}</i></span>`); }
+      if (u.hall && u.alive && B && B.b && !u.effects.some(e => e.k === 'enrage')) { const left = B.b.enrageIn(u); chips.push(`<span class="fxi clock ${left <= 3 ? 'soon' : ''}" title="Enrages after ${left} more of its turns: its Attack then keeps rising">⏳<i>${left}</i></span>`); }
       if (u.stacks.smids) chips.unshift(fxBadge('atkUp', null, `Blood Frenzy: +${u.stacks.smids * 10}% Attack`, '×' + u.stacks.smids));
       if (u.stacks.charge) chips.unshift(fxBadge('broken', null, 'Static Charge', u.stacks.charge));
       if (u.isBoss) {
@@ -4506,7 +4506,7 @@
     before: animBefore,
     after: animAfter,
     pause: ms => sleep(ms),
-    round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r; },
+    round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r + (B && B.cfg.type === 'siege' ? (r < K.SIEGE.rageAt ? ` · rage at ${K.SIEGE.rageAt}` : ' · ENRAGED') : ''); },
     impact: (u, skill, t) => impactFx(u, skill, t),
     banner: async (u, skill) => {
       await bannerQ;
@@ -4552,7 +4552,7 @@
       updateOverlay();
     },
     phase: (t, n) => { SFX.banner(); R.shake = 5; queueBanner(`Phase ${n}`, t.name, 'big enemy', 900); updateOverlay(); },
-    enrage: (t, v) => { if (v === 1) { SFX.banner(); if (!calm()) R.shake = 6; queueBanner('Enraged!', `${t.name} took too long to fall: its Attack keeps rising`, 'big enemy', 1000); } updateOverlay(); },
+    enrage: (t, v) => { if (v === 1) { SFX.banner(); if (!calm()) R.shake = 6; queueBanner('Enraged!', B && B.cfg.type === 'siege' ? `The wave took too long: every enemy hits harder and harder` : `${t.name} took too long to fall: its Attack keeps rising`, 'big enemy', 1000); } updateOverlay(); },
     log,
     update: updateOverlay,
   };
@@ -5156,7 +5156,7 @@
       <section class="sv-box sg-tix"><h4>Siege tickets</h4><div class="sg-tks">${Array.from({ length: max }, (_, i) => `<i class="${i < t ? 'on' : ''}">${TICKET_SVG}</i>`).join('')}<b>${t} / ${max}</b></div><small class="sv-note">A run costs one ticket. One comes back every ${K.SIEGE.ticketMin / 60} hours, at most ${max}. ${nextIn}.</small></section>
       <section class="sv-box sv-team"><h4>Your team</h4><div class="cv-heroes">${ids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('') || '<p class="empty-note">No heroes picked yet.</p>'}</div>
         <div class="sv-pw"><span>Power <b>${teamPower(ids).toLocaleString('en-US')}</b></span><button class="btn small" data-act="editteam" data-mode="siege">Edit team</button></div></section>
-      <section class="sv-box"><h4>The rules</h4><small class="sv-note">Waves of enemies walk at your gate, more and stronger every wave, until your team falls. Between waves your heroes recover ${Math.round(K.SIEGE.rest * 100)}% HP; skills and effects carry on. Every kill pays XP and Sigils at once. Every ${K.SIEGE.cp}th wave is a boss wave and a checkpoint: its first clear pays shards and stones, and later runs may start ${K.SIEGE.back} waves below your best checkpoint.</small></section></aside>`;
+      <section class="sv-box"><h4>The rules</h4><small class="sv-note">Waves of enemies walk at your gate, more and stronger every wave, until your team falls. Between waves your heroes recover ${Math.round(K.SIEGE.rest * 100)}% HP; skills and effects carry on. A wave still standing at turn ${K.SIEGE.rageAt} enrages: its enemies hit harder every ${K.SIEGE.rageEvery} turns. Every kill pays XP and Sigils at once. Every ${K.SIEGE.cp}th wave is a boss wave and a checkpoint: its first clear pays shards and stones, and later runs may start ${K.SIEGE.back} waves below your best checkpoint.</small></section></aside>`;
     // the four furthest starts and the very first wave (the starts in between are rarely wanted)
     const shown = starts.slice().reverse().filter((w, i) => i < 4 || w === 1);
     const rows = shown.map((w, i) => {

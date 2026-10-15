@@ -979,7 +979,7 @@ const K = (function () {
   // many foes makes each one a little weaker (SIEGE.crowd), so the threat grows smoothly with the count.
   // curve: [wave, enemy level, strength] points, straight lines in between; count: [from wave, enemies]
   const SIEGE = {
-    waves: 500, cp: 25, back: 25, rest: 0.1, tickets: 5, ticketMin: 120, boss: 0.45, crowd: 0.55, kill: 1 / 30, killXp: 1 / 20,
+    waves: 500, cp: 25, back: 25, rest: 0.1, tickets: 5, ticketMin: 120, boss: 0.45, crowd: 0.55, atk: 2.5, rageAt: 90, rageEvery: 10, kill: 1 / 30, killXp: 1 / 20,
     curve: [[1, 1, 0.75], [50, 22, 1.7], [100, 40, 3.3], [200, 62, 6], [300, 78, 8.6], [500, 95, 14]],
     count: [[1, 1], [11, 2], [26, 3], [51, 4], [81, 5], [111, 6], [141, 7], [171, 8], [201, 9], [231, 10]],
   };
@@ -998,8 +998,8 @@ const K = (function () {
   }
   function siegeUnits(n) {
     const F = siegeWave(n), foes = siegeFoes(n), st = { chapter: n >= 60 ? TUNE.hitFrom : 0 }, crowd = Math.pow(3 / Math.max(3, foes.length), SIEGE.crowd);
-    // every foe enrages like a Boss Hall boss (u.hall), so a wave that neither side can win still ends
-    return foes.map(id => { const u = attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * crowd * (BOSSES[id] ? SIEGE.boss : 1)), st); u.hall = true; return u; });
+    // a wave that takes SIEGE.rageAt battle turns enrages as a whole (u.siege, Battle.waveRage), so a stalled wave still ends
+    return foes.map(id => { const u = attrition(toughen(enemyUnit(id, BOSSES[id] ? Math.max(1, F.lvl - 3) : F.lvl), F.str * crowd * (BOSSES[id] ? SIEGE.boss : 1)), st); u.atk = Math.round(u.atk * SIEGE.atk); u.siege = true; return u; });
   }
   // what one kill pays every hero (XP) and the player (Sigils); a boss counts as five
   const siegeKill = (n, boss) => { const l = siegeWave(n).lvl, m = boss ? 5 : 1; return { xp: Math.round(winXp(l) * SIEGE.killXp * m), silver: Math.round(winSilver(l) * SIEGE.kill * m) }; };
@@ -1496,6 +1496,8 @@ const K = (function () {
       // damage meter: per unit uid, damage dealt and healing done by source (skill or effect name), and damage taken
       this.meter = {};
       this.deaths = 0;
+      // the Siege: the whole wave enrages from battle turn SIEGE.rageAt (waveRage)
+      this.rageAt = enemies.some(u => u.siege) ? SIEGE.rageAt : 0;
       // a Boss Hall trait shows as a lasting badge on its boss
       for (const u of enemies) if (u.trait && !u.effects.some(e => e.k === u.trait)) u.effects.push({ k: u.trait, n: 999 });
     }
@@ -1576,6 +1578,7 @@ const K = (function () {
         u.tm -= 100; if (u.tm < 0) u.tm = 0;
         this.turns++;
         this.h.round(this.turns);
+        if (this.rageAt && this.turns >= this.rageAt) this.waveRage();
         await this.turn(u);
       }
       this.active = null;
@@ -1654,6 +1657,16 @@ const K = (function () {
       this.h.float(u, v === 1 ? 'ENRAGED!' : `Enrage ×${v}`, 'debuff');
       this.h.log(v === 1 ? `${u.name} is ENRAGED: its Attack keeps rising until it falls.` : `${u.name}'s rage grows (+${Math.round(ENRAGE.atk * v * 100)}% Attack).`, 'enemy');
       if (this.h.enrage) this.h.enrage(u, v);
+    }
+    // the Siege: from battle turn rageAt every enemy of the wave is enraged (+ENRAGE.atk Attack per stack), one more
+    // stack every SIEGE.rageEvery turns, until the wave falls
+    waveRage() {
+      const v = 1 + Math.floor((this.turns - this.rageAt) / SIEGE.rageEvery), list = this.living(this.enemies);
+      let up = false;
+      for (const u of list) { const e = u.effects.find(x => x.k === 'enrage'); if (e && e.v >= v) continue; if (e) e.v = v; else u.effects.push({ k: 'enrage', n: 999, v }); up = true; }
+      if (!up) return;
+      this.h.log(v === 1 ? 'The wave took too long: every enemy is ENRAGED and hits harder until it falls.' : `The wave's rage grows (+${Math.round(ENRAGE.atk * v * 100)}% Attack).`, 'enemy');
+      if (this.h.enrage) this.h.enrage(list[0], v);
     }
     // Blight Aura (see BLIGHT): the boss's foes lose u.blight of their max HP; shields absorb it, Defense does not
     async aura(u) {
@@ -1880,7 +1893,7 @@ const K = (function () {
       let atk = a.atk;
       if (this.has(a, 'atkUp')) atk *= 1.5;
       if (this.has(a, 'atkDown')) atk *= 0.5;
-      const rg = a.isBoss && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
+      const rg = (a.isBoss || a.siege) && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
       if (a.stacks.smids) atk *= 1 + 0.1 * a.stacks.smids;
       if (a.passive === 'bloodlust' && a.hp < a.maxHp * 0.5) atk *= 1.3;
       if (a.passive === 'soulharvest') atk *= 1 + 0.1 * Math.min(5, this.deaths);
