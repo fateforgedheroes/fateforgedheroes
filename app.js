@@ -30,6 +30,10 @@
   const chapterBg = c => { c = Math.max(0, Math.min(CHAPTER_BG_OF.length - 1, c)); return CHAPTER_HI[c] ? 'h' + c : 'c' + CHAPTER_BG_OF[c]; };
   const chapterArt = c => CHAPTER_HI[c] || (typeof CHAPTER_BG !== 'undefined' ? CHAPTER_BG[CHAPTER_BG_OF[c]] : '');
   const preBg = c => (CHAPTER_HI[c] ? SPR.bgHi('h' + c, CHAPTER_HI[c]) : null); // starts loading it (the team screen before Fight)
+  // the other battles fight on these backgrounds too: the Tower and the guild boss on the chapter of their essence
+  // (Ember IV, Verdant III, Frost V, Umbral VI, Storm VII, Radiant VIII, Aether and the Tower of Fate X), the arena on
+  // one of the ten (by its seed); the Boss Hall uses its boss's chapter and the Siege its own courtyard
+  const ESS_CH = { Ember: 3, Verdant: 2, Frost: 4, Umbral: 5, Storm: 6, Radiant: 7, Aether: 9, All: 9 };
 
   // the painted page background behind every screen (shell.html body::before)
   if (typeof PAGE_BG !== 'undefined') document.documentElement.style.setProperty('--page-bg', `url(${PAGE_BG})`);
@@ -1682,7 +1686,7 @@
     return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="ar-wrap lfit" data-t="${t}">${tabs}<div class="arena">${me}${def}</div>${opps}${boardHtml()}</div>`;
   }
   function startArena(f) {
-    runBattle({ type: 'arena', att: f.att, def: f.def, seed: f.seed, win: f.win, fight: f, area: f.seed % 5, title: `Arena · vs ${f.opponent.name}` });
+    runBattle({ type: 'arena', att: f.att, def: f.def, seed: f.seed, win: f.win, fight: f, area: f.seed % 5, bg: chapterBg(f.seed % K.CHAPTERS.length), title: `Arena · vs ${f.opponent.name}` });
   }
   function finishArena(cfg) {
     const f = cfg.fight, m = $('#modal'), tier = K.arenaTier(f.rating), was = K.arenaTier(f.before);
@@ -1887,7 +1891,7 @@
     if (r.error || !r.gboss) { toast(r.error || 'The fight could not start.', true); guildLoad(); return; }
     const f = r.gboss;
     track('gboss');
-    runBattle({ type: 'gboss', team: f.team, d: f.d, ess: f.ess, seed: f.seed, fight: f, area: AREA_OF[f.ess] ?? 1, title: `Guild boss · ${K.BOSSES[K.GBOSS.art[f.ess]].name}` });
+    runBattle({ type: 'gboss', team: f.team, d: f.d, ess: f.ess, seed: f.seed, fight: f, area: AREA_OF[f.ess] ?? 1, bg: chapterBg(ESS_CH[f.ess] ?? 9), title: `Guild boss · ${K.BOSSES[K.GBOSS.art[f.ess]].name}` });
   }
   // ================= GEAR VAULT =================
   // All gear in one place (tab 'vault', next to Heroes and Team), like the artifact screen in RAID: filter by slot,
@@ -4729,7 +4733,7 @@
   const PREP = { stage: 0, ph: 0, boss: null, n: 1, tower: null };
   function openPrep(i) { Object.assign(PREP, { stage: i, ph: 0, boss: null, tower: null }); preBg(K.STAGES[i].chapter); useTeam('campaign'); setTab('prep'); window.scrollTo({ top: 0 }); }
   function openBossPrep(id, n) { Object.assign(PREP, { boss: id, n, ph: 0, tower: null }); preBg(Math.floor(K.BOSS_ORDER.indexOf(id) * K.CHAPTERS.length / K.BOSS_ORDER.length)); S.bhCur = id; useBossTeam(K.BOSSES[id].aff); setTab('prep'); window.scrollTo({ top: 0 }); }
-  function openTowerPrep(e) { Object.assign(PREP, { tower: e, boss: null, ph: 0 }); S.tw.cur = e; setTab('prep'); window.scrollTo({ top: 0 }); }
+  function openTowerPrep(e) { Object.assign(PREP, { tower: e, boss: null, ph: 0 }); preBg(ESS_CH[e] ?? 9); S.tw.cur = e; setTab('prep'); window.scrollTo({ top: 0 }); }
   function prepHtml() {
     const tower = PREP.tower && K.TOWERS.includes(PREP.tower) ? PREP.tower : null, boss = !tower && PREP.boss && K.BOSSES[PREP.boss] ? PREP.boss : null;
     let ph, lvl, rars = [], tile, energy, back, title, sub, teamSel, auto = '', act = 'toggle', fits = () => true, drops = '', warn = '';
@@ -4957,7 +4961,7 @@
     const ids = twTeam(e);
     if (!ids.length) { toast(`Pick heroes for the ${twName(e)} first.`, true); render(); return; }
     if (f !== twProg(e) + 1 || f > K.TOWER.floors) { render(); return; }
-    runBattle({ type: 'tower', ess: e, floor: f, ids, nPh: 1, lvl: K.towerFloor(f).lvl, area: AREA_OF[e] ?? 1, title: `${twName(e)} · floor ${f}` });
+    runBattle({ type: 'tower', ess: e, floor: f, ids, nPh: 1, lvl: K.towerFloor(f).lvl, area: AREA_OF[e] ?? 1, bg: chapterBg(ESS_CH[e] ?? 9), title: `${twName(e)} · floor ${f}` });
   }
   function twRewards(rw, withXp) {
     return [sigils(rw.silver), ...(withXp ? [`${rw.xp.toLocaleString('en-US')} XP per hero`] : []), ...Object.entries(rw.fs).map(([t, n]) => `${shardIc(t)} ${n} ${esc(K.SHARD[t].name)}`), ...Object.entries(rw.st).map(([t, n]) => `${stoneIc(t)} ${n} ${stoneName(t, n)}`)];
@@ -4968,7 +4972,7 @@
   // right a row per floor around the next one (enemy level, its foes, the first-clear reward, Fight on the next
   // floor); tapping a row shows the foes and the reward. Fight opens the team screen first (openTowerPrep).
   const TV = { view: 'towers', open: 0 };
-  const twArt = e => CHAPTER_BG[ESS_BG[e === 'All' ? 'Aether' : e] || 0];
+  const twArt = e => chapterArt(ESS_CH[e] ?? 9); // the tower's scene: the chapter background it fights on
   const twCol = e => e === 'All' ? '#e3c06a' : AFF_COL[e];
   // a reward as small icon tiles (icon, amount, short label)
   const twTiles = (r, xp) => [[ic('coin'), r.silver.toLocaleString('en-US'), 'Sigils'], ...(xp ? [['<b class="tw-xp">XP</b>', r.xp.toLocaleString('en-US'), 'per hero']] : []),
