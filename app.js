@@ -5130,7 +5130,8 @@
       im.onerror = () => res(''); im.src = bossBig(id);
     }));
   }
-  const storyOpen = k => { const c = parseInt(k, 10), i = c * 7 + (k.endsWith('b') ? 6 : 0); return !!STORY[k] && (S.story[k] || i <= S.cleared + 1); };
+  // a scene can be read again once its stage was reached on any difficulty
+  const storyOpen = k => { const c = parseInt(k, 10), i = c * 7 + (k.endsWith('b') ? 6 : 0); return !!STORY[k] && (!!S.story[k] || K.DIFFS.some((x, d) => i <= clearedOn(d) + 1)); };
   // plays a scene; resolves when it is done or skipped. In a battle it lies over the field (the battle waits), elsewhere
   // over the chapter's art
   function playScene(k) {
@@ -5170,7 +5171,9 @@
     });
   }
   // the scene a campaign battle opens with (the chapter's start), or shows when its boss arrives
-  const storyDue = (cfg, part) => cfg.type === 'stage' && !cfg.diff && !cfg.rep && cfg.i > S.cleared && cfg.stage.n === (part === 's' ? 0 : 6) && STORY[cfg.stage.chapter + part] && !S.story[cfg.stage.chapter + part];
+  // a scene plays the first time a player gets there on any difficulty, and only if they never saw it (so players who
+  // finished Easy before the story existed meet it on Normal and up, and nobody sees a scene play twice)
+  const storyDue = (cfg, part) => cfg.type === 'stage' && !cfg.rep && cfg.i > clearedOn(cfg.diff) && cfg.stage.n === (part === 's' ? 0 : 6) && STORY[cfg.stage.chapter + part] && !S.story[cfg.stage.chapter + part];
 
   // ---------- The Siege (tab `siege`, engine K.SIEGE): an endless defence. The team holds its gate while waves of
   // enemies walk at it (more of them and stronger every wave) until it falls. Every kill pays hero XP and Sigils at
