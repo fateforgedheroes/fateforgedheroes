@@ -252,7 +252,7 @@
       const as = e.target.closest('[data-as]');
       if (as) { const t = accounts().find(x => x.uid === as.dataset.as); if (!t) return; stash(expired); unstash(t.uid); store.set(SESSION_KEY, t.session); location.reload(); return; }
       const a = e.target.closest('[data-auth]'); if (!a) return;
-      if (a.dataset.auth === 'google') location.href = URL0 + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(location.origin + location.pathname);
+      if (a.dataset.auth === 'google') (window.top || window).location.href = URL0 + '/auth/v1/authorize?provider=google&redirect_to=' + encodeURIComponent(location.origin + location.pathname);
       else if (a.dataset.auth === 'guest') { store.set(GUEST_KEY, true); closeOverlay(); paintAccount(); }
       else if (a.dataset.auth === 'back') cancelAdd();
       else if (a.dataset.auth === 'reset') {

@@ -51,6 +51,8 @@
   // Player level stops at PLAYER_MAX; there the player can prestige (S.p.prestige): back to level 1 with everything kept,
   // a new emblem (PRESTIGE_ART[n - 1] when the art exists, else a numbered badge) and PRESTIGE_REWARD. Unlocks and max
   // energy count a prestiged player as level PLAYER_MAX (effLvl), so a prestige never takes anything away.
+  // the game inside the desktop phone frame (desktop.html: an iframe of a phone's screen)
+  const IN_FRAME = (() => { try { return window.top !== window.self; } catch (e) { return true; } })();
   const PLAYER_MAX = 100, PRESTIGE_REWARD = { silver: 25000, fs: { mythic: 1 } };
   const effLvl = s => (s.p.prestige ? PLAYER_MAX : s.p.lvl);
   const romanN = n => { let s = ''; for (const [v, r] of [[1000, 'M'], [900, 'CM'], [500, 'D'], [400, 'CD'], [100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]) while (n >= v) { s += r; n -= v; } return s; };
@@ -5680,6 +5682,7 @@
   // out wrong in a desktop browser); "I Understand" closes it. Above every other popup (.pc-pop), so the daily reward
   // and the like wait underneath. A computer: a mouse or trackpad that can hover (no touch screen as the main input). ----------
   function showPcNotice() {
+    if (IN_FRAME) return; // inside the desktop phone frame (desktop.html) the game already looks as on a phone
     if (!matchMedia('(hover: hover) and (pointer: fine)').matches || document.querySelector('.pc-pop')) return;
     const el = document.createElement('div');
     el.className = 'pc-pop'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-labelledby', 'pc-pop-h');

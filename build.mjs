@@ -35,6 +35,16 @@ const head = `<!doctype html>
 <html lang="en" style="background:#110e13">
 <head>
 <meta charset="utf-8">
+<script>
+// on a computer (a mouse or trackpad, no touch screen) the game plays inside a phone on its side (desktop.html), so it
+// looks exactly as on a phone (always; the page inside the phone, ?inapp=1, stays where it is)
+(function () { try {
+  var q = location.search;
+  if (location.protocol === 'file:' || window.top !== window.self || /[?&]inapp=1/.test(q)) return;
+  if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  location.replace('/desktop.html' + q + location.hash);
+} catch (e) { /* play as it is */ } })();
+</script>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Fate Forged Heroes: a turn-based fantasy RPG. Summon heroes at the Fate Altar, forge your team and fight through ten chapters and a hall of bosses.">
 <meta name="theme-color" content="#110e13">
@@ -60,7 +70,7 @@ writeFileSync(new URL('index.html', out), page.replace("window.FFH_BUILD = '@@BU
 writeFileSync(new URL('version.json', out), JSON.stringify({ build }) + '\n');
 // Static extras (optional)
 // manifest.webmanifest + icon-192/512.png: installed on a home screen the game opens full screen and on its side
-for (const f of ['privacy.html', 'favicon.png', 'email-logo.png', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png']) {
+for (const f of ['privacy.html', 'desktop.html', 'favicon.png', 'email-logo.png', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png']) {
   const dir = DIRS.find(d => existsSync(new URL(d + f, import.meta.url)));
   if (dir) copyFileSync(new URL(dir + f, import.meta.url), new URL(f, out));
   else console.warn(`Note: ${f} not found, skipped.`);
