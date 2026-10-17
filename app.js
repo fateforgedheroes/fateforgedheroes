@@ -1620,7 +1620,7 @@
     let rows = null;
     try { rows = await cloud().rpc('leaderboard', { kind }); } catch (e) { AR.boardErr = 'The leaderboard could not be loaded.'; }
     if (AR.lb !== kind) return;
-    AR.board = rows || [];
+    AR.board = named(rows || []);
     if (tab === 'arena' && !B) render();
   }
   function arenaEnter() {
@@ -2126,7 +2126,7 @@
     const o = VT.open && !VT.sell ? S.inv.find(it => it.id === VT.open) : null, mo = !o && FG.mat ? mats.find(m => m.k + m.id === FG.mat) : null;
     const detail = o ? `<div class="fg-detail rar-${o.rar}" style="--rc:var(--r${o.rar})"><div class="fg-big">${gearIcon(o, 'fg-ic')}<span class="fg-plv">+${o.lvl}</span>${essBadge(setEss(o.set))}</div>
         <div class="fg-dmain"><h3 class="rartxt">${itemNameH(o)}</h3><div class="fg-dsub">${esc(K.SETS[o.set].name)} · ${o.owner && C[o.owner] ? `worn by <b>${esc(C[o.owner].short)}</b>` : 'not worn'}</div><div class="fg-dstats">${K.gearStats(o).map(([k, v]) => `<span>${K.STAT_NAMES[k]}</span><b>${fmtVal(k, v)}</b><i></i>`).join('')}</div></div>
-        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn ${VT.up === o.id ? 'on' : ''}" data-act="fgforge" data-item="${o.id}" aria-pressed="${VT.up === o.id}">${o.lvl < K.MAX_GEAR_LVL ? 'Upgrade' : 'Ascend'}</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div>${VT.up === o.id ? `<div class="it-up">${fgForge(o)}</div>` : ''}</div>`
+        <div class="fg-acts"><button type="button" class="btn primary" data-act="iequip" data-item="${o.id}">Equip on… ›</button><button type="button" class="btn" data-act="vlock" data-item="${o.id}">${o.lock ? 'Unlock' : o.owner && C[o.owner] ? `Lock to ${esc(C[o.owner].short)}` : 'Lock'}</button>${sellable(o) ? `<button type="button" class="btn danger" data-act="sell" data-item="${o.id}">Sell · ${K.sellValue(o).toLocaleString('en-US')}</button>` : ''}</div><div class="it-up">${fgForge(o)}</div></div>`
       : mo ? `<div class="fg-detail mat"><div class="fg-big">${mo.ic}</div><div class="fg-dmain"><h3>${esc(mo.name)} ×${mo.n.toLocaleString('en-US')}</h3><p class="empty-note">${esc(mo.tip)}</p></div><div class="fg-acts"><button type="button" class="btn primary" ${mo.go === 'fcs' ? 'data-act="fcopen">Use on your hero ›' : `data-act="go" data-go="${mo.go}">${mo.go === 'altaar' ? 'Fate Altar ›' : 'Heroes ›'}`}</button></div></div>` : '';
     const selItems = S.inv.filter(it => VT.sel.has(it.id)), selValue = selItems.reduce((t, it) => t + K.sellValue(it), 0);
     const tools = VT.sell
@@ -2138,7 +2138,8 @@
         <div class="it-cats">${[['all', 'All'], ['gear', 'Gear'], ['stone', 'Stones'], ['shard', 'Fate Shards'], ['elixir', 'Elixirs']].map(([k, l]) => `<button type="button" class="${FG.cat === k ? 'on' : ''}" data-act="icat" data-k="${k}">${l} <small>${cnt[k]}</small></button>`).join('')}</div></section>
       <div class="it-work">${filters}<section class="fg-panel it-list"><div class="it-tools">${tools}</div>
         ${gearCells || matCells ? `<div class="fg-groups">${grouped}</div>` : '<p class="empty-note">Nothing matches these filters.</p>'}
-        ${VT.sell ? `<div class="it-sellbar"><span><b>${selItems.length}</b> selected · ${ic('coin')} <b>${selValue.toLocaleString('en-US')}</b> · worn and locked pieces cannot be sold</span><button type="button" class="btn danger" data-act="vsell" ${selItems.length ? '' : 'disabled'}>Sell ${selItems.length || ''}</button></div>` : detail}</section></div></div>`;
+        ${VT.sell ? `<div class="it-sellbar"><span><b>${selItems.length}</b> selected · ${ic('coin')} <b>${selValue.toLocaleString('en-US')}</b> · worn and locked pieces cannot be sold</span><button type="button" class="btn danger" data-act="vsell" ${selItems.length ? '' : 'disabled'}>Sell ${selItems.length || ''}</button></div>` : ''}</section></div></div>
+      ${detail && !VT.sell ? `<div class="it-pop" data-act="iclose"><div class="it-pop-box ${o ? 'gear' : 'mat'}" data-act="inop" role="dialog" aria-modal="true" aria-label="${esc(o ? itemName(o) : mo.name)}"><button type="button" class="it-x" data-act="iclose" aria-label="Close">✕</button>${detail}</div></div>` : ''}`;
   }
   function forgeHtml() { return itemsHtml(); }
 
@@ -2494,6 +2495,9 @@
   // ----- global leaderboards (Town Hall tab): campaign, Boss Hall (all bosses or one), arena, Tower of Essence (all
   // towers or one). The rows come from the `leaderboard` database function (0003 + 0010); the arena list adds the bots.
   const LB = { kind: 'campaign', rows: null, err: '', loading: '' };
+  // players who never picked a name (still "Adventurer") stay off every leaderboard (the database leaves them out too,
+  // 0014_leaderboard_names.sql; this also covers a database without that file)
+  const named = rows => rows.filter(r => !/^\s*adventurer\s*$/i.test(r.name || 'Adventurer'));
   async function lbLoad(kind) {
     const cl = cloud();
     LB.kind = kind; LB.rows = null; LB.err = '';
@@ -2503,7 +2507,7 @@
     // the guilds have their own function (0012_guild_board.sql): 'guilds' = this week, 'guilds:all', 'guilds:best'
     try { rows = kind.startsWith('guilds') ? await cl.rpc('guild_board', { kind: kind.split(':')[1] || 'week' }) : await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
     if (LB.kind !== kind) return;
-    LB.rows = rows || []; LB.loading = '';
+    LB.rows = kind.startsWith('guilds') ? rows || [] : named(rows || []); LB.loading = '';
     if (tab === 'profiel' && TH.tab === 'leaders' && !B) render();
   }
   function leadersHtml() {
@@ -3520,6 +3524,7 @@
       SFX.up(); upgFx(r, true, '★'.repeat(item.asc)); toast(`Ascended: ${itemName(item)}${item.asc >= K.MAX_ASC ? ' · fully ascended!' : ''}`);
       save(); render();
     }
+    else if (act === 'iclose') { VT.open = null; VT.up = null; FG.mat = null; render(); }
     else if (act === 'vsellmode') { VT.sell = !VT.sell; VT.sel.clear(); VT.open = null; render(); }
     else if (act === 'vpick' && item) {
       FG.mat = null;
@@ -4712,6 +4717,8 @@
   $('#gp-close').addEventListener('click', closeGuidePop);
   $('#guide-pop').addEventListener('click', e => { if (e.target.id === 'guide-pop') closeGuidePop(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGuidePop(); });
+  // Escape closes the Vault's item window
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && tab === 'forge' && (VT.open || FG.mat) && $('#modal').hidden && !B) { VT.open = null; VT.up = null; FG.mat = null; render(); } });
   $('#b-quit').addEventListener('click', () => {
     // arena: the result is already known, so this skips ahead (fast forward) instead of surrendering
     if (B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)))) { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
@@ -4830,6 +4837,7 @@
     else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
     else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false; document.body.classList.add('in-battle');
+    { const cb = $('#chatbtn'), ctl = $('#battle .b-ctl'); if (cb && ctl) ctl.appendChild(cb); } // the chat button joins the round controls
     $('#toast').hidden = true;
     const siege = cfg.type === 'siege';
     $('#b-title').textContent = cfg.title; $('#b-round').textContent = (siege ? `Wave ${cfg.from} · ` : nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
@@ -5509,7 +5517,7 @@
     return `<details class="meter"><summary>Damage meter <small>tap a hero for details · damage over time in red</small></summary>${body}</details>`;
   }
   function endBattleView() {
-    R.running = false; pending = null; document.body.classList.remove("in-battle"); { const t = $("#b-chat"); if (t) t.hidden = true; }
+    R.running = false; pending = null; document.body.classList.remove("in-battle"); { const cb = $('#chatbtn'); if (cb && cb.parentElement !== document.body) document.body.insertBefore(cb, $('#chatbox')); } { const t = $("#b-chat"); if (t) t.hidden = true; }
     coachHide(); closeGuidePop();
     $('#battle').hidden = true; $('#screen').hidden = false; $('#tabs').hidden = false; $('#ov').innerHTML = ''; $('#banner').hidden = true;
     $('#battle').classList.remove('siege'); setFig(1);

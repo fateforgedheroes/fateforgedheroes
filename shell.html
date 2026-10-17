@@ -1979,9 +1979,6 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   #app:has(#battle:not([hidden])) .top { display: none; }
   #battle .order .ord-l { display: none; }
   #battle .b-top h2 { font-size: 1rem; }
-  /* the chat button moves up into the title row (its right end is kept free), off the skill buttons */
-  #battle .b-top { padding-right: 44px; }
-  body.in-battle .chat-fab { top: calc(3px + env(safe-area-inset-top, 0px)); bottom: auto; right: 10px; width: 34px; height: 34px; } body.in-battle .chat-fab svg { width: 18px; height: 18px; }
   body.in-battle .chat-n { width: 16px; min-width: 16px; height: 16px; top: -3px; right: -3px; font-size: .7rem; }
 }
 @media (max-width: 760px), (max-height: 500px) and (orientation: landscape) { #app:has(#battle:not([hidden])) { padding-top: 0; padding-bottom: 0; } #battle:not([hidden]) { box-sizing: border-box; } }
@@ -3091,6 +3088,9 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 #battle .order .oc { width: 28px !important; height: 28px !important; border-width: 1px; } #battle .order .oc img { width: 26px !important; height: 26px !important; } #battle .order .sep { height: 20px; }
 #battle .b-ctl { top: auto; right: auto; bottom: 10px; left: 10px; gap: 8px; }
 #battle .rb { width: 46px; height: 46px; border-width: 2px; border-color: rgba(217, 180, 90, .7); background: rgba(16, 11, 16, .82); box-shadow: 0 3px 8px rgba(0,0,0,.6); } #battle .rb svg { width: 22px; height: 22px; } #battle .rb b { font-size: 14px; }
+/* in a battle the chat button joins the round controls (app.js moves it into .b-ctl), the same size and in line */
+#battle .b-ctl .chat-fab { position: relative; inset: auto; z-index: auto; width: 46px; height: 46px; flex: none; }
+#battle .b-ctl .chat-fab svg { width: 22px; height: 22px; }
 #battle .rb.danger.armed::after { top: auto; bottom: 52px; left: 0; right: auto; }
 #battle .coach { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 6; width: min(60%, 520px); margin: 0; font-size: .88rem; }
 #battle .b-bar { position: absolute; right: 10px; bottom: 10px; z-index: 5; display: grid; grid-template-columns: auto; justify-items: end; gap: 6px; padding: 0 !important; border: 0; background: none; box-shadow: none; max-width: 62%; grid-column: auto !important; grid-row: auto !important; overflow: visible !important; }
@@ -3117,6 +3117,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 @media (max-height: 500px) and (orientation: landscape), (max-width: 760px) {
   #battle .stage-wrap { max-width: min(100%, calc((100dvh - 8px) * 16 / 9)); border-radius: 0; }
   #battle .rb { width: 38px; height: 38px; } #battle .rb svg { width: 18px; height: 18px; } #battle .b-ctl { gap: 6px; bottom: 6px; left: 6px; }
+  #battle .b-ctl .chat-fab { width: 38px; height: 38px; } #battle .b-ctl .chat-fab svg { width: 18px; height: 18px; }
   #battle .sk { width: 58px; } #battle .sk-ic { width: 50px; height: 50px; border-width: 2px; } #battle .sk-ic svg { width: 26px; height: 26px; } #battle .sk-cd { top: 12px; font-size: 1.3rem; } #battle .b-skills { gap: 6px; } #battle .b-bar { right: 6px; bottom: 6px; }
   #battle .b-desc { display: none; } #battle .coach { width: 70%; font-size: .78rem; padding: 6px 10px; }
 }
@@ -3265,6 +3266,20 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .hb-none { margin: 0; font-size: .8rem; }
 .hb-upv .fg-forge { padding: 0; }
 .it-up { grid-column: 1 / -1; padding-top: 8px; border-top: 1px solid rgba(217, 180, 90, .25); }
+/* the Vault's item window (itemsHtml): a tapped piece or material opens over the list, with the upgrade or ascension
+   panel of a piece in it; a tap outside, ✕ or Escape closes it */
+.it-pop { position: fixed; inset: 0; z-index: 24; display: grid; place-items: center; padding: 16px; background: rgba(8, 6, 10, .72); animation: sfx-fade .2s ease-out; }
+.it-pop-box { position: relative; width: min(720px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain; padding: 14px; border: 1px solid #9c7c37; border-radius: 6px;
+  background: linear-gradient(180deg, #1f1823, #120d15); box-shadow: 0 0 0 1px #000, 0 18px 40px rgba(0, 0, 0, .7); }
+.it-pop-box .fg-detail { border: 0; padding: 0; background: none; box-shadow: none; }
+.it-x { position: absolute; top: 6px; right: 6px; z-index: 2; width: 32px; height: 32px; border-radius: 50%; border: 1px solid #9c7c37; background: #120d15; color: #f3d891; font-size: 1rem; cursor: pointer; }
+@media (max-height: 500px) and (orientation: landscape) {
+  /* a phone on its side: the piece on the left, its upgrade panel on the right, so it fits the height */
+  .it-pop { padding: 6px; } .it-pop-box { width: min(820px, 100%); max-height: calc(100dvh - 12px); padding: 8px 10px; }
+  .it-pop-box.gear .fg-detail { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.25fr) !important; align-items: start; }
+  .it-pop-box.gear .fg-acts { grid-column: 1 / 3; }
+  .it-pop-box.gear .it-up { grid-column: 3; grid-row: 1 / span 2; border-top: 0; padding-top: 0; padding-left: 10px; padding-right: 30px; border-left: 1px solid rgba(217, 180, 90, .25); }
+}
 @media (max-width: 1100px) { .hx.bag { grid-template-columns: 150px minmax(170px, .75fr) minmax(0, 1.6fr); } .hx.bag .hx-list { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 760px) and (min-height: 501px), (max-width: 760px) and (orientation: portrait) { .hx.bag .hx-ros { display: none; } .hb-cmp { grid-template-columns: minmax(0, 1fr); } .hb-cs.sel { padding: 6px 0 0; border-left: 0; border-top: 1px solid rgba(217, 180, 90, .25); } }
 @media (max-height: 500px) and (orientation: landscape) {
@@ -3429,7 +3444,11 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .g-tile { flex-direction: row; justify-content: flex-start; text-align: left; } .g-tile > img.spr, .g-tile > .g-chest-ic, .g-tile > .lock-ic { width: 28px !important; height: 28px !important; padding: 2px; } .g-tile { min-height: 0; padding: 3px 5px !important; } .g-tile > .lock-ic { padding: 6px !important; } .g-tile > b { font-size: .72rem; } .g-tile small { display: none; }
   .section-head:has(+ .dc-banner) { padding-block: 2px !important; margin-bottom: 3px; } .soc-tabs { margin-bottom: 3px !important; } .soc-tabs button { min-height: 28px !important; }
   .g-invite > h3 { display: none; }
-  .fr-list li.gm-row { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "av id acts" "av stats stats"; column-gap: 8px; row-gap: 2px; padding: 4px 6px; }
+  /* name and role on one line (a long name ends in …), the stats below, the Guildmaster's buttons on a line of their own,
+     so the buttons never squeeze the name into a column of single letters */
+  .fr-list li.gm-row { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "av id" "av stats" "av acts"; column-gap: 8px; row-gap: 3px; padding: 4px 6px; }
+  .gm-id { flex-direction: row; align-items: center; gap: 6px; } .gm-id b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; } .gm-id .g-role { flex: none; margin-left: 5px; }
+  .fr-acts.gm-acts { justify-self: start; flex-wrap: nowrap; gap: 4px; justify-content: flex-start; } .fr-acts.gm-acts .btn { flex: 0 1 auto; padding: 2px 7px; font-size: .64rem; white-space: nowrap; }
   .gm-av, .gm-av img.spr { width: 32px; height: 32px; } .gm-lv { min-width: 16px; height: 16px; font-size: .56rem; right: -4px; bottom: -4px; } .gm-id { gap: 1px; } .gm-id b { font-size: .8rem; } .gm-id .g-role { font-size: .55rem; padding: 0 4px; }
   .gm-stats { grid-template-columns: repeat(4, minmax(0, auto)); gap: 2px; justify-self: start; max-width: 100%; overflow: hidden; } .gm-stat small { letter-spacing: 0; } .fr-list { overflow-x: hidden; } .gm-stat { flex-direction: row; gap: 3px; padding: 1px 5px; } .gm-stat small { font-size: .48rem; } .gm-stat b { font-size: .7rem; }
   .gm-acts .btn { padding: 2px 6px; min-height: 0; font-size: .64rem; }
@@ -3610,8 +3629,6 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   /* the first battle's coach: a compact card over the field (above the title), taps on the small tips go through to the units */
   #battle .coach-pop { z-index: 8; padding: 8px; } #battle .coach-card { height: auto; max-height: calc(100% - 16px); width: min(440px, 82%); padding: 10px 14px; gap: 6px; font-size: .84rem; } #battle .coach-card .btn { padding: 5px 14px; min-height: 0; }
   #battle .coach { pointer-events: none; opacity: .95; }
-  /* in a battle the chat button sits with the round controls at the bottom left, not over the hero's name in the skill column */
-  body.in-battle .chat-fab { top: auto; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); right: auto; left: 200px; }
   /* messages (toasts) drop in under the header, where they cover no buttons (the tour card, Fight, the result) */
   .toast { top: calc(50px + env(safe-area-inset-top, 0px)); bottom: auto !important; z-index: 40; }
   /* the result after a level-up that opens a building gets an extra "Open the …" button: a small one, so the column still fits */
