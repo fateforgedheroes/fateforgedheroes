@@ -825,6 +825,19 @@ button, a, input { touch-action: manipulation; }
   .chat-box { left: 8px; right: 8px; width: auto; top: calc(56px + env(safe-area-inset-top, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); height: auto; }
 }
 .vol-rows { display: grid; gap: 10px; max-width: 460px; }
+/* Town Hall → Settings: Sound across the whole width on top, every other card in an even grid of two (one on narrow
+   screens), cards in a row equally tall; the sliders big enough to drag with a thumb */
+.profile.settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.profile.settings > section { margin: 0; min-width: 0; display: flex; flex-direction: column; }
+.profile.settings > .set-sound { grid-column: 1 / -1; }
+.profile.settings .vol-rows, .profile.settings .set-rows { max-width: none; }
+.profile.settings .vol-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; }
+@media (max-width: 560px) { .profile.settings { grid-template-columns: minmax(0, 1fr); } .profile.settings .vol-rows { grid-template-columns: minmax(0, 1fr); } }
+.vol-range { -webkit-appearance: none; appearance: none; height: 30px; background: transparent; cursor: pointer; touch-action: none; }
+.vol-range::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #c9952f, #f3d891); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5); }
+.vol-range::-moz-range-track { height: 8px; border-radius: 4px; background: linear-gradient(90deg, #c9952f, #f3d891); }
+.vol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; margin-top: -8px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff4cf, #d9a940 70%); border: 2px solid #1a1206; box-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
+.vol-range::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff4cf, #d9a940 70%); border: 2px solid #1a1206; }
 /* Settings → Battle: an on/off switch per option (Screen shake) */
 .set-rows { display: grid; gap: 8px; max-width: 460px; }
 .set-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
@@ -3910,6 +3923,14 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .th-body .profile .prof-link .btn { padding: 3px 10px; min-height: 0; font-size: .7rem; flex: 1 1 auto; }
   .unlock-card .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .unlock-card .lk-rw .gem-ic { width: 22px; height: 22px; } .unlock-card .lk-rw b { font-size: .9rem; } .unlock-card .lk-rw small { font-size: .65rem; }
   .auth-box .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .auth-box .lk-rw .gem-ic { width: 22px; height: 22px; }
+}
+/* Settings on a phone on its side: the same even grid, not the Profile tab's three columns */
+@media (max-height: 500px) and (orientation: landscape) {
+  .th-body .profile.settings { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: none; gap: 8px; align-items: stretch; }
+  .th-body .profile.settings > *, .th-body .profile.settings > section:last-child { grid-area: auto; } .th-body .profile.settings > .set-sound { grid-column: 1 / -1; }
+  .th-body .profile.settings .vol-rows { gap: 4px 20px; }
+  .th-body .profile.settings section > p.empty-note { display: block; font-size: .66rem; line-height: 1.3; margin: 2px 0 4px; } /* short notes stay: an empty card says what it is for */
+  .th-body .profile.settings > .set-sound > p.empty-note { display: none; }
 }
 </style>
 

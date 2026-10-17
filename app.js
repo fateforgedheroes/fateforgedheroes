@@ -3286,9 +3286,9 @@
         : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.${S.lk ? '' : ` Linking an account pays <b>${LINK_GEMS} Crystals</b>.`}</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
     // feedback and bug reports go to the Discord, so everything stays in one place
     const feedback = `<section class="prof-acc fb-sec"><h3>Feedback and bugs</h3><p class="empty-note">Found a bug or have an idea? Tell us in the Discord: post it in the feedback or bug channel, with a screenshot if you can.</p><div class="row"><a class="btn dc-btn small" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Give feedback in Discord</a></div></section>`;
-    return `<div class="profile">
+    return `<div class="profile settings">
+      <section class="prof-acc set-sound"><h3>Sound</h3><div class="vol-rows">${volSlider('music')}${volSlider('sfx')}</div><p class="empty-note">Tap a speaker (or slide to 0) to switch that sound off. The speaker in the top bar mutes both.</p></section>
       <section class="prof-acc"><h3>Battle</h3><div class="set-rows"><div class="set-row"><span><b>Screen shake</b><small>The screen shakes on critical hits and big blows.</small></span><button class="set-tog${S.shake === false ? '' : ' on'}" data-act="shake" aria-pressed="${S.shake !== false}">${S.shake === false ? 'Off' : 'On'}</button></div></div></section>
-      <section class="prof-acc"><h3>Sound</h3><div class="vol-rows">${volSlider('music')}${volSlider('sfx')}</div><p class="empty-note">Tap a speaker (or slide to 0) to switch that sound off. The speaker in the top bar mutes both.</p></section>
       ${blockedHtml()}
       <section class="prof-acc"><h3>Account</h3>${account}</section>
       ${feedback}
