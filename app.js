@@ -633,7 +633,7 @@
     clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), ms || 2400);
   }
   function hud() {
-    $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy(); const ge = $('#gems'); if (ge) ge.textContent = (S.gems || 0).toLocaleString('en-US');
+    $('#silver').textContent = S.silver.toLocaleString('en-US'); paintEnergy(); const ge = $('#gems'); if (ge) ge.textContent = gemsAll().toLocaleString('en-US');
     const totalFs = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
     $('#shards').textContent = totalFs; $('#shards').parentElement.title = 'Fate Shards: ' + K.FATE_SHARDS.map(f => `${f.name} ${S.fs[f.id] || 0}`).join(', '); $('#stones').textContent = S.stones; $('#stones').parentElement.title = 'Ascension Stones: ' + K.STONES.map(s => `${stoneN(s.id)} ${s.name.replace(/ Ascension Stone$/, '')}`).join(', ') + '. Lesser for 2-4★, Greater for 5★, Ancient for 6★.';
     const aOn = S.sound || S.music, sb = $('#sound'); sb.classList.toggle('on', aOn); sb.setAttribute('aria-pressed', aOn ? 'true' : 'false'); sb.title = aOn ? 'Mute sound and music' : 'Turn sound and music back on';
@@ -754,7 +754,7 @@
     if (go === 'arena') return signedIn() ? 'Attack and climb the ranking' : 'Needs a free account';
     if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : 'Friends, guild and mail'; }
     if (go === 'profiel') { const n = thClaimN(); return n ? `${n} ${n === 1 ? 'reward' : 'rewards'} to claim` : `Player level ${S.p.lvl}`; }
-    if (go === 'market') return `${(S.gems || 0).toLocaleString('en-US')} Crystals`;
+    if (go === 'market') return `${gemsAll().toLocaleString('en-US')} Crystals`;
     return '';
   }
   function homeHtml() {
@@ -2651,6 +2651,26 @@
   // building on the homebase). Every offer has a limit per UTC day or week (S.mk); the energy refill gets dearer per buy.
   const LEVEL_GEMS = 10;
   const GEM_SVG = typeof CRYSTAL_ART !== 'undefined' ? `<img class="gem-ic" src="${CRYSTAL_ART}" alt="">` : '';
+  // Bought Crystals (0015_wallet.sql) live on the server, not in the save: PAID.n is the balance read from there
+  // (wallet_mine), and only the server adds to it. The game shows earned + bought as one number (gemsAll) and spends
+  // the earned ones first, then the bought ones through wallet_spend (payGems), so an edited save cannot mint them.
+  const PAID = { n: 0, at: 0 };
+  const gemsAll = () => (S.gems || 0) + PAID.n;
+  async function paidLoad() {
+    const cl = cloud(); PAID.at = Date.now(); if (!cl || !cl.signedIn()) { PAID.n = 0; return; }
+    try { const n = await cl.rpc('wallet_mine'); PAID.n = Math.max(0, +n || 0); } catch (e) { PAID.n = 0; } // no wallet table yet: nothing bought
+    hud(); if (tab === 'market') render();
+  }
+  // pay a price in Crystals: true when paid; the bought part is taken by the server first, so a failed call costs nothing
+  async function payGems(price, item) {
+    const own = Math.min(S.gems || 0, price), rest = price - own;
+    if (rest > 0) {
+      if (rest > PAID.n) { toast(`Not enough Crystals: this costs ${price}, you have ${gemsAll()}.`, true); return false; }
+      try { PAID.n = Math.max(0, +(await cloud().rpc('wallet_spend', { amount: rest, item })) || 0); }
+      catch (e) { toast(/not enough/i.test(String(e && e.message)) ? 'Not enough Crystals.' : 'Could not reach the server. Nothing was spent: try again.', true); paidLoad(); return false; }
+    }
+    S.gems -= own; return true;
+  }
   const MARKET = [
     { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar (you can hold up to twice your bar). Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
     { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
@@ -2671,45 +2691,50 @@
   const mkBought = it => { const m = mkState(); return (it.per === 'week' ? m.w : m.d)[it.id] || 0; };
   const mkLimit = it => (Array.isArray(it.price) ? it.price.length : it.limit);
   const mkPrice = it => (Array.isArray(it.price) ? it.price[Math.min(mkBought(it), it.price.length - 1)] : it.price);
+  const MK = { busy: false }; // a purchase waiting for the server: no second one meanwhile
   function mkBuy(id) {
     const it = MARKET.find(x => x.id === id); if (!it) return;
     if (it.fcs) { // the Fate Changing Stone: the first one free, then FCS_PRICE; at most one held
       const price = fcsPrice();
       if (fcs().n >= 1) { fcsOpen(); return; }
-      if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
-      S.gems -= price; fcs().n++; fcs().got++; save(); hud(); SFX.up(); render();
-      toast(price ? 'Bought: a Fate Changing Stone. Use it on your Fateborn.' : 'Your free Fate Changing Stone is ready. Use it on your Fateborn.', false, 3500);
+      if (gemsAll() < price) { toast(`Not enough Crystals: this costs ${price}, you have ${gemsAll()}.`, true); return; }
+      if (MK.busy) return; MK.busy = true;
+      payGems(price, 'fcs').then(ok => { MK.busy = false; if (!ok) return;
+        fcs().n++; fcs().got++; save(); hud(); SFX.up(); render();
+        toast(price ? 'Bought: a Fate Changing Stone. Use it on your Fateborn.' : 'Your free Fate Changing Stone is ready. Use it on your Fateborn.', false, 3500); });
       return;
     }
     const n = mkBought(it), price = mkPrice(it);
     if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
-    if (S.gems < price) { toast(`Not enough Crystals: this costs ${price}, you have ${S.gems}.`, true); return; }
+    if (gemsAll() < price) { toast(`Not enough Crystals: this costs ${price}, you have ${gemsAll()}.`, true); return; }
     if (it.r.energy) { energyTick(); if (S.energy + it.r.energy > enCeil()) { toast(`Your energy is nearly full: you can hold at most ${enCeil()} (twice your bar). Spend some first.`, true, 4000); return; } }
-    const go = () => {
-      if (S.gems < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
+    const go = async () => {
+      if (MK.busy || gemsAll() < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
+      MK.busy = true; const ok = await payGems(mkPrice(it), it.id); MK.busy = false; if (!ok) return;
       const m = mkState(), book = it.per === 'week' ? m.w : m.d;
-      S.gems -= mkPrice(it); book[it.id] = (book[it.id] || 0) + 1;
+      book[it.id] = (book[it.id] || 0) + 1;
       grantGift(it.r); save(); hud(); SFX.up(); render();
       toast(`Bought: ${giftParts(it.r).join(' · ')}.`, false, 3000);
     };
-    if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Crystals</b>. You have ${S.gems}.`, `Buy for ${price} Crystals`, go); else go();
+    if (price >= 100) confirmBox('Buy this?', `<b>${esc(it.name)}</b> for <b>${price} Crystals</b>. You have ${gemsAll()}.`, `Buy for ${price} Crystals`, go); else go();
   }
   function marketHtml() {
+    if (Date.now() - PAID.at > 30000) setTimeout(paidLoad, 0); // the bought Crystals, fresh when the Market opens
     const icon = it => it.fcs ? `<span class="mk-ic fcs">${FCS_SVG}</span>` : it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
     const card = it => {
       if (it.fcs) {
         const have = fcs().n >= 1, price = fcsPrice(), wait = fcsWait();
         return `<li class="mk-card">${icon(it)}<div class="mk-main"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small><span class="mk-left">${have ? 'You have one: use it on your hero' : price ? 'Hold one at a time' : 'Your first one is free!'}${wait ? ` · next change in ${fmtLeft(wait)}` : ''}</span></div>
-          ${have ? `<button type="button" class="btn primary mk-buy" data-act="fcopen">Use</button>` : `<button type="button" class="btn primary mk-buy" data-act="mkbuy" data-id="${it.id}" ${S.gems < price ? 'disabled' : ''}>${price ? GEM_SVG + price : 'Free'}</button>`}</li>`;
+          ${have ? `<button type="button" class="btn primary mk-buy" data-act="fcopen">Use</button>` : `<button type="button" class="btn primary mk-buy" data-act="mkbuy" data-id="${it.id}" ${gemsAll() < price ? 'disabled' : ''}>${price ? GEM_SVG + price : 'Free'}</button>`}</li>`;
       }
       const n = mkBought(it), lim = mkLimit(it), left = lim - n, price = mkPrice(it), out = left <= 0;
       return `<li class="mk-card ${out ? 'out' : ''}">${icon(it)}<div class="mk-main"><b>${esc(it.name)}</b><small>${esc(it.desc)}</small><span class="mk-left">${out ? `Sold out ${it.per === 'week' ? 'this week' : 'today'}` : `${left} of ${lim} left ${it.per === 'week' ? 'this week' : 'today'}`}</span></div>
-        <button type="button" class="btn ${out ? '' : 'primary'} mk-buy" data-act="mkbuy" data-id="${it.id}" ${out || S.gems < price ? 'disabled' : ''}>${GEM_SVG}${price}</button></li>`;
+        <button type="button" class="btn ${out ? '' : 'primary'} mk-buy" data-act="mkbuy" data-id="${it.id}" ${out || gemsAll() < price ? 'disabled' : ''}>${GEM_SVG}${price}</button></li>`;
     };
     const groups = [...new Set(MARKET.map(x => x.group))].map(g => `<section class="mk-sec"><h3>${g}</h3><ul class="mk-list">${MARKET.filter(x => x.group === g).map(card).join('')}</ul></section>`).join('');
     const dayLeft = fmtLeft(86400000 - Date.now() % 86400000);
     return `<div class="section-head"><div><h2>Market</h2><p class="lede">Spend Crystals on Energy, Fate Shards, Sigils and Ascension Stones. Daily offers come back at midnight (UTC, in ${dayLeft}), weekly ones on Monday.</p></div>
-        <div class="mk-bal">${GEM_SVG}<b>${S.gems.toLocaleString('en-US')}</b><small>Crystals</small></div></div>
+        <div class="mk-bal">${GEM_SVG}<b>${gemsAll().toLocaleString('en-US')}</b><small>Crystals</small></div></div>
       <div class="mk-wrap">${groups}</div>
       <section class="mk-sec mk-soon"><h3>Gear</h3><p class="empty-note">Coming soon: gear pieces for Crystals.</p></section>
       <p class="empty-note mk-how">Get Crystals from every player level (+${LEVEL_GEMS}), the daily and weekly quest chests, missions, achievements, your hero collection and day 7 of the login rewards. All in the Town Hall.</p>`;
@@ -2852,7 +2877,9 @@
   const signedIn = () => { const cl = cloud(); return !!(cl && cl.signedIn && cl.signedIn()); };
   // fetches friends and mail; paints the header badge and re-renders an open Social or Mail screen
   async function socialLoad() {
+    if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
+    paidLoad();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -2892,7 +2919,7 @@
     return `<div class="mm-box" role="menu">
       <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
-      <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
+      <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${gemsAll().toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
         <span class="tag">Ascension Stones</span>${K.STONES.map(s => `<span>${stoneIc(s.id)} ${stoneN(s.id)} <small>${s.name.replace(/ Ascension Stone$/, '')}</small></span>`).join('')}</div></div>`;
   }
