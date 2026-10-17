@@ -5531,8 +5531,17 @@
     for (const id of crew) if (S.roster[id].lvl > lv0[id]) ups.push(`${C[id].short} → ${S.roster[id].lvl}`);
     S.silver += rw.silver; for (const t in rw.fs) S.fs[t] = (S.fs[t] || 0) + rw.fs[t]; addStones(rw.st);
     S.exp = null; save(); hud(); render(); SFX.up();
-    const got = [crew.map(id => `${C[id].short} +${(gain[id] || 0).toLocaleString('en-US')} XP`).join(', '), `+${rw.silver.toLocaleString('en-US')} Sigils`, ...Object.entries(rw.fs).map(([t, n]) => `+${n} ${K.SHARD[t].name}`), ...Object.entries(rw.st).map(([t, n]) => `+${n} ${stoneName(t, n)}`)];
-    toast(`The ship is back: ${got.join(' · ')}${ups.length ? `. Level up: ${ups.join(', ')}` : ''}.`, false, 6000);
+    // what the trip brought, in a popup: the crew with the XP each got (and a level-up), then every reward as a tile
+    const heroes = crew.map(id => `<span class="exr-h rar-${C[id].rar}">${por(id)}<b>${esc(C[id].short)}</b><i>${gain[id] ? `+${gain[id].toLocaleString('en-US')} XP` : 'Max level'}</i>${S.roster[id].lvl > lv0[id] ? `<em>Lv ${S.roster[id].lvl}</em>` : ''}</span>`).join('');
+    const tiles = [`<span class="cv-rw" title="${rw.silver.toLocaleString('en-US')} Sigils">${ic('coin')}<b>${rw.silver.toLocaleString('en-US')}</b></span>`,
+      ...Object.entries(rw.fs).filter(([, n]) => n > 0).map(([t, n]) => `<span class="cv-rw" title="${n} × ${esc(K.SHARD[t].name)}">${shardIc(t)}<b>${n}</b></span>`),
+      ...Object.entries(rw.st).filter(([, n]) => n > 0).map(([t, n]) => `<span class="cv-rw" title="${n} × ${esc(stoneName(t, n))}">${stoneIc(t)}<b>${n}</b></span>`)].join('');
+    const el = document.createElement('div');
+    el.className = 'unlock-pop ex-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'The ship is back');
+    el.innerHTML = `<div class="unlock-card"><span class="tag">${esc(K.EXPEDITIONS[x.k].name)}</span><h2>The ship is back!</h2>
+      <div class="exr-crew">${heroes}</div><div class="cv-rws">${tiles}</div><button class="btn primary" type="button">OK</button></div>`;
+    document.body.appendChild(el); el.querySelector('button').focus();
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
   }
   // keep the time left on the Expeditions screen and the ship's badge on the homebase current
   setInterval(() => { if (!S || !S.exp) return; if (tab === 'expedition' && $('#modal').hidden) { const el = document.querySelector('.exp-left'); if (el && !expDone()) { el.textContent = `Back in ${fmtLeft(S.exp.end - Date.now())}`; const b = document.querySelector('.exp-bar i'); if (b) b.style.width = Math.min(100, Math.round((Date.now() - S.exp.start) / (S.exp.end - S.exp.start) * 100)) + '%'; } else if (expDone() && !document.querySelector('[data-act=expclaim]')) render(); } else if (tab === 'home' && expDone() && !document.querySelector('.hb-dot')) render(); }, 30000);
