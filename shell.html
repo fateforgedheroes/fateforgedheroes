@@ -3446,6 +3446,13 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .ev-card .ev-lock { font-size: .8rem; color: var(--muted); }
 .ev-cal { display: grid; grid-template-columns: 92px repeat(7, minmax(0, 1fr)); gap: 3px; font-size: .74rem; }
 .ev-cal .ev-h { font-family: var(--font-tag); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
+.ev-cal .ev-wk, .ev-day .ev-mini { font: inherit; border: 0; cursor: pointer; text-align: left; } .ev-cal .ev-wk:hover, .ev-day .ev-mini:hover { filter: brightness(1.15); }
+/* the popup of one event in the calendar (app.js evPop): its icon in its colour, when it runs, what it does */
+.ev-pop .unlock-card { border-color: var(--evc); box-shadow: 0 0 0 4px #000, 0 0 40px -6px var(--evc); }
+.ev-pop .ev-pic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--evc); background: rgba(0, 0, 0, .45); color: var(--evc); }
+.ev-pop .ev-pic svg, .ev-pop .ev-pic img, .ev-pop .ev-pic .fg-ess { width: 30px; height: 30px; fill: currentColor; }
+.ev-pop .ev-when { color: var(--muted); font-size: .9rem; } .ev-pop .ev-when b { color: var(--evc); }
+.ev-pop .ev-pbtn { display: flex; gap: 8px; justify-content: center; }
 .ev-cal .ev-wk { display: flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 4px; background: rgba(0, 0, 0, .35); color: #e6dccb; }
 .ev-cal .ev-wk .fg-ess, .ev-cal .ev-wk svg { width: 14px; height: 14px; }
 .ev-day { min-height: 42px; padding: 3px; border-radius: 4px; background: rgba(0, 0, 0, .3); border: 1px solid transparent; display: flex; flex-direction: column; gap: 2px; }

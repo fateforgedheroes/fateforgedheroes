@@ -3512,6 +3512,7 @@
     else if (act === 'twrow') { TV.open = TV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); } // a floor row opens and closes
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
     else if (act === 'sggo') startSiege(+a.dataset.n);
+    else if (act === 'evpop') evPop(+a.dataset.d, a.dataset.k);
     else if (act === 'story') { if (storyOpen(a.dataset.k)) playScene(a.dataset.k).then(() => render()); }
     else if (act === 'sgrow') { SGV.open = SGV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
@@ -5186,6 +5187,23 @@
   const evHint = (e, extra) => e ? `<div class="ev-hint" style="--evc:${EVENTS[e.k].col}"><span class="ev-ic">${evIc(e)}</span><span><b>${esc(evTitle(e))}</b> · ${esc(extra || evText(e))} <small>(${evLeft(e)} left)</small></span></div>` : '';
   const evHunted = id => { const e = evNow('hunt'); return !!e && e.boss === id; };
   const evTideOf = aff => { const e = evNow('tide'); return !!e && e.ess === aff; };
+  // a tap on an event in the calendar: what it is, when it runs and whether it runs now, in a popup
+  const evDate = d => { const x = new Date(d * 86400000); return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getUTCDay()]} ${x.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]}`; };
+  function evPop(d, k) {
+    const e = evOnDay(d).find(x => x.k === k); if (!e) return;
+    const E0 = EVENTS[k], d0 = evDay(), one = k === 'hunt' ? { from: d, to: d + 1 } : e, now = d0 >= one.from && d0 < one.to;
+    const when = one.to - one.from === 1 ? evDate(one.from) : `${evDate(one.from)} to ${evDate(one.to - 1)}`;
+    const state = now ? `Running now · ${k === 'hunt' ? untilUtc((d0 + 1) * 86400000) : evLeft(e)} left` : d0 < one.from ? `Starts in ${untilUtc(one.from * 86400000)}` : 'Over';
+    const text = k === 'hunt' && d !== d0 ? `The hunted boss on ${evDate(d)}: ${K.BOSSES[e.boss].name}. Every Boss Hall win against it drops one more set piece and ${/^[AEIOU]/.test(K.BOSSES[e.boss].aff) ? 'an' : 'a'} ${K.BOSSES[e.boss].aff} Elixir. A new boss every day of the Boss Hunt week.` : evText(e);
+    const locked = E0.u && !unlocked(E0.u);
+    const el = document.createElement('div');
+    el.className = 'unlock-pop ev-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', evTitle(e)); el.style.setProperty('--evc', E0.col);
+    el.innerHTML = `<div class="unlock-card"><span class="ev-pic">${evIc(e)}</span><span class="tag">${esc(E0.name)}</span><h2>${esc(k === 'hunt' ? K.BOSSES[e.boss].name : evTitle(e))}</h2>
+      <span class="ev-when">${esc(when)} · <b>${esc(state)}</b></span><p>${esc(text)}</p>${locked ? `<span class="ev-lock">${LOCK_SVG} Opens after ${needTxt(E0.u)}</span>` : ''}
+      <div class="ev-pbtn">${now && !locked ? `<button class="btn primary" type="button" data-go="${k === 'tide' && !unlocked('tower') ? 'team' : E0.go}">Go ›</button>` : ''}<button class="btn" type="button">Close</button></div></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', ev => { const b = ev.target.closest('button'); if (ev.target === el || b) { el.remove(); if (b && b.dataset.go) setTab(b.dataset.go); } });
+  }
   function eventsHtml() {
     const d0 = evDay(), now = evOnDay(d0);
     const cards = now.map(e => { const E0 = EVENTS[e.k], locked = E0.u && !unlocked(E0.u);
@@ -5196,10 +5214,10 @@
     let cal = `<span></span>${days.map(x => `<span class="ev-h">${x}</span>`).join('')}`;
     for (let w = w0; w < w0 + 4; w++) {
       const ws = 7 * w - 3, tide = evOnDay(ws)[0];
-      cal += `<span class="ev-wk" title="${esc(evText(tide))}">${essIcon(tide.ess)}${tide.ess}</span>`;
+      cal += `<button type="button" class="ev-wk" data-act="evpop" data-d="${ws}" data-k="tide" title="${esc(evTitle(tide))}">${essIcon(tide.ess)}${tide.ess}</button>`;
       for (let d = ws; d < ws + 7; d++) {
         const evs = evOnDay(d).filter(e => e.k !== 'tide'), date = new Date(d * 86400000);
-        cal += `<span class="ev-day ${d < d0 ? 'past' : d === d0 ? 'today' : ''}"><b>${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}</b>${evs.map(e => `<span class="ev-mini" style="--evc:${EVENTS[e.k].col}" title="${esc(evTitle(e) + ': ' + evText(e))}">${esc(e.k === 'hunt' ? K.BOSSES[e.boss].name : e.k === 'storm' ? K.SHARD[e.shard].name.replace(/ Fate Shard$/, '') + ' Storm' : 'Blood Moon')}</span>`).join('')}</span>`;
+        cal += `<span class="ev-day ${d < d0 ? 'past' : d === d0 ? 'today' : ''}"><b>${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}</b>${evs.map(e => `<button type="button" class="ev-mini" style="--evc:${EVENTS[e.k].col}" data-act="evpop" data-d="${d}" data-k="${e.k}" title="${esc(evTitle(e))}">${esc(e.k === 'hunt' ? K.BOSSES[e.boss].name : e.k === 'storm' ? K.SHARD[e.shard].name.replace(/ Fate Shard$/, '') + ' Storm' : 'Blood Moon')}</button>`).join('')}</span>`;
       }
     }
     return `<div class="evs"><div class="section-head"><div><h2>Events</h2><p class="lede">Every week brings its own events. They follow a four-week cycle, so they keep coming back.</p></div></div>
