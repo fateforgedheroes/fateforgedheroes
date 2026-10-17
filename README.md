@@ -1,85 +1,62 @@
 # Fate Forged Heroes
 
-Turn-based fantasy RPG for the browser. Static site (one HTML page, no dependencies) with optional Supabase accounts and cloud saves.
+A turn-based fantasy hero collector for the browser, made for phones held sideways. One static page without dependencies, with optional Supabase accounts, cloud saves and online modes (arena, guilds, chat).
 
-- **Hosting:** Vercel (builds with `npm run build`, serves `dist/`)
-- **Accounts + saves:** Supabase (Google login, email + password, one save row per player)
-- **Code:** this repository
+- **Play:** https://www.fateforgedheroes.com
+- **Hosting:** Vercel (`npm run build`, serves `dist/`, deploys every push to `main`)
+- **Accounts, saves and online modes:** Supabase
 
-## Project layout
+## Files
 
 | Path | What |
 | --- | --- |
-| `src/engine.js` | Combat engine and all game data: heroes, enemies, bosses, chapters, gear, Fate Shards. No DOM. |
-| `src/app.js` | Screens, battle view, effects, sound, local saves |
-| `src/cloud.js` | Sign-in and cloud saves (Supabase REST API via `fetch`) |
-| `src/sprites.js`, `src/bgs.js` | Sprite frames and backgrounds |
-| `src/shell.html` | Page layout and CSS |
-| `src/assets/*.js` | Art as data URLs (hero, enemy and boss sprites, portraits, shards, logo) |
-| `public/` | Copied as-is into the site (`privacy.html`, `favicon.png`) |
-| `supabase/migrations/` | Database setup (run once in Supabase) |
-| `tests/campaign-sim.cjs` | Balance smoke test: auto-plays the whole campaign |
+| `engine.js` | Combat engine and all game data. No DOM; also runs in Node. |
+| `app.js` | Screens, the battle view, effects, sound, music, saves |
+| `cloud.js` | Accounts and cloud saves (Supabase REST API via `fetch`) |
+| `sprites.js`, `bgs.js` | Character pictures and battle backgrounds |
+| `shell.html` | Page layout and styles |
+| `story.js` | The campaign story |
+| `manga.js`, `sheets.js`, `shards.js`, `menu.js`, `bg.js`, `chbg.js`, `gear.js`, `cards.js`, … | Art as data URLs |
+| `hi/`, `sheets/`, `backgrounds/` | Larger art, loaded when a battle needs it |
+| `desktop.html` | The phone frame the game plays in on computers and tablets |
+| `privacy.html`, `favicon.png`, `manifest.webmanifest`, `icon-*.png` | Copied into the site as they are |
+| `0001_*.sql` … `0014_*.sql` | Database setup, run once each, in order, in the Supabase SQL Editor |
+| `supabase/functions/arena/` | The server for the arena and the guild boss (Edge Function) |
+| `build.mjs`, `strip.mjs` | Build: puts the page together and takes the comments out |
+| `campaign-sim.cjs` | Balance test: auto-plays the whole campaign for every class |
 
 ## Run locally
 
 ```bash
 npm run build        # writes dist/index.html
-npm test             # campaign simulation, must print PASS
-npx serve dist       # or open dist/index.html directly
+npm test             # campaign simulation, must print PASS for every class
+npx serve dist       # then open the address it shows
 ```
 
-Without `SUPABASE_URL` and `SUPABASE_ANON_KEY` the build runs in offline mode (browser saves only).
-
----
+Without `SUPABASE_URL` and `SUPABASE_ANON_KEY` the build runs offline (saves stay in the browser).
 
 ## Setup (one time)
 
-### 1. Supabase
+### Supabase
 
-1. Create a project at supabase.com (region: close to your players, e.g. Frankfurt). Store the database password in a password manager.
-2. **SQL Editor → New query**: paste `supabase/migrations/0001_saves.sql` and run it.
-3. **Project Settings → API**: copy the **Project URL** and the **anon public** key. (Never use the `service_role` key in the game.)
-4. **Authentication → Providers → Email**: enabled by default. Keep "Confirm email" on.
-5. **Authentication → URL Configuration**:
-   - Site URL: `https://www.fateforgedheroes.com` (until the domain exists: your `*.vercel.app` address)
-   - Redirect URLs: add the Vercel address and, later, `https://www.fateforgedheroes.com` and `https://fateforgedheroes.com`.
+1. Create a project (a region close to your players). Keep the database password in a password manager.
+2. **SQL Editor**: run `0001_saves.sql`, then the other `.sql` files in order.
+3. **Project Settings → API**: copy the Project URL and the anon public key. Never put the `service_role` key in the game.
+4. **Authentication → URL Configuration**: Site URL `https://www.fateforgedheroes.com`; add it (and `https://fateforgedheroes.com`) to the Redirect URLs.
+5. **Authentication → Email Templates**: paste `supabase/email/confirm-signup.html` as the "Confirm signup" template.
 
-### 2. Google sign-in
+### Google sign-in (optional)
 
-1. Go to console.cloud.google.com → create a project "Fate Forged Heroes".
-2. **APIs & Services → OAuth consent screen**: External, app name "Fate Forged Heroes", your support email, add the privacy policy URL (`/privacy.html`).
-3. **Credentials → Create credentials → OAuth client ID** → Web application.
-   - Authorized redirect URI: `https://<your-project-ref>.supabase.co/auth/v1/callback` (shown in Supabase under Authentication → Providers → Google).
-4. Copy the Client ID and Client secret into Supabase → **Authentication → Providers → Google** and enable it.
+Create an OAuth client (Web application) in the Google Cloud console with the redirect URI Supabase shows under Authentication → Providers → Google, and paste its Client ID and secret there. The game shows the Google button once the provider is on.
 
-### 3. Vercel
+### Vercel
 
-1. **Add New → Project → Import** this GitHub repository. Framework preset: **Other**. Vercel reads `vercel.json`.
-2. **Settings → Environment Variables** (Production and Preview):
-   - `SUPABASE_URL` = the Project URL
-   - `SUPABASE_ANON_KEY` = the anon public key
-3. Redeploy. Every push to `main` now goes live automatically; every pull request gets a preview link.
+Import this repository, framework preset **Other**. Under Settings → Environment Variables set `SUPABASE_URL` and `SUPABASE_ANON_KEY`. Every push to `main` goes live.
 
-### 4. Domain (when bought)
+### Arena server
 
-Vercel → Project → **Settings → Domains** → add `fateforgedheroes.com` and `www.fateforgedheroes.com`, then add the DNS records Vercel shows at your registrar (Cloudflare: set the records to "DNS only"). Then update the Site URL and Redirect URLs in Supabase (step 1.5).
+The GitHub Action in `.github/workflows/arena-function.yml` deploys the Edge Function when the engine or the function changes. It needs the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF`.
 
-### 5. Before going public
+## Saves
 
-- Fill in the placeholders (`[YOUR NAME]`, `[EMAIL ADDRESS]`, …) in `public/privacy.html`.
-- Supabase → Authentication → Emails: optionally set up your own SMTP sender so confirmation emails come from your domain.
-
----
-
-## How saves work
-
-- Every change is saved in the browser (`localStorage`, key `ffh-save`) and, when signed in, uploaded to the `saves` table a few seconds later (plus every 30 s and when the tab is hidden).
-- On sign-in: no cloud save yet → the local save is uploaded. Otherwise the newer save wins; a fresh local game always takes the cloud save.
-- Row Level Security: a player can only read and write their own row. `delete_my_account()` lets players delete their account (GDPR).
-
-## Roadmap
-
-1. Leaderboards (server-verified via Supabase Edge Functions)
-2. Move rewards, summons and drops server-side (anti-cheat)
-3. Guilds, guild chat (Supabase Realtime), guild boss
-4. Arena against other players' saved teams
+Every change is saved in the browser (`localStorage`, key `ffh-save`) and, with an account, uploaded to the `saves` table a few seconds later. Each device remembers which cloud version its save is based on, so two devices never overwrite each other silently; when both changed, the player picks which save to keep. Row Level Security lets a player read and write only their own row, and `delete_my_account()` deletes an account with its data.

@@ -87,7 +87,7 @@ const K = (function () {
   // hp / atk: a blighted boss has more HP and hits less hard itself, so the fight lasts long enough for the aura to matter
   const BLIGHT = { bh: 3, pct: [0.1, 0.11, 0.12, 0.13, 0.14], hp: 2.2, atk: 0.5 };
   const blighted = (u, d) => { if (u.isBoss) { u.blight = BLIGHT.pct[d || 0]; u.maxHp = u.hp = Math.round(u.maxHp * BLIGHT.hp); u.atk = Math.round(u.atk * BLIGHT.atk); } return u; };
-  // Boss Hall walls (from level BTRAIT.from, Hard): like a RAID dungeon, each boss has a trait that only a specific tool
+  // Boss Hall walls (from level BTRAIT.from, Hard): each boss has a trait that only a specific tool
   // answers, and the first time that answer lands the trait breaks for the rest of the fight. Iron Hide: takes dmg × damage
   // until a Defense Down lands (a debuffer is needed). Swift: Speed ×spd until a
   // Speed Down lands (it acts 1.4× as often). The trait shows as a badge on the boss.
@@ -814,7 +814,6 @@ const K = (function () {
 
   // ---------- Campaign ----------
   // 10 chapters x 7 stages. Stage 1-6 each drop a fixed gear slot, stage 7 (chapter boss) a random one.
-  // Chapter names/settings are placeholders.
   const CHAPTERS = [
     // pool[0] = regular foes, pool[1] = elites; stages mix them per phase (see stageGroup), so bigger pools mean more variety
     // Chapter I builds the team: the starter fights alone in stage 1, the first clears of stages 1-3 add Draelyn, Bromir and Skavren
@@ -938,7 +937,7 @@ const K = (function () {
   // measured with four Legendaries it ends about where the essence towers do. Measured (best Ember team; floor still won half
   // the time): a Chapter III-IV team ~60, Easy done ~130, Brutal start ~200, Brutal done ~270, Nightmare done ~300 (floor
   // 300 itself ~20% a try). Teams without a Legendary stop 30-70 floors earlier.
-  // curve: [floor, enemy level, strength] points, straight lines in between (calibrated by simulation, see CLAUDE.md)
+  // curve: [floor, enemy level, strength] points, straight lines in between (calibrated by simulation)
   const TOWERS = ['Ember', 'Verdant', 'Storm', 'Frost', 'Radiant', 'Umbral', 'All'];
   const TOWER = { floors: 300, curve: [[1, 1, 0.9], [50, 25, 2.0], [100, 45, 4.3], [200, 65, 7.4], [300, 85, 10.5]], boss: 0.45, open: 2, openBoss: 1.15, solo: [3, 1.7, 1.25, 1] };
   function towerFloor(f) {
@@ -1046,14 +1045,14 @@ const K = (function () {
   const elixirXp = lvl => winXp(lvl) * ELIXIR.wins;
   const elixirFits = (ess, id) => ess === 'Aether' || (CHAMPS[id] && CHAMPS[id].aff === ess);
 
-  // ---------- Energy (like RAID) ----------
+  // ---------- Energy ----------
   // Every campaign stage and Boss Hall level costs energy when it starts; a defeat gives half of it back (app.js).
   // Energy refills by 1 every regenMin minutes up to energyMax (base + player level: 200 + level, so a night's sleep
   // fits in it), and level-ups, quest chests, Market refills and gifts add energy on top of the bar (app.js levelEnergy:
   // a full bar up to level 15, then 60), but never past `over` × the max (the rest is lost), so no one hoards thousands.
   // Above the max the bar stops refilling until it is below again. Easy Chapter I is free: the tutorial chapter.
   // Arena and guild boss have their own tokens and keys. Pace (campaign-sim battles × cost against ~480 a day plus
-  // level-ups): Easy about a week and a half, all five difficulties a few months, as in RAID.
+  // level-ups): Easy about a week and a half, all five difficulties a few months.
   const ENERGY = { base: 200, regenMin: 3, stage: [3, 4, 6, 8, 10], boss: 6, over: 2 };
   const energyMax = plvl => ENERGY.base + (plvl || 1);
   // Easy Chapter I is free the first time through (new players never wait); a replay costs like the rest of Easy
@@ -1268,7 +1267,7 @@ const K = (function () {
     const base = { atk: 5 + il * 0.9, hp: 40 + il * 7, def: 3 + il * 0.35, atkP: 3 + il * 0.09, defP: 3 + il * 0.09, hpP: 3 + il * 0.09, crit: 3 + il * 0.08, cdmg: 5 + il * 0.2, acc: 6 + il * 0.3, res: 6 + il * 0.3, spd: 5 + il * 0.12 }[k];
     return Math.round(base * q);
   }
-  // substat rolls: wide ranges around the same average as before, so a great piece is a lucky roll worth farming for (RAID)
+  // substat rolls: wide ranges around the same average as before, so a great piece is a lucky roll worth farming for
   const SUB_POOL = [['hpP', 2, 7], ['atkP', 2, 7], ['defP', 2, 7], ['crit', 1, 6], ['cdmg', 2, 8], ['acc', 2, 9], ['res', 2, 9], ['atk', 3, 11], ['hp', 20, 80], ['def', 1, 6], ['spd', 1, 5]];
   // substat scale: grows with item level; Mythical rolls 25% higher
   const subScale = (it, k) => (k === 'spd' ? 1 : 1 + it.il / 25) * (it.rar >= 5 ? 1.25 : 1);
@@ -1303,7 +1302,7 @@ const K = (function () {
     for (const s of it.subs) out.push([s[0], am > 1 ? Math.round(s[1] * am) : s[1]]);
     return out;
   }
-  // +16 like RAID: a substat added or boosted at +4, +8, +12 and +16; the main stat grows 4.5% per level, so +16 is what +12 was
+  // +16: a substat added or boosted at +4, +8, +12 and +16; the main stat grows 4.5% per level, so +16 is what +12 was
   const MAX_GEAR_LVL = 16;
   const upgradeCost = it => Math.round(40 * (it.lvl + 1) * (it.rar + 1) * (1 + it.il / 10));
   // chance per try by the current level: low levels almost always succeed, the last steps to +16 are a real gamble
@@ -1395,14 +1394,16 @@ const K = (function () {
   // Legendary pity: after PITY_LEG of those summons without a Legendary, the next one is Legendary (st.lpity counts)
   const PITY_EPIC = 40, PITY_LEG = 75;
   const PITY_SHARDS = ['ancient', 'mythic', 'legendary'];
-  function summonOne(st, type) {
+  // step: how much a summon counts towards the Legendary pity (2 during a Shard Storm of this shard, app.js events)
+  function summonOne(st, type, step) {
+    step = step || 1;
     const T = SHARD[type || 'fate'];
     const r = rnd() * 100; let acc = 0, rar = 1;
     for (let i = 4; i >= 0; i--) { if (!T.rates[i]) continue; acc += T.rates[i]; if (r < acc) { rar = i; break; } }
     if (acc < 100 && r >= acc) rar = T.rates.findIndex(x => x > 0);
     if (PITY_SHARDS.includes(T.id)) {
-      if (rar < 4 && (st.lpity || 0) + 1 >= PITY_LEG) rar = 4;
-      st.lpity = rar >= 4 ? 0 : (st.lpity || 0) + 1;
+      if (rar < 4 && (st.lpity || 0) + step >= PITY_LEG) rar = 4;
+      st.lpity = rar >= 4 ? 0 : (st.lpity || 0) + step;
       if (rar < 3 && (st.pity || 0) + 1 >= PITY_EPIC) rar = 3;
       st.pity = rar >= 3 ? 0 : (st.pity || 0) + 1;
     }
@@ -1893,7 +1894,7 @@ const K = (function () {
       let atk = a.atk;
       if (this.has(a, 'atkUp')) atk *= 1.5;
       if (this.has(a, 'atkDown')) atk *= 0.5;
-      const rg = (a.isBoss || a.siege) && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
+      const rg = (a.isBoss || a.hall || a.siege) && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
       if (a.stacks.smids) atk *= 1 + 0.1 * a.stacks.smids;
       if (a.passive === 'bloodlust' && a.hp < a.maxHp * 0.5) atk *= 1.3;
       if (a.passive === 'soulharvest') atk *= 1 + 0.1 * Math.min(5, this.deaths);

@@ -7,6 +7,7 @@
 // Without them the game builds in offline mode (browser saves only).
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { stripComments } from './strip.mjs';
 
 const DIRS = ['./src/', './src/assets/', './assets/', './public/', './'];
 const missing = [];
@@ -36,12 +37,14 @@ const head = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <script>
-// on a computer (a mouse or trackpad, no touch screen) the game plays inside a phone on its side (desktop.html), so it
-// looks exactly as on a phone (always; the page inside the phone, ?inapp=1, stays where it is)
+// on a computer or a tablet the game plays inside a phone on its side (desktop.html), so it looks exactly as on a phone
+// (always; the page inside the phone, ?inapp=1, stays where it is). A tablet: a touch screen at least 600 CSS pixels
+// across its short side; phones are smaller and play as they are
 (function () { try {
   var q = location.search;
   if (location.protocol === 'file:' || window.top !== window.self || /[?&]inapp=1/.test(q)) return;
-  if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+  var computer = matchMedia('(hover: hover) and (pointer: fine)').matches, tablet = Math.min(screen.width, screen.height) >= 600;
+  if (!computer && !tablet) return;
   location.replace('/desktop.html' + q + location.hash);
 } catch (e) { /* play as it is */ } })();
 </script>
@@ -64,7 +67,8 @@ const out = new URL('./dist/', import.meta.url);
 mkdirSync(out, { recursive: true });
 // Build id: a hash of the page (or FFH_BUILD from the environment), stamped into it as window.FFH_BUILD and written to
 // version.json; an open game tab polls that file and offers a reload when a newer build is live (app.js checkVersion)
-const page = head + shell + '\n</body>\n</html>\n';
+// the page players load carries no comments (strip.mjs): smaller, and only code, markup and data
+const page = stripComments(head + shell + '\n</body>\n</html>\n');
 const build = (process.env.FFH_BUILD || createHash('sha256').update(page).digest('hex').slice(0, 12)).replace(/[^\w.-]/g, '');
 writeFileSync(new URL('index.html', out), page.replace("window.FFH_BUILD = '@@BUILD@@'", () => `window.FFH_BUILD = '${build}'`));
 writeFileSync(new URL('version.json', out), JSON.stringify({ build }) + '\n');

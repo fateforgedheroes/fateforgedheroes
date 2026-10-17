@@ -2980,6 +2980,21 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .cl-chest { color: #ffd76a; } .cl-boss { color: #ff9a7a; }
 .cl-gear { display: grid; gap: 6px; justify-items: start; padding: 8px 10px; border-radius: 10px; background: rgba(8, 6, 11, .72); border: 1px solid color-mix(in srgb, var(--rc, var(--gold)) 45%, transparent); }
 .cl-gear { --rc: var(--gold); }
+/* the chapter's reward chest on its banner (app.js chestBtn): gold and hopping when it can be claimed, dim with the
+   progress while the chapter is not cleared, open with a tick once claimed */
+.cl-gear { position: relative; } .cl-gear.has-chest { padding-right: 84px; }
+.cl-chestb { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 70px; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+.cl-chestb svg { width: 54px; height: 48px; filter: drop-shadow(0 3px 3px rgba(0, 0, 0, .6)); }
+.cl-chestb small { font: 700 .62rem var(--font-tag); letter-spacing: .08em; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
+.cl-chestb.ready svg { animation: chestHop 1.3s ease-in-out infinite; filter: drop-shadow(0 0 10px rgba(255, 210, 100, .9)) drop-shadow(0 3px 3px rgba(0, 0, 0, .6)); }
+.cl-chestb.ready small { color: #fff1c4; text-shadow: 0 0 8px rgba(255, 210, 100, .9); }
+.cl-chestb.wait { opacity: .55; filter: grayscale(.45); } .cl-chestb.wait small { color: var(--muted); }
+.cl-chestb.got { opacity: .6; } .cl-chestb.got small { color: #9fe08a; }
+@keyframes chestHop { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-5px) rotate(-4deg); } 60% { transform: translateY(-3px) rotate(3deg); } }
+@media (prefers-reduced-motion: reduce) { .cl-chestb.ready svg { animation: none; } }
+.ch-pop .ch-big svg { width: 96px; height: 86px; filter: drop-shadow(0 0 18px rgba(255, 210, 100, .8)); }
+.ch-pop .cv-rws { flex: none; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+@media (max-height: 500px) and (orientation: landscape) { .cl-gear.has-chest { padding-right: 70px; } .cl-chestb { width: 60px; right: 6px; } .cl-chestb svg { width: 44px; height: 40px; } .ch-pop .ch-big svg { width: 70px; height: 62px; } }
 .cl-rrow { display: flex; align-items: center; gap: 8px; } .cl-rrow > small { min-width: 104px; font: 700 .74rem var(--font-tag); letter-spacing: .04em; white-space: nowrap; }
 .cl-set { display: flex; align-items: center; gap: 8px; } .cl-set img { width: 38px; height: 38px; object-fit: contain; flex: none; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--rc) 60%, transparent)); }
 .cl-set > span { display: grid; line-height: 1.25; } .cl-set b { font-family: var(--font-display); color: #f7dfa4; letter-spacing: .03em; }
@@ -2999,7 +3014,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .cl-desc, .cl-gear > small, .cl-set em { display: none; } .cl-name { font-size: 1rem; }
   .cl-gear { grid-column: 1 / -1; width: 100%; padding: 4px 6px; gap: 3px; } .cl-rrow > small { min-width: 92px; font-size: .66rem; } .cl-set img { width: 28px; height: 28px; } .cl-slots .gt-ic { width: 24px; height: 24px; }
 }
-/* ===== Campaign · a chapter's stages (RAID-style): drops on the left, a row per stage on the right ===== */
+/* ===== Campaign · a chapter's stages: drops on the left, a row per stage on the right ===== */
 .sv-wrap { display: grid; grid-template-columns: 290px minmax(0, 1fr); gap: 10px; align-items: start; }
 .sv-side { display: grid; gap: 8px; position: sticky; top: 8px; min-width: 0; }
 .sv-ch { position: relative; padding: 14px 14px 12px; min-height: 76px; display: grid; align-content: end; border: 1px solid var(--gold); border-radius: 10px; overflow: hidden;
@@ -3087,7 +3102,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .pp-bottom { padding: 5px 52px 5px 6px; gap: 6px; } .pp-roster .pp-c { flex-basis: 46px; } .pp-go { grid-auto-flow: column; } .pp-fight { min-height: 40px; min-width: 120px; font-size: 1.05rem; } .pp-go .btn { padding: 5px 10px; }
   .pp-ph { flex-wrap: nowrap; } .pp-ph button { padding: 3px 7px; font-size: .66rem; white-space: nowrap; } .pp-top h2 small { display: none; }
 }
-/* ===== the battle (RAID-style): the field fills the screen, everything else floats on it =====
+/* ===== the battle: the field fills the screen, everything else floats on it =====
    title and phase/turn top right, turn order top left, Guide / Auto / speed / give up bottom left, the hero's skills
    as round buttons bottom right (gone on auto), coach tips bottom centre, a chat line along the top, no log */
 #battle:not([hidden]) { display: flex !important; flex-direction: column; align-items: center; gap: 0; padding: 0 !important; }
@@ -3154,7 +3169,7 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   #battle .sk { grid-template-columns: 34px minmax(0, 1fr); padding: 4px !important; gap: 0 6px; } #battle .sk-ic { width: 34px !important; height: 34px !important; } #battle .sk-ic svg { width: 18px !important; height: 18px !important; }
   #battle .sk > b { font-size: .72rem; } #battle .sk > small { font-size: .6rem; } #battle .sk-d { font-size: .62rem; } #battle .sk-cd { top: 21px !important; left: 21px !important; font-size: 1rem !important; }
 }
-/* ===== battle result (RAID-style): banner, reward tiles, a card per hero, round nav buttons and big actions ===== */
+/* ===== battle result: banner, reward tiles, a card per hero, round nav buttons and big actions ===== */
 .modal-box.rs2 { width: min(980px, 100%); max-height: calc(100dvh - 16px); gap: 10px; padding: 0 0 12px; text-align: center; overflow-y: auto;
   background: radial-gradient(120% 60% at 50% 0%, rgba(240, 190, 90, .14), transparent 60%), linear-gradient(180deg, #1e1724, #0e0a12); }
 .modal-box.rs2.lose { background: radial-gradient(120% 60% at 50% 0%, rgba(220, 70, 60, .16), transparent 60%), linear-gradient(180deg, #1e1416, #0e0a0c); }
@@ -3411,6 +3426,41 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .sv-ch .sc-btns .btn { padding: 3px 10px; min-height: 0; font-size: .72rem; }
 @media (max-height: 500px) and (orientation: landscape) {
   .story .sc-box { padding: 7px 12px 9px; } .story .sc-name { font-size: .85rem; margin-bottom: 2px; } .story .sc-text { font-size: .86rem; min-height: 2.4em; }
+}
+/* Events (app.js EVENTS, eventsHtml): the ribbon on Home, the screen with what runs now and the four-week calendar */
+.ev-rib { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 620px; margin: 6px auto 0; padding: 6px 10px; box-sizing: border-box; border: 1px solid #9c7c37; border-radius: 999px; cursor: pointer; color: #f3e6c8; font: inherit;
+  background: linear-gradient(90deg, rgba(120, 40, 140, .55), rgba(30, 20, 40, .85) 60%), #160f1a; box-shadow: 0 0 14px rgba(180, 90, 220, .3); }
+.ev-rib .ev-tag { font-family: var(--font-tag); font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gold); flex: none; }
+.ev-rib .ev-chips { display: flex; gap: 6px; min-width: 0; overflow: hidden; flex: 1; }
+.ev-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px 2px 4px; border-radius: 999px; background: rgba(0, 0, 0, .4); border: 1px solid var(--evc, #9c7c37); white-space: nowrap; font-size: .82rem; }
+.ev-chip .ev-ic { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--evc, #9c7c37); color: #120c18; flex: none; }
+.ev-chip .ev-ic svg { width: 13px; height: 13px; fill: currentColor; } .ev-chip .ev-ic img { width: 16px; height: 16px; }
+.ev-rib .ev-go { flex: none; color: var(--gold); font-weight: 700; }
+.evs { display: flex; flex-direction: column; gap: 10px; }
+.ev-now { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.ev-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--evc, #9c7c37); border-radius: 6px; background: linear-gradient(160deg, color-mix(in srgb, var(--evc, #9c7c37) 22%, #1a1320), #120d15 70%); box-shadow: 0 0 0 1px #000; }
+.ev-card header { display: flex; align-items: center; gap: 10px; } .ev-card header .ev-ic { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--evc); color: #120c18; flex: none; }
+.ev-card header .ev-ic svg { width: 20px; height: 20px; fill: currentColor; } .ev-card header .ev-ic img { width: 26px; height: 26px; }
+.ev-card h3 { margin: 0; font-size: 1.05rem; } .ev-card .ev-left { font-family: var(--font-tag); font-size: .72rem; letter-spacing: .08em; color: var(--gold); }
+.ev-card p { margin: 0; font-size: .9rem; color: #e6dccb; } .ev-card .btn { align-self: flex-start; }
+.ev-card .ev-lock { font-size: .8rem; color: var(--muted); }
+.ev-cal { display: grid; grid-template-columns: 92px repeat(7, minmax(0, 1fr)); gap: 3px; font-size: .74rem; }
+.ev-cal .ev-h { font-family: var(--font-tag); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
+.ev-cal .ev-wk { display: flex; align-items: center; gap: 4px; padding: 3px 5px; border-radius: 4px; background: rgba(0, 0, 0, .35); color: #e6dccb; }
+.ev-cal .ev-wk .fg-ess, .ev-cal .ev-wk svg { width: 14px; height: 14px; }
+.ev-day { min-height: 42px; padding: 3px; border-radius: 4px; background: rgba(0, 0, 0, .3); border: 1px solid transparent; display: flex; flex-direction: column; gap: 2px; }
+.ev-day.past { opacity: .4; } .ev-day.today { border-color: var(--gold); box-shadow: 0 0 8px rgba(217, 180, 90, .4); }
+.ev-day b { font-size: .7rem; color: var(--muted); } .ev-day .ev-mini { display: block; padding: 1px 4px; border-radius: 3px; background: var(--evc); color: #120c18; font-weight: 700; font-size: .62rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev-hint { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 0 0 8px; border-radius: 6px; border: 1px solid var(--evc); background: color-mix(in srgb, var(--evc) 18%, #140e18); font-size: .85rem; }
+.ev-hint .ev-ic { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--evc); color: #120c18; flex: none; } .ev-hint .ev-ic svg { width: 14px; height: 14px; fill: currentColor; }
+.ev-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--evc); color: #120c18; font: 700 .62rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
+.ev-rib + .home { margin-top: 4px; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .ev-rib { max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); margin: 2px auto 0; padding: 2px 8px; } .ev-chip { font-size: .72rem; padding: 1px 7px 1px 3px; } .ev-chip .ev-ic { width: 16px; height: 16px; }
+  .ev-rib + .home { max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); }
+  .ev-now { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .ev-card { padding: 7px 9px; gap: 4px; } .ev-card p { font-size: .76rem; } .ev-card h3 { font-size: .9rem; }
+  .ev-card header .ev-ic { width: 26px; height: 26px; } .ev-card .btn { padding: 3px 10px; min-height: 0; font-size: .7rem; }
+  .ev-cal { grid-template-columns: 74px repeat(7, minmax(0, 1fr)); font-size: .64rem; } .ev-day { min-height: 30px; }
 }
 /* the Siege (app.js siegeHtml, finishSiege): the Tower's layout (.tws, .tw-sidec) with tickets; in battle (#battle.siege)
    every figure is smaller, so the labels shrink too and ordinary enemies show only their HP bar */

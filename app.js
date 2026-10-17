@@ -63,7 +63,7 @@
   const playerWinXp = (lvl, first, boss) => Math.round((40 + lvl * 6) * (first ? 1.5 : 1) * (boss ? 1.2 : 1));
   const levelSilver = l => 100 * l;
   // a level-up refills: a full bar up to level LEVEL_FULL_EN (new players never wait), then a fixed LEVEL_EN, so energy
-  // gets scarce late in the game (with Hard, Brutal and Nightmare costing more per stage), like in RAID
+  // gets scarce late in the game (with Hard, Brutal and Nightmare costing more per stage)
   const LEVEL_FULL_EN = 15, LEVEL_EN = 60;
   const levelEnergy = l => (l <= LEVEL_FULL_EN ? K.energyMax(l) : LEVEL_EN);
   const RENAME_COST = 2500; // the first name change is free
@@ -767,7 +767,7 @@
       return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
         <img class="hb-bg" src="${MENU_ART[z.go]}" alt=""><span class="hb-txt"><b class="hb-name">${esc(z.label)}</b><span class="hb-st">${st}</span></span>${dot ? '<i class="hb-dot" aria-hidden="true"></i>' : ''}</button>`;
     };
-    return `<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
+    return `${tut ? '' : evRibbon()}<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
   }
   // the icon bar on the left of every screen but Home (and the battle): the Home buildings with their banner icons
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
@@ -820,7 +820,7 @@
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'events' ? eventsHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
@@ -860,6 +860,25 @@
   // (CV.view = 'stages'). Home and the icon bar open the list; a new player's first battle skips it (fightSpot).
   const CV = { view: 'chapters' };
   const SLOT_ORDER = ['wapen', 'helm', 'schild', 'handschoenen', 'borstpantser', 'laarzen'];
+  // a small treasure chest (open = claimed)
+  const CHEST_ART = open => `<svg viewBox="0 0 40 36" aria-hidden="true"><defs><linearGradient id="chw" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a8642e"/><stop offset="1" stop-color="#5a2f14"/></linearGradient><linearGradient id="chg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0b0"/><stop offset="1" stop-color="#c9922e"/></linearGradient></defs>
+    ${open ? '<path d="M5 17 L8.5 4.5 Q20 0.5 31.5 4.5 L35 17 Z" fill="url(#chw)" stroke="#2a1608" stroke-width="1.2"/><ellipse cx="20" cy="17.5" rx="14" ry="3.2" fill="#ffd36a"/>' : '<path d="M4 17 V12 Q4 5 20 5 Q36 5 36 12 V17 Z" fill="url(#chw)" stroke="#2a1608" stroke-width="1.2"/><rect x="9" y="6.5" width="3.5" height="10.5" fill="url(#chg)"/><rect x="27.5" y="6.5" width="3.5" height="10.5" fill="url(#chg)"/>'}
+    <rect x="4" y="16.5" width="32" height="17" rx="2" fill="url(#chw)" stroke="#2a1608" stroke-width="1.2"/><rect x="9" y="16.5" width="3.5" height="17" fill="url(#chg)"/><rect x="27.5" y="16.5" width="3.5" height="17" fill="url(#chg)"/>
+    <rect x="16.5" y="14" width="7" height="8.5" rx="1.5" fill="url(#chg)" stroke="#2a1608" stroke-width=".8"/><circle cx="20" cy="18.4" r="1.3" fill="#2a1608"/></svg>`;
+  // the chest on a chapter's banner: claim (all seven stages cleared on this difficulty), wait (the progress), or claimed
+  function chestBtn(c, d, done) {
+    const got = chrClaimed(c, d), ready = done === 7 && !got;
+    return `<span class="cl-chestb ${ready ? 'ready' : got ? 'got' : 'wait'}" role="button" tabindex="0" data-act="${ready ? 'chclaim' : 'chpeek'}" data-chap="${c}" title="${ready ? 'Claim the chapter rewards' : got ? 'Chapter rewards claimed' : `Clear all seven stages on ${K.DIFFS[d].name} to open this chest`}">${CHEST_ART(got)}<small>${ready ? 'Claim' : got ? '✓ Claimed' : `${done}/7`}</small></span>`;
+  }
+  // the chest opened (got: the rewards just claimed) or a look inside a closed one
+  function chestPop(c, d, got) {
+    const el = document.createElement('div'), claimed = !got && chrClaimed(c, d);
+    el.className = 'unlock-pop ch-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `Chapter ${ROMAN[c]} rewards`);
+    el.innerHTML = `<div class="unlock-card"><div class="ch-big">${CHEST_ART(got || claimed)}</div><span class="tag">Chapter ${ROMAN[c]} · ${esc(K.DIFFS[d].name)}</span><h2>${got ? 'Chapter rewards claimed!' : claimed ? 'Already claimed' : 'Chapter rewards'}</h2>
+      <div class="cv-rws">${chapRewardIcons(chapterReward(c, d))}</div>${got || claimed ? '' : `<p>Clear all seven stages of Chapter ${ROMAN[c]} on ${esc(K.DIFFS[d].name)} to open this chest.</p>`}<button class="btn primary" type="button">${got ? 'Great!' : 'OK'}</button></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
+  }
   function chapterListHtml(head) {
     const d = S.diff || 0, D = K.DIFFS[d], cleared = clearedOn(d), next = cleared + 1;
     const maxChap = Math.min(K.CHAPTERS.length - 1, K.STAGES[Math.min(next, K.STAGES.length - 1)].chapter), hi = D.rars[D.rars.length - 1];
@@ -871,7 +890,7 @@
         <span class="cl-num">${ROMAN[c]}</span>
         <span class="cl-t"><small>Chapter ${ROMAN[c]}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${esc(ch.name)}</b><span class="cl-desc">${esc(ch.desc)}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${[0, 1, 2, 3, 4, 5, 6].map(k => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</span>${done}/7${chest ? ' · <b class="cl-chest">Reward ready</b>' : ''}` : `${LOCK_SVG} Clear Chapter ${ROMAN[c - 1]} first`}${boss ? `<span class="cl-boss">Boss: ${esc(boss)}</span>` : ''}</span></span>
-        <span class="cl-gear"><span class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
+        <span class="cl-gear ${open ? 'has-chest' : ''}">${open ? chestBtn(c, d, done) : ''}<span class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
           ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
           <small>${own} ${own === 1 ? 'piece' : 'pieces'} owned</small></span></button>`;
     }).join('');
@@ -901,7 +920,7 @@
     const auto = i => `<button type="button" class="btn small ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[chap]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>`;
     const playBtn = i => stateOf(i) === 'locked' ? `<button class="btn" disabled>${LOCK_SVG} Locked</button>` : `<button class="btn primary" data-act="play" data-stage="${i}">Fight${enCost(stEn(i, d))}</button>`;
     const spot = fightSpot() && sel === next;
-    // the chapter's set, the other drops, the team and the chest on the left; a row per stage on the right (RAID-style)
+    // the chapter's set, the other drops, the team and the chest on the left; a row per stage on the right
     const set = K.SETS[ch.set], [need, bonus] = set.desc.split(': '), own = S.inv.filter(it => it.set === ch.set).length, hi = D.rars[D.rars.length - 1];
     // the chapter's reward chest
     const claimed = chrClaimed(chap, d), canClaim = chapDone && !claimed;
@@ -980,12 +999,12 @@
       const cur = open && best < K.BOSS_LEVELS && (i === K.BOSS_ORDER.length - 1 || !bossOpen(i + 1));
       return `<button type="button" class="cl-ch bl-ch ${open ? '' : 'locked'} ${cur ? 'cur' : ''} ${best >= K.BOSS_LEVELS ? 'done' : ''}" data-act="bhopen" data-id="${id}" style="--art:url(${bhArt(i)});--c:${AFF_COL[bo.aff]}" ${open ? '' : 'disabled'}>
         <span class="cl-num bl-por">${open ? por(id) : LOCK_SVG}</span>
-        <span class="cl-t"><small>Boss ${i + 1} · <span style="color:${AFF_COL[bo.aff]}">${bo.aff}</span> · ${esc(bo.arch)}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${open ? esc(bo.name) : '???'}</b><span class="cl-desc">${open ? `<b>${esc(bo.passiveName)}</b>: ${esc(bo.passiveDesc)}` : ''}</span>
+        <span class="cl-t"><small>Boss ${i + 1} · <span style="color:${AFF_COL[bo.aff]}">${bo.aff}</span> · ${esc(bo.arch)}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${open ? esc(bo.name) : '???'}${evHunted(id) ? '<span class="ev-badge" style="--evc:#e8933a">Hunted today</span>' : ''}</b><span class="cl-desc">${open ? `<b>${esc(bo.passiveName)}</b>: ${esc(bo.passiveDesc)}` : ''}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${Array.from({ length: K.BOSS_LEVELS }, (_, k) => `<i class="${k < best ? 'on' : ''}"></i>`).join('')}</span>${best}/${K.BOSS_LEVELS}` : `${LOCK_SVG} ${esc(bhLockTxt(i))}`}</span></span>
         <span class="cl-gear"><span class="cl-set" style="--rc:var(--r${K.bossLoot(nx).rars.slice(-1)[0]})"><img src="${gearArt('borstpantser', 4, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(SS.role)}</i> six-piece set</em></span></span>
           <small>Level ${nx} drops ${rarsHtml(K.bossLoot(nx).rars)}</small></span></button>`;
     }).join('');
-    return `<div class="campaign cv cl bhl">${bhHead('')}
+    return `<div class="campaign cv cl bhl">${bhHead('')}${evHint(evNow('hunt'))}
       <p class="cl-hint">Twenty-five bosses, ten levels each. Beat a boss on level 1 to open the next. Every boss drops its own six-piece set; every two levels are one campaign difficulty.</p>
       <div class="cl-list">${rows}</div></div>`;
   }
@@ -1055,7 +1074,7 @@
           <div class="altar-actions"><button class="btn" data-act="buyshard" ${S.silver < K.SHARD_PRICE ? 'disabled' : ''}>Buy a Fate Shard · ${sigils(K.SHARD_PRICE)}</button></div>
           <span class="empty-note">Fate Shards drop from every victory in the campaign and the Boss Hall. First clears give a guaranteed shard.</span>
           <div class="pity"><span class="tag">Epic or better guaranteed in ${K.PITY_EPIC - (S.pity || 0)} ${K.PITY_EPIC - (S.pity || 0) === 1 ? 'summon' : 'summons'}</span><small class="empty-note">Only Ancient, Mythic and Legendary Fate Shards count towards this.</small><div class="bar"><i style="width:${Math.round((S.pity || 0) / K.PITY_EPIC * 100)}%"></i></div>
-            <span class="tag pity-leg">Legendary guaranteed in ${K.PITY_LEG - (S.lpity || 0)} ${K.PITY_LEG - (S.lpity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar leg"><i style="width:${Math.round((S.lpity || 0) / K.PITY_LEG * 100)}%"></i></div></div>
+            ${(() => { const s = evNow('storm'); return s ? `<span class="ev-badge" style="--evc:#9a7cf0">Shard Storm: ${esc(K.SHARD[s.shard].name)} counts double</span>` : ''; })()}<span class="tag pity-leg">Legendary guaranteed in ${K.PITY_LEG - (S.lpity || 0)} ${K.PITY_LEG - (S.lpity || 0) === 1 ? 'summon' : 'summons'}</span><div class="bar leg"><i style="width:${Math.round((S.lpity || 0) / K.PITY_LEG * 100)}%"></i></div></div>
         </div>
         <div class="fs-grid">${cards}</div>
       </div>`;
@@ -1928,7 +1947,7 @@
     runBattle({ type: 'gboss', team: f.team, d: f.d, ess: f.ess, seed: f.seed, fight: f, area: AREA_OF[f.ess] ?? 1, bg: chapterBg(ESS_CH[f.ess] ?? 9), title: `Guild boss · ${K.BOSSES[K.GBOSS.art[f.ess]].name}` });
   }
   // ================= GEAR VAULT =================
-  // All gear in one place (tab 'vault', next to Heroes and Team), like the artifact screen in RAID: filter by slot,
+  // All gear in one place (tab 'vault', next to Heroes and Team), filter by slot,
   // rarity, set and whether it is worn, sort it, lock pieces you want to keep (it.lock) and sell several at once.
   // Sell mode: tap pieces to select them; worn and locked gear can never be selected.
   const VT = { slot: 'all', rar: 'all', set: 'all', st: 'all', sort: 'rar', sell: false, sel: new Set(), open: null, up: null };
@@ -2871,7 +2890,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${(S.gems || 0).toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -2887,6 +2906,7 @@
     const it = e.target.closest('[data-mm]');
     if (it) {
       const a = it.dataset.mm; setMenu(false);
+      if (a === 'events') { if (B) toast('Not during a battle.', true); else setTab('events'); return; }
       ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
       return;
     }
@@ -3395,7 +3415,8 @@
     else if (act === 'chopen') { S.chap = +a.dataset.n; CV.view = 'stages'; campSel = null; save(); render(); window.scrollTo({ top: 0 }); }
     else if (act === 'chlist') { CV.view = 'chapters'; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'csel') { campSel = campSel === +a.dataset.stage ? -1 : +a.dataset.stage; render(); } // a stage row opens and closes
-    else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); toast(`Chapter ${ROMAN[c]} rewards claimed!`); } }
+    else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); SFX.up(); chestPop(c, d, true); } }
+    else if (act === 'chpeek') { const c = +a.dataset.chap, d = S.diff || 0; chestPop(c, d, false); }
     else if (act === 'play') { if (fightSpot() || firstSteps()) { spotFight = false; startCampaign(+a.dataset.stage); } else openPrep(+a.dataset.stage); } // Fight opens the team screen first (prepHtml)
     else if (act === 'ppgo') { spotFight = false; if (PREP.tower) startTower(PREP.tower, twProg(PREP.tower) + 1); else if (PREP.boss) startDungeon(PREP.boss, PREP.n); else startCampaign(PREP.stage); }
     else if (act === 'ppback') { if (PREP.tower) { TV.view = 'floors'; setTab('tower'); } else if (PREP.boss) { BV.view = 'levels'; setTab('kerkers'); } else { CV.view = 'stages'; setTab('campagne'); } window.scrollTo({ top: 0 }); }
@@ -3719,7 +3740,8 @@
     if ((S.fs[type] || 0) < n || !unlocked('altaar')) return;
     S.fs[type] -= n; S.p.st.summons += n; track('summon', n);
     const res = [];
-    for (let i = 0; i < n; i++) res.push(K.summonOne(S, type));
+    const storm = evNow('storm'), step = storm && storm.shard === type ? 2 : 1; // a Shard Storm: this shard counts double for the Legendary pity
+    for (let i = 0; i < n; i++) res.push(K.summonOne(S, type, step));
     save(); render();
     const best = Math.max(...res.map(r => r.rar));
     if (best >= 2) summonReveal(res, type, () => summonResult(res, type, best));
@@ -4359,6 +4381,7 @@
     g.setTransform(RS, 0, 0, RS, -VIEW.x * RS, 0); g.imageSmoothingEnabled = false; // set every frame: a context the phone restored starts from defaults
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     { const bgc = SPR.bg(R.bg || R.area); if (bgc.width > 480) { g.imageSmoothingEnabled = true; g.drawImage(bgPre(bgc), sh, shy, 480, 270); g.imageSmoothingEnabled = false; g.fillStyle = BG_SHADE || (BG_SHADE = topShade()); g.fillRect(0, 0, 480, 70); } else g.drawImage(bgc, sh, shy); }
+    if (B && B.cfg.type === 'siege' && B.cfg.moon) { g.fillStyle = 'rgba(150, 10, 20, 0.22)'; g.fillRect(0, 0, 480, 270); } // the Blood Moon's red sky
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
     g.fillStyle = ashCol;
     for (const a of R.ash) { a.x += a.vx; a.y += R.area === 4 ? -a.vy : a.vy; if (a.y > H) a.y = -2; if (a.y < -2) a.y = H; if (a.x < 0) a.x = W; g.fillRect(Math.round(a.x), Math.round(a.y), 1, 1); }
@@ -4781,7 +4804,7 @@
 
   // ----- start / intro / finish -----
   // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
-  // ----- before a campaign battle or a Boss Hall level (RAID-style, tab 'prep'): your team on the left (pick a team,
+  // ----- before a campaign battle or a Boss Hall level (tab 'prep'): your team on the left (pick a team,
   // tap a hero to take it out), VS in the middle (enemy level, drops, energy, how your essences hit theirs), the
   // enemies of each phase on the right, every hero below (tap to put in or take out), Auto ×10 and Fight. A campaign
   // stage edits the Campaign's team (S.modeTeam.campaign), a boss level the team for the boss's essence (S.bossTeam,
@@ -4996,10 +5019,10 @@
     if (arena) finishArena(cfg); else finishBattle(win);
   }
 
-  function grantXp(amount, ids) {
-    const ups = [];
+  function grantXp(amount0, ids) {
+    const ups = [], tide = evNow('tide');
     for (const id of ids || S.team) {
-      const h = S.roster[id], cap = K.maxLvl(h.stars, id);
+      const h = S.roster[id], cap = K.maxLvl(h.stars, id), amount = tide && C[id] && C[id].aff === tide.ess ? Math.round(amount0 * 1.5) : amount0; // the Essence Tide: +50% XP
       if (h.lvl >= cap) continue;
       const l0 = h.lvl; h.xp += amount;
       while (h.lvl < cap && h.xp >= K.xpNeed(h.lvl)) { h.xp -= K.xpNeed(h.lvl); h.lvl++; }
@@ -5048,7 +5071,7 @@
       const prog = twProg(e), team = twTeam(e), nb = twNextBig(prog + 1, 1)[0], col = twCol(e);
       return `<button type="button" class="cl-ch tl-ch ${prog >= K.TOWER.floors ? 'done' : ''}" data-act="twsel" data-e="${e}" style="--art:url(${twArt(e)});--c:${col}">
         <span class="cl-num tl-ess" style="color:${col}">${e === 'All' ? '✦' : essIcon(e)}</span>
-        <span class="cl-t"><small>${e === 'All' ? 'Every hero · foes twice as strong' : `${e} heroes only`}</small><b class="cl-name">${twName(e)}</b>
+        <span class="cl-t"><small>${e === 'All' ? 'Every hero · foes twice as strong' : `${e} heroes only`}</small><b class="cl-name">${twName(e)}${evTideOf(e) ? '<span class="ev-badge" style="--evc:#5fb4e8">Tide</span>' : ''}</b>
           <span class="cl-prog"><span class="tl-bar"><i style="width:${prog / K.TOWER.floors * 100}%"></i></span>${prog} / ${K.TOWER.floors}</span>
           <span class="cl-desc">${team.length ? `Team of ${team.length} · power ${teamPower(team).toLocaleString('en-US')}` : 'No team yet'}</span></span>
         <span class="cl-gear tl-next">${nb ? `<small>Next milestone: floor ${nb[0]}</small><span class="tw-msi">${twBigIc(nb[1])}</span>` : '<small>Every floor cleared</small>'}</span></button>`;
@@ -5088,6 +5111,75 @@
       ${prog >= K.TOWER.floors ? `<p class="cl-hint">All ${K.TOWER.floors} floors of the ${twName(e)} are cleared. Few heroes ever stand here.</p>` : ''}
       <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}</div></div></div>`;
   }
+  // ---------- Events (tab `events`) ----------
+  // A calendar that repeats every four weeks, read from the date alone (UTC days, weeks start on Monday), so nothing is
+  // stored and every player sees the same events. Always on: the Essence Tide (one essence a week, round the seven
+  // essences). Week 1 of the cycle: a Blood Moon over the Siege on the weekend. Week 2: a Boss Hunt all week (a different
+  // Boss Hall boss each day) and a Shard Storm of Ancient Fate Shards on the weekend. Week 4: a Shard Storm of Mythic
+  // Fate Shards on the weekend. Each event's effect lives where that mode pays out (grantXp, finishBattle, sgWave,
+  // sgMs, doSummon); evNow(kind) answers whether it runs now.
+  const evDay = (ms = Date.now()) => Math.floor(ms / 86400000);
+  const evWeek = d => Math.floor((d + 3) / 7); // UTC day 4 (Monday 5 January 1970) starts week 1
+  const EVENTS = {
+    tide: { name: 'Essence Tide', col: '#5fb4e8', go: 'tower' },
+    blood: { name: 'Blood Moon Siege', col: '#d8443a', go: 'siege', u: 'siege' },
+    storm: { name: 'Shard Storm', col: '#9a7cf0', go: 'altaar', u: 'altaar' },
+    hunt: { name: 'Boss Hunt', col: '#e8933a', go: 'kerkers', u: 'kerkers' },
+  };
+  const EV_SVG = {
+    blood: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1.5A6.5 6.5 0 1 0 14.5 11 5.5 5.5 0 0 1 10.5 1.5z"/></svg>',
+    hunt: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 1h1.6v2.1A5 5 0 0 1 12.9 7.2H15v1.6h-2.1A5 5 0 0 1 8.8 12.9V15H7.2v-2.1A5 5 0 0 1 3.1 8.8H1V7.2h2.1A5 5 0 0 1 7.2 3.1zM8 4.6A3.4 3.4 0 1 0 8 11.4 3.4 3.4 0 0 0 8 4.6zm0 2.2A1.2 1.2 0 1 1 8 9.2 1.2 1.2 0 0 1 8 6.8z"/></svg>',
+  };
+  // every event that runs on UTC day d, with its first day and the day after its last
+  function evOnDay(d) {
+    const w = evWeek(d), ws = 7 * w - 3, c = ((w % 4) + 4) % 4, dow = d - ws, out = [];
+    out.push({ k: 'tide', ess: K.ESSENCES[((w % 7) + 7) % 7], from: ws, to: ws + 7 });
+    if (c === 1 && dow >= 5) out.push({ k: 'blood', from: ws + 5, to: ws + 7 });
+    if (c === 2) out.push({ k: 'hunt', boss: K.BOSS_ORDER[((d % 25) + 25) % 25], from: ws, to: ws + 7, day: d });
+    if ((c === 2 || c === 0) && dow >= 5) out.push({ k: 'storm', shard: c === 2 ? 'ancient' : 'mythic', from: ws + 5, to: ws + 7 });
+    return out;
+  }
+  const evNow = k => evOnDay(evDay()).find(e => e.k === k) || null;
+  const evIc = e => e.k === 'tide' ? essIcon(e.ess) : e.k === 'storm' ? shardIc(e.shard) : EV_SVG[e.k];
+  const evTitle = e => e.k === 'tide' ? `${e.ess} Tide` : e.k === 'storm' ? `Shard Storm · ${K.SHARD[e.shard].name.replace(/ Fate Shard$/, '')}` : EVENTS[e.k].name;
+  function evText(e) {
+    if (e.k === 'tide') return `${e.ess} heroes gain 50% more XP, ${e.ess} Elixirs drop twice${e.ess !== 'Aether' ? `, and the ${twName(e.ess)} pays double Sigils and XP on first clears` : ''}.`;
+    if (e.k === 'blood') return 'A blood moon hangs over the Siege: tickets come back every hour instead of every two, and every kill pays double XP and Sigils.';
+    if (e.k === 'storm') return `Every ${K.SHARD[e.shard].name} you summon counts double towards the Legendary pity.`;
+    return `Today's hunted boss: ${K.BOSSES[e.boss].name}. Every Boss Hall win against it drops one more set piece and ${/^[AEIOU]/.test(K.BOSSES[e.boss].aff) ? 'an' : 'a'} ${K.BOSSES[e.boss].aff} Elixir. A new boss every day.`;
+  }
+  const evLeft = e => untilUtc(e.to * 86400000);
+  const evChip = e => `<span class="ev-chip" style="--evc:${EVENTS[e.k].col}"><span class="ev-ic">${evIc(e)}</span>${esc(evTitle(e))}</span>`;
+  // the line on Home: what runs now, tap for the events screen
+  function evRibbon() {
+    const now = evOnDay(evDay());
+    return `<button type="button" class="ev-rib" data-act="go" data-go="events"><span class="ev-tag">Events</span><span class="ev-chips">${now.map(evChip).join('')}</span><span class="ev-go">›</span></button>`;
+  }
+  // a hint on the screen an event touches
+  const evHint = (e, extra) => e ? `<div class="ev-hint" style="--evc:${EVENTS[e.k].col}"><span class="ev-ic">${evIc(e)}</span><span><b>${esc(evTitle(e))}</b> · ${esc(extra || evText(e))} <small>(${evLeft(e)} left)</small></span></div>` : '';
+  const evHunted = id => { const e = evNow('hunt'); return !!e && e.boss === id; };
+  const evTideOf = aff => { const e = evNow('tide'); return !!e && e.ess === aff; };
+  function eventsHtml() {
+    const d0 = evDay(), now = evOnDay(d0);
+    const cards = now.map(e => { const E0 = EVENTS[e.k], locked = E0.u && !unlocked(E0.u);
+      return `<article class="ev-card" style="--evc:${E0.col}"><header><span class="ev-ic">${evIc(e)}</span><div><h3>${esc(evTitle(e))}</h3><span class="ev-left">${evLeft(e)} left</span></div></header>
+        <p>${esc(evText(e))}</p>${locked ? `<span class="ev-lock">${LOCK_SVG} Opens after ${needTxt(E0.u)}</span>` : `<button type="button" class="btn small primary" data-act="go" data-go="${e.k === 'tide' && !unlocked('tower') ? 'team' : E0.go}">Go ›</button>`}</article>`; }).join('');
+    // the calendar: this week and the three after it, a row per week (its Essence Tide on the left), a cell per day
+    const w0 = evWeek(d0), days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    let cal = `<span></span>${days.map(x => `<span class="ev-h">${x}</span>`).join('')}`;
+    for (let w = w0; w < w0 + 4; w++) {
+      const ws = 7 * w - 3, tide = evOnDay(ws)[0];
+      cal += `<span class="ev-wk" title="${esc(evText(tide))}">${essIcon(tide.ess)}${tide.ess}</span>`;
+      for (let d = ws; d < ws + 7; d++) {
+        const evs = evOnDay(d).filter(e => e.k !== 'tide'), date = new Date(d * 86400000);
+        cal += `<span class="ev-day ${d < d0 ? 'past' : d === d0 ? 'today' : ''}"><b>${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}</b>${evs.map(e => `<span class="ev-mini" style="--evc:${EVENTS[e.k].col}" title="${esc(evTitle(e) + ': ' + evText(e))}">${esc(e.k === 'hunt' ? K.BOSSES[e.boss].name : e.k === 'storm' ? K.SHARD[e.shard].name.replace(/ Fate Shard$/, '') + ' Storm' : 'Blood Moon')}</span>`).join('')}</span>`;
+      }
+    }
+    return `<div class="evs"><div class="section-head"><div><h2>Events</h2><p class="lede">Every week brings its own events. They follow a four-week cycle, so they keep coming back.</p></div></div>
+      <section><h3>Happening now</h3><div class="ev-now">${cards}</div></section>
+      <section><h3>Calendar</h3><div class="ev-cal">${cal}</div><p class="empty-note">Days follow UTC: an event starts and ends at 00:00 UTC.</p></section></div>`;
+  }
+
   // ---------- The story (story.js STORY_TEXT) ----------
   // Twenty scenes: one at the start of every chapter (before its first battle) and one at its boss (when the boss walks
   // onto the field in the boss stage's last phase). Each plays once, the first time a player gets there on Easy
@@ -5194,13 +5286,14 @@
   // just after a checkpoint SIEGE.back waves below the best. A run costs a Siege ticket: one comes back every
   // SIEGE.ticketMin minutes, at most SIEGE.tickets (S.sgT, S.sgAt: like energy, filled lazily by sgTick).
   // S.sg = { best, runs, kills }. The battle draws every figure smaller (SIEGE_FIG) on its own deep courtyard. ----------
-  const SIEGE_BG = 'backgrounds/siege.webp', SG_MS = K.SIEGE.ticketMin * 60000, SGV = { open: 0 };
+  const SIEGE_BG = 'backgrounds/siege.webp', SGV = { open: 0 };
+  const sgMs = () => (evNow('blood') ? 60 : K.SIEGE.ticketMin) * 60000; // a Blood Moon brings a ticket every hour
   function sgTick() {
     const now = Date.now(), max = K.SIEGE.tickets;
     if (S.sgT == null || !S.sgAt) { S.sgT = S.sgT ?? max; S.sgAt = now; }
     if (S.sgT >= max) { S.sgAt = now; return; }
-    const n = Math.floor((now - S.sgAt) / SG_MS); if (n <= 0) return;
-    S.sgT = Math.min(max, S.sgT + n); S.sgAt = S.sgT >= max ? now : S.sgAt + n * SG_MS;
+    const ms = sgMs(), n = Math.floor((now - S.sgAt) / ms); if (n <= 0) return;
+    S.sgT = Math.min(max, S.sgT + n); S.sgAt = S.sgT >= max ? now : S.sgAt + n * ms;
   }
   const sgFull = () => { sgTick(); return S.sgT >= K.SIEGE.tickets; };
   // where a run may start: wave 1, or just after a checkpoint at least SIEGE.back waves below the best checkpoint reached
@@ -5213,9 +5306,9 @@
     if (!unlocked('siege')) { render(); return; }
     if (!ids.length) { toast('Pick a team for the Siege first.', true); render(); return; }
     if (!sgStarts().includes(from)) { render(); return; }
-    if (S.sgT < 1) { toast(`No Siege tickets left. The next one comes in ${fmtLeft(S.sgAt + SG_MS - Date.now())}.`, true); render(); return; }
+    if (S.sgT < 1) { toast(`No Siege tickets left. The next one comes in ${fmtLeft(S.sgAt + sgMs() - Date.now())}.`, true); render(); return; }
     S.sgT--; useTeam('siege'); save();
-    runBattle({ type: 'siege', from, ids, nPh: K.SIEGE.waves - from + 1, lvl: K.siegeWave(from).lvl, area: 4, bg: 'hsiege', title: 'The Siege',
+    runBattle({ type: 'siege', moon: !!evNow('blood'), from, ids, nPh: K.SIEGE.waves - from + 1, lvl: K.siegeWave(from).lvl, area: 4, bg: 'hsiege', title: 'The Siege',
       run: { last: from - 1, kills: 0, xp: 0, silver: 0, fs: {}, st: {}, elx: 0, ups: {}, best0: S.sg.best } });
   }
   // the wave chip on the battlefield: which wave, and the best so far
@@ -5243,7 +5336,8 @@
   function sgWave(cfg, b, n, won) {
     const run = cfg.run;
     let xp = 0, silver = 0, kills = 0;
-    for (const u of b.enemies) if (!u.alive) { const k = K.siegeKill(n, u.isBoss); xp += k.xp; silver += k.silver; kills++; }
+    const moon = evNow('blood') ? 2 : 1; // a Blood Moon: every kill pays double
+    for (const u of b.enemies) if (!u.alive) { const k = K.siegeKill(n, u.isBoss); xp += k.xp * moon; silver += k.silver * moon; kills++; }
     run.kills += kills; run.xp += xp; run.silver += silver; S.silver += silver; S.sg.kills += kills;
     grantXp(xp, cfg.ids).forEach(([id, l]) => (run.ups[id] = l));
     if (won) {
@@ -5307,7 +5401,7 @@
   function siegeHtml() {
     sgTick(); S.seen.siege = true; // opening it is its unlock message enough
     const best = S.sg.best, ids = teamIds('siege').filter(id => S.roster[id]), starts = sgStarts(), max = K.SIEGE.tickets, t = S.sgT;
-    const nextIn = t >= max ? 'Full' : `Next in ${fmtLeft(S.sgAt + SG_MS - Date.now())}`;
+    const nextIn = t >= max ? 'Full' : `Next in ${fmtLeft(S.sgAt + sgMs() - Date.now())}`;
     const ahead = []; for (let w = (Math.floor(best / K.SIEGE.cp) + 1) * K.SIEGE.cp; w <= K.SIEGE.waves && ahead.length < 3; w += K.SIEGE.cp) ahead.push(w);
     // the checkpoints ahead as rows under the starts: the boss of that wave and what its first clear pays
     const ms = ahead.map(w => { const F = K.siegeWave(w), boss = K.siegeFoes(w)[0]; return `<div class="sv-row locked boss sg-cp">
@@ -5317,7 +5411,7 @@
         <span class="sv-go"><span class="tw-msi tw-rw">${twBigIc(K.siegeReward(w))}</span></span></div>`; }).join('');
     const side = `<aside class="sv-side tw-sidec sg-side">
       <div class="sv-ch" style="--art:url(${SIEGE_BG})"><small>Best wave</small><h3>${best ? `Wave ${best}` : 'Not defended yet'}</h3><span class="tl-bar"><i style="width:${best / K.SIEGE.waves * 100}%"></i></span><small>${best} / ${K.SIEGE.waves} waves · ${(S.sg.kills || 0).toLocaleString('en-US')} enemies defeated</small></div>
-      <section class="sv-box sg-tix"><h4>Siege tickets</h4><div class="sg-tks">${Array.from({ length: max }, (_, i) => `<i class="${i < t ? 'on' : ''}">${TICKET_SVG}</i>`).join('')}<b>${t} / ${max}</b></div><small class="sv-note">A run costs one ticket. One comes back every ${K.SIEGE.ticketMin / 60} hours, at most ${max}. ${nextIn}.</small></section>
+      <section class="sv-box sg-tix"><h4>Siege tickets</h4><div class="sg-tks">${Array.from({ length: max }, (_, i) => `<i class="${i < t ? 'on' : ''}">${TICKET_SVG}</i>`).join('')}<b>${t} / ${max}</b></div><small class="sv-note">A run costs one ticket. One comes back every ${sgMs() >= 7200000 ? `${sgMs() / 3600000} hours` : 'hour (Blood Moon)'}, at most ${max}. ${nextIn}.</small></section>
       <section class="sv-box sv-team"><h4>Your team</h4><div class="cv-heroes">${ids.map(id => `<span class="cv-hero rar-${C[id].rar}">${por(id)}<span class="cv-hero-e">${affChip(C[id].aff)}</span><i>Lv ${S.roster[id].lvl}</i></span>`).join('') || '<p class="empty-note">No heroes picked yet.</p>'}</div>
         <div class="sv-pw"><span>Power <b>${teamPower(ids).toLocaleString('en-US')}</b></span><button class="btn small" data-act="editteam" data-mode="siege">Edit team</button></div></section>
       <section class="sv-box"><h4>The rules</h4><small class="sv-note">Waves of enemies walk at your gate, more and stronger every wave, until your team falls. Between waves your heroes recover ${Math.round(K.SIEGE.rest * 100)}% HP; skills and effects carry on. A wave still standing at turn ${K.SIEGE.rageAt} enrages: its enemies hit harder every ${K.SIEGE.rageEvery} turns. Every kill pays XP and Sigils at once. Every ${K.SIEGE.cp}th wave is a boss wave and a checkpoint: its first clear pays shards and stones, and later runs may start ${K.SIEGE.back} waves below your best checkpoint.</small></section></aside>`;
@@ -5335,6 +5429,7 @@
     }).join('');
     return `<div class="campaign cv sv tws sgs">
       <div class="cv-head"><span class="cv-emb" style="background-image:url(${MENU_ART.siege})" aria-hidden="true"></span><div class="cv-ht"><h2>The Siege</h2><p>Hold your gate against endless waves. How far can your team get?</p></div></div>
+      ${evHint(evNow('blood'))}
       <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}${ms ? `<h4 class="sg-lh">Checkpoints ahead</h4>${ms}` : ''}</div></div></div>`;
   }
   // ---------- Expeditions (the ship, tab `expedition`, K.EXPEDITIONS) ----------
@@ -5513,7 +5608,8 @@
         // a floor pays once, on its first clear (the tower climbs one floor at a time)
         if (cfg.floor > (S.tw.prog[cfg.ess] || 0)) { S.tw.prog[cfg.ess] = cfg.floor; first = true; }
         const rw = K.towerReward(cfg.floor);
-        if (first) { silver = rw.silver; xp = rw.xp; for (const [t, n] of Object.entries(rw.fs)) for (let i = 0; i < n; i++) gotShards.push(t); stones = rw.st; } else { silver = 0; xp = 0; }
+        const twTide = evTideOf(cfg.ess) ? 2 : 1; // the Essence Tide: double Sigils and XP on first clears
+        if (first) { silver = rw.silver * twTide; xp = rw.xp * twTide; for (const [t, n] of Object.entries(rw.fs)) for (let i = 0; i < n; i++) gotShards.push(t); stones = rw.st; } else { silver = 0; xp = 0; }
         if (first && cfg.floor % 10 === 0) elixir = cfg.ess === 'All' ? 'Aether' : cfg.ess;
       } else {
         if (cfg.n > (S.bh[cfg.id] || 0)) { S.bh[cfg.id] = cfg.n; first = true; S.bhSel[cfg.id] = Math.min(K.BOSS_LEVELS, cfg.n + 1); }
@@ -5522,10 +5618,11 @@
         if (first && cfg.n === 5) gotShards.push('greater');
         if (first && cfg.n === 7) gotShards.push('ancient');
         if (first && cfg.n === 10) gotShards.push('ancient');
-        const drops = 1 + (cfg.n >= 5 ? 1 : 0) + (first ? 1 : 0);
+        const hunted = evHunted(cfg.id); // the Boss Hunt: one more set piece and a sure elixir
+        const drops = 1 + (cfg.n >= 5 ? 1 : 0) + (first ? 1 : 0) + (hunted ? 1 : 0);
         for (let i = 0; i < drops; i++) loot.push(K.genGear({ il: lvl, ...K.bossLoot(cfg.n), sets: K.bossSets(cfg.bi) }, S.nid++));
         if (first && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length) S.bhCur = K.BOSS_ORDER[cfg.bi + 1];
-        if (Math.random() < K.ELIXIR.hall) elixir = unitAff(cfg.id);
+        if (hunted || Math.random() < K.ELIXIR.hall) elixir = unitAff(cfg.id);
       }
       xp = Math.round(xp * (cfg.type === 'boss' ? 1.2 : 1));
     } else if (cfg.type === 'tower') { xp = 0; silver = 0; } // tower tries are free, so a defeat pays nothing
@@ -5536,7 +5633,8 @@
     if (win && cfg.type !== 'tower') gotShards.push(...K.rollShards());
     // an elixir drop: now and then an Aether Elixir (fits any hero) instead (the tower's own reward stays as it is)
     if (elixir && cfg.type !== 'tower' && Math.random() < K.ELIXIR.aether) elixir = 'Aether';
-    if (elixir) S.elx[elixir] = (S.elx[elixir] || 0) + 1;
+    const elxN = elixir && evTideOf(elixir) ? 2 : 1; // the Essence Tide: its elixirs drop twice
+    if (elixir) S.elx[elixir] = (S.elx[elixir] || 0) + elxN;
     S.silver += silver; addStones(stones);
     for (const t of gotShards) S.fs[t] = (S.fs[t] || 0) + 1;
     loot.forEach(it => S.inv.push(it));
@@ -5556,7 +5654,7 @@
       for (const [t, n] of Object.entries(stones)) if (n > 0) s.st[t] = (s.st[t] || 0) + n;
       loot.forEach(it => s.items.push(it.id));
       if (captured) s.caps.push(captured.id);
-      if (elixir) { s.elx = s.elx || {}; s.elx[elixir] = (s.elx[elixir] || 0) + 1; }
+      if (elixir) { s.elx = s.elx || {}; s.elx[elixir] = (s.elx[elixir] || 0) + elxN; }
       ups.forEach(([id, l]) => (s.ups[id] = l));
     }
     const unlocks = newUnlocks();
@@ -5572,7 +5670,7 @@
     ups.forEach(([id, l, cap]) => items.push(`<li class="up" ${d()}>${por(id)}${esc(C[id].short)} is now level ${l}${cap ? ' (maximum, ascend for more)' : ''}</li>`));
     if (win && isStageCfg(cfg) && !loot.length) items.push(`<li ${d()}><span class="aff" style="--c:var(--muted)">–</span>No ${esc(dropName(cfg.stage).toLowerCase())} dropped this time.</li>`);
     loot.forEach(it => items.push(`<li class="loot rar-${it.rar}" ${d()}>${gearIcon(it, 'loot-ic')}<span><span class="item-name">${itemNameH(it)}</span> · <span class="item-set">${K.SETS[it.set].name}</span></span></li>`));
-    if (elixir) items.push(`<li class="loot elx-loot" ${d()}>${elxIc(elixir)}<span>+1 <b style="color:${AFF_COL[elixir]}">${elxName(elixir, 1)}</b> · ${elixir === 'Aether' ? 'any hero' : `${elixir} heroes`} drink it for XP (Team · Upgrade)</span></li>`);
+    if (elixir) items.push(`<li class="loot elx-loot" ${d()}>${elxIc(elixir)}<span>+${elxN} <b style="color:${AFF_COL[elixir]}">${elxName(elixir, 1)}</b> · ${elixir === 'Aether' ? 'any hero' : `${elixir} heroes`} drink it for XP (Team · Upgrade)</span></li>`);
     if (captured) items.push(`<li class="loot rar-${C[captured.id].rar}" ${d()}>${por(captured.id)}<span>${captured.isNew ? `Captured: <b class="rartxt">${esc(C[captured.id].name)}</b> joins your roster as a hero.` : `Captured another <b class="rartxt">${esc(C[captured.id].name)}</b> as fodder.`}</span></li>`);
     if (unlock) items.push(`<li class="loot rar-${C[unlock].rar}" ${d()}>${por(unlock)}<span>New champion: <b class="rartxt">${esc(C[unlock].name)}</b> (${K.RARITIES[C[unlock].rar]})${S.team.includes(unlock) ? ' joins your team' : ''}</span></li>`);
     // MVP
@@ -5594,7 +5692,7 @@
         : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
     const tower = cfg.type === 'tower';
     const canNext = isStage ? cfg.i + 1 < K.STAGES.length : tower ? cfg.floor < K.TOWER.floors : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
-    // the result, RAID-style: the outcome on a banner, what it paid as tiles, a card per hero (level up, damage, taken,
+    // the result: the outcome on a banner, what it paid as tiles, a card per hero (level up, damage, taken,
     // healed), the meter folded away, round buttons home / stages / heroes and the big ones Fight again / Edit team / Next
     const cost = (i) => cfg.type === 'stage' ? stEn(i, cfg.diff) : cfg.type === 'boss' ? K.bossEnergy(i) : 0;
     const here = isStage ? cfg.i : tower ? cfg.floor : cfg.n, en = n => n ? `<span class="rs-en">${enIc()}${n}</span>` : '';
@@ -5609,7 +5707,7 @@
       refund ? tile(enIc(), `+${refund}`, 'Energy back: a defeat costs only half') : '',
       ...Object.entries(shardN).map(([t, n]) => tile(shardIc(t), n, K.SHARD[t].name, `rar-${K.FATE_SHARDS.findIndex(f => f.id === t)}`)),
       ...Object.entries(stones).filter(([, n]) => n > 0).map(([t, n]) => tile(stoneIc(t), n, stoneName(t, n))),
-      elixir ? tile(elxIc(elixir), 1, `${elxName(elixir, 1)}: ${elixir === 'Aether' ? 'any hero' : elixir + ' heroes'} drink it for XP`) : '',
+      elixir ? tile(elxIc(elixir), elxN, `${elxName(elixir, 1)}: ${elixir === 'Aether' ? 'any hero' : elixir + ' heroes'} drink it for XP`) : '',
       captured ? tile(por(captured.id), captured.isNew ? 'New' : '+1', `Captured: ${C[captured.id].name}`, `hero rar-${C[captured.id].rar}`) : '',
       unlock ? tile(por(unlock), 'New', `New champion: ${C[unlock].name}`, `hero rar-${C[unlock].rar}`) : '',
       ...pups.map(([l, sv, sh, t, en2]) => tile(`<span class="lvbadge">${l}</span>`, 'Level up', `Player level ${l}! +${en2} Energy · +${sv.toLocaleString('en-US')} Sigils · +${LEVEL_GEMS} Crystals${sh ? ` · +1 ${K.SHARD[sh].name}` : ''}${t ? ` · ${UNLOCK_NAME[t]} unlocked` : ''}`, 'lvup')),
@@ -5877,7 +5975,6 @@
     else if (S.migrated6) { delete S.migrated6; save(); toast('The Fate Altar is open: your crown shards are now Fate Shards, and you got a Greater Fate Shard.'); }
     else if (m7) { save(); toast(`New: player levels. Win battles to level up. The Fate Altar opens at level ${PLAYER_UNLOCK.altaar}, the Boss Hall after Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]}. Tap your avatar for your profile.`, false, 7000); }
   }
-  window.claude?.hot?.snapshot?.(() => ({ S }));
   const boot = data => SPR.preload().then(() => { start(data); if (S.hero) SPR.loadSheet(S.hero.id); if (S && S.team) S.team.forEach(id => SPR.loadHi(id)); }); // the own hero's moves and the team's sharp art load in the background
-  if (window.claude?.hot?.ready) window.claude.hot.ready(boot); else boot(window.claude?.hot?.data ?? {});
+  boot({});
 })();
