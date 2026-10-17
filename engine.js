@@ -80,6 +80,9 @@ const K = (function () {
   // ENRAGE.every turns after that, so a team that cannot kill it in time is worn down. Counted per battle (phase).
   // blightAt: bosses with a Blight Aura fight longer (more HP, and a team needs time to out-heal the aura), so they enrage later
   const ENRAGE = { at: 14, blightAt: 22, every: 2, atk: 0.25 };
+  // Arena fury: an arena fight past battle turn `at` makes both teams hit harder, +atk Attack every `every` turns
+  // (turn 110 +10%, 120 +20%, ...), so two teams that cannot kill each other still reach an end
+  const ARENA_FURY = { at: 100, every: 10, atk: 0.1 };
   // Blight Aura (Boss Hall only, campaign bosses stay as they are): Boss Hall bosses from level BLIGHT.bh on hit the whole
   // enemy team each of their turns for a share of max HP (pct per campaign difficulty) that Defense does not reduce.
   // A team without healing (heal, shield, revive) wears down before it can win, so from there a healer is needed.
@@ -1499,6 +1502,8 @@ const K = (function () {
       this.deaths = 0;
       // the Siege: the whole wave enrages from battle turn SIEGE.rageAt (waveRage)
       this.rageAt = enemies.some(u => u.siege) ? SIEGE.rageAt : 0;
+      // the arena: both teams grow fiercer from battle turn ARENA_FURY.at (this.fury = stacks)
+      this.furyAt = [...heroes, ...enemies].some(u => u.arena) ? ARENA_FURY.at : 0; this.fury = 0;
       // a Boss Hall trait shows as a lasting badge on its boss
       for (const u of enemies) if (u.trait && !u.effects.some(e => e.k === u.trait)) u.effects.push({ k: u.trait, n: 999 });
     }
@@ -1580,6 +1585,7 @@ const K = (function () {
         this.turns++;
         this.h.round(this.turns);
         if (this.rageAt && this.turns >= this.rageAt) this.waveRage();
+        if (this.furyAt && this.turns > this.furyAt) { const v = Math.floor((this.turns - this.furyAt) / ARENA_FURY.every); if (v > this.fury) { this.fury = v; this.h.log(`Arena fury: both teams deal ${Math.round(ARENA_FURY.atk * v * 100)}% more damage.`, 'enemy'); if (this.h.fury) this.h.fury(v); } }
         await this.turn(u);
       }
       this.active = null;
@@ -1895,6 +1901,7 @@ const K = (function () {
       if (this.has(a, 'atkUp')) atk *= 1.5;
       if (this.has(a, 'atkDown')) atk *= 0.5;
       const rg = (a.isBoss || a.hall || a.siege) && a.effects.find(e => e.k === 'enrage'); if (rg) atk *= 1 + ENRAGE.atk * rg.v;
+      if (a.arena && this.fury) atk *= 1 + ARENA_FURY.atk * this.fury;
       if (a.stacks.smids) atk *= 1 + 0.1 * a.stacks.smids;
       if (a.passive === 'bloodlust' && a.hp < a.maxHp * 0.5) atk *= 1.3;
       if (a.passive === 'soulharvest') atk *= 1 + 0.1 * Math.min(5, this.deaths);
@@ -2214,7 +2221,7 @@ const K = (function () {
   function arenaSetup(att, def, seed) {
     setRng(seeded(seed));
     const heroes = arenaUnits(att, 'hero'), enemies = arenaUnits(def, 'enemy');
-    for (const u of [...heroes, ...enemies]) u.oneRevive = true;
+    for (const u of [...heroes, ...enemies]) { u.oneRevive = true; u.arena = true; }
     return { heroes, enemies };
   }
   async function arenaFight(att, def, seed) {
@@ -2298,7 +2305,7 @@ const K = (function () {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
-    START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
+    START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, ARENA_FURY, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,
     PC_CLASSES, PC_GENDERS, PC_IDS, isPC, PC_STARS, pcStars, pcSkills, baseStars, maxLvl, maxStars, MAX_STARS, rankCost, STONES, stoneTier, stageStones, bossStones, SKILL_MAX, SKILL_STEP, skillUp, FATE_SHARDS, SHARD, rollShards, CAPTURE_ORDER, CAPTURE_CHANCE, isCaptured, feedXp, breakStones, SHARD_PRICE, summonOne, PITY_EPIC, PITY_LEG, PITY_SHARDS,
     heroStats, heroUnit, enemyUnit, bossUnit, Battle, pick,

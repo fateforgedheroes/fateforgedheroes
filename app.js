@@ -4611,7 +4611,8 @@
     before: animBefore,
     after: animAfter,
     pause: ms => sleep(ms),
-    round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r + (B && B.cfg.type === 'siege' ? (r < K.SIEGE.rageAt ? ` · rage at ${K.SIEGE.rageAt}` : ' · ENRAGED') : ''); },
+    round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r + (B && B.cfg.type === 'siege' ? (r < K.SIEGE.rageAt ? ` · rage at ${K.SIEGE.rageAt}` : ' · ENRAGED') : B && B.cfg.type === 'arena' && r > K.ARENA_FURY.at - 20 ? (r >= K.ARENA_FURY.at + K.ARENA_FURY.every ? ` · FURY +${Math.round(K.ARENA_FURY.atk * Math.floor((r - K.ARENA_FURY.at) / K.ARENA_FURY.every) * 100)}%` : ` · fury at ${K.ARENA_FURY.at + K.ARENA_FURY.every}`) : ''); },
+    fury: v => { if (v === 1) { SFX.banner(); if (!calm()) R.shake = 6; queueBanner('Arena fury!', 'The fight took too long: both teams deal more damage every 10 turns', 'big enemy', 1000); } updateOverlay(); },
     impact: (u, skill, t) => impactFx(u, skill, t),
     banner: async (u, skill) => {
       await bannerQ;
