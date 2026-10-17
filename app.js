@@ -820,7 +820,7 @@
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'events' ? eventsHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'events' ? eventsHtml() : tab === 'admin' ? adminHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
@@ -2879,7 +2879,7 @@
   async function socialLoad() {
     if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
-    paidLoad();
+    paidLoad(); admCheck();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -2917,7 +2917,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${ADM.ok ? item('admin', '♛', 'Admin') : ''}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${gemsAll().toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -2934,6 +2934,7 @@
     if (it) {
       const a = it.dataset.mm; setMenu(false);
       if (a === 'events') { if (B) toast('Not during a battle.', true); else setTab('events'); return; }
+      if (a === 'admin') { if (B) toast('Not during a battle.', true); else { ADM.data = null; setTab('admin'); } return; }
       ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
       return;
     }
@@ -3513,6 +3514,8 @@
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
     else if (act === 'sggo') startSiege(+a.dataset.n);
     else if (act === 'evpop') evPop(+a.dataset.d, a.dataset.k);
+    else if (act === 'admload') { ADM.data = null; ADM.err = ''; render(); }
+    else if (act === 'admlb') admLbSet(a.dataset.uid, a.dataset.s);
     else if (act === 'story') { if (storyOpen(a.dataset.k)) playScene(a.dataset.k).then(() => render()); }
     else if (act === 'sgrow') { SGV.open = SGV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
@@ -5188,6 +5191,49 @@
   const evHint = (e, extra) => e ? `<div class="ev-hint" style="--evc:${EVENTS[e.k].col}"><span class="ev-ic">${evIc(e)}</span><span><b>${esc(evTitle(e))}</b> · ${esc(extra || evText(e))} <small>(${evLeft(e)} left)</small></span></div>` : '';
   const evHunted = id => { const e = evNow('hunt'); return !!e && e.boss === id; };
   const evTideOf = aff => { const e = evNow('tide'); return !!e && e.ess === aff; };
+  // ---------- Admin (0016_admin.sql): player numbers, only for accounts in the admins table ----------
+  // admin_check says whether this account may see them (then the ☰ menu has an Admin item); admin_stats returns them
+  const ADM = { ok: false, who: '', data: null, err: '', busy: false };
+  async function admCheck() {
+    const cl = cloud(); if (!cl || !cl.signedIn()) { ADM.ok = false; return; }
+    const who = cl.info().email; if (ADM.who === who) return; ADM.who = who;
+    try { ADM.ok = !!(await cl.rpc('admin_check')); } catch (e) { ADM.ok = false; }
+  }
+  async function admLoad() {
+    if (ADM.busy) return; ADM.busy = true; ADM.err = '';
+    try { ADM.data = await cloud().rpc('admin_stats'); ADM.at = Date.now(); } catch (e) { ADM.err = String(e && e.message || e); }
+    try { ADM.lb = await cloud().rpc('admin_lb_list'); } catch (e) { ADM.lb = null; } // no 0017 yet: no list
+    ADM.busy = false; if (tab === 'admin') render();
+  }
+  // the leaderboard checks (0017): accounts whose save cannot be real are left out; the owner hides or allows by hand
+  function admLbHtml() {
+    if (ADM.lb == null) return `<section class="adm-sec adm-lb"><h3>Leaderboard checks</h3><p class="empty-note">Run 0017_leaderboard_checks.sql to see flagged accounts here.</p></section>`;
+    const st = { hidden: 'Hidden by you', allowed: 'Allowed by you' };
+    const rows = ADM.lb.map(r => `<li class="${r.state || 'flag'}"><span><b>${esc(r.name || 'Player')}</b> <small>Lv ${r.lvl || 1} · ${esc(String(r.user_id).slice(0, 8))}</small><em>${esc(r.reason || 'No problem found')}</em></span>
+      <span class="adm-lbs">${r.state ? `<i>${st[r.state]}</i>` : '<i class="off">Left out automatically</i>'}${r.state !== 'hidden' ? `<button class="btn small danger" data-act="admlb" data-uid="${r.user_id}" data-s="hidden">Hide</button>` : ''}${r.state !== 'allowed' ? `<button class="btn small" data-act="admlb" data-uid="${r.user_id}" data-s="allowed">Allow</button>` : ''}${r.state ? `<button class="btn small" data-act="admlb" data-uid="${r.user_id}" data-s="">Clear</button>` : ''}</span></li>`).join('');
+    return `<section class="adm-sec adm-lb"><h3>Leaderboard checks</h3><p class="empty-note">Saves that cannot be real (more stages, Boss Hall levels and Tower floors than battles won, or a Siege wave above its kills) stay off the campaign, Boss Hall, Tower and Siege boards. Hide keeps an account off every board, the arena too; Allow keeps a false alarm on.</p>${rows ? `<ul class="adm-lbl">${rows}</ul>` : '<p class="empty-note">No account flagged. 👍</p>'}</section>`;
+  }
+  async function admLbSet(uid, s) {
+    try { await cloud().rpc('admin_lb_set', { uid, state: s || null }); ADM.lb = await cloud().rpc('admin_lb_list'); toast(s === 'hidden' ? 'Hidden from the leaderboards.' : s === 'allowed' ? 'Allowed on the leaderboards.' : 'Back to the automatic checks.'); }
+    catch (e) { toast('Could not change it: ' + (e && e.message || e), true); }
+    if (tab === 'admin') render();
+  }
+  function adminHtml() {
+    if (!ADM.ok) return '<p class="empty-note">Only for the owner.</p>';
+    if (!ADM.data && !ADM.err) { setTimeout(admLoad, 0); return '<div class="adm"><div class="section-head"><div><h2>Admin</h2></div></div><p class="empty-note">Loading the numbers…</p></div>'; }
+    if (ADM.err) return `<div class="adm"><div class="section-head"><div><h2>Admin</h2></div></div><p class="empty-note">Could not load: ${esc(ADM.err)}</p><button class="btn small" data-act="admload">Try again</button></div>`;
+    const x = ADM.data, n = v => (+v || 0).toLocaleString('en-US');
+    const tile = (v, l, s) => `<div class="adm-t"><b>${n(v)}</b><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>`;
+    const bars = (rows, k, col) => { const max = Math.max(1, ...rows.map(r => +r[k] || 0)); return `<div class="adm-bars" style="--bc:${col}">${rows.map(r => `<div class="adm-b" title="${esc(r.d)}: ${n(r[k])}"><i style="height:${Math.round((+r[k] || 0) / max * 100)}%"></i><em>${n(r[k])}</em><small>${esc(r.d.split(' ')[0])}</small></div>`).join('')}</div>`; };
+    const days = x.days || [], lv = x.levels || [], lmax = Math.max(1, ...lv.map(r => r.n));
+    return `<div class="adm"><div class="section-head"><div><h2>Admin</h2><p class="lede">Accounts only: guests play in their browser and are not counted. Updated ${new Date(ADM.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</p></div><button class="btn small" data-act="admload">Refresh</button></div>
+      <div class="adm-tiles">${tile(x.active24h, 'Active today', 'last 24 hours')}${tile(x.active7d, 'Active this week', 'last 7 days')}${tile(x.active30d, 'Active this month', 'last 30 days')}${tile(x.accounts, 'Accounts', `${n(x.new24h)} new today · ${n(x.new7d)} this week`)}
+        ${tile(x.arenaWeek, 'In the arena', `this week · ${n(x.arenaFights24h)} fights today`)}${tile(x.chatters7d, 'Chatting', `last 7 days · ${n(x.messages24h)} messages today`)}${tile(x.guilds, 'Guilds', `${n(x.guildMembers)} members`)}${tile(x.bought, 'Bought Crystals', 'in wallets')}</div>
+      <div class="adm-cols"><section class="adm-sec"><h3>Active players per day</h3>${bars(days, 'active', '#e9c46f')}<p class="empty-note">A player counts on a day a save of theirs was written (approximate for very busy players).</p></section>
+        <section class="adm-sec"><h3>New accounts per day</h3>${bars(days, 'new', '#5fb4e8')}</section>
+        <section class="adm-sec"><h3>Player levels</h3><p class="empty-note">Active in the last 30 days.</p><div class="adm-lv">${lv.map(r => `<div><span>Lv ${r.band || 1}${r.band >= 100 ? '' : `-${r.band + 9}`}</span><i style="width:${Math.round(r.n / lmax * 100)}%"></i><b>${n(r.n)}</b></div>`).join('') || '<p class="empty-note">No players yet.</p>'}</div></section></div>
+      ${admLbHtml()}</div>`;
+  }
   // a tap on an event in the calendar: what it is, when it runs and whether it runs now, in a popup
   const evDate = d => { const x = new Date(d * 86400000); return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getUTCDay()]} ${x.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]}`; };
   function evPop(d, k) {

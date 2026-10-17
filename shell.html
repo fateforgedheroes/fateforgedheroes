@@ -3466,6 +3466,25 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .ev-cal { display: grid; grid-template-columns: 92px repeat(7, minmax(0, 1fr)); gap: 3px; font-size: .74rem; }
 .ev-cal .ev-h { font-family: var(--font-tag); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: center; padding: 2px 0; }
 .ev-cal .ev-wk, .ev-day .ev-mini { font: inherit; border: 0; cursor: pointer; text-align: left; } .ev-cal .ev-wk:hover, .ev-day .ev-mini:hover { filter: brightness(1.15); }
+/* Admin (app.js adminHtml): number tiles, two bar charts of the last 14 days, the level spread */
+.adm-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.adm-t { display: grid; gap: 1px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.adm-t b { font: 800 1.5rem var(--font-display); color: var(--gold); font-variant-numeric: tabular-nums; } .adm-t span { color: var(--fg); font-weight: 600; } .adm-t small { color: var(--muted); font-size: .75rem; }
+.adm-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+.adm-sec { padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); min-width: 0; } .adm-sec h3 { margin: 0 0 6px; color: var(--gold); font-size: .85rem; }
+.adm-bars { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); align-items: end; gap: 2px; height: 120px; }
+.adm-b { position: relative; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.adm-b i { display: block; width: 100%; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--bc); }
+.adm-b em { font-style: normal; font-size: .58rem; color: var(--fg); font-variant-numeric: tabular-nums; } .adm-b small { font-size: .55rem; color: var(--muted); }
+.adm-lv { display: grid; gap: 3px; } .adm-lv div { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 2.6em; align-items: center; gap: 6px; font-size: .75rem; }
+.adm-lv i { display: block; height: 10px; border-radius: 3px; background: #9a7cf0; } .adm-lv b { text-align: right; font-variant-numeric: tabular-nums; }
+.adm-lb { margin-top: 8px; } .adm-lbl { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.adm-lbl li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, .3); border-left: 3px solid #e0453a; }
+.adm-lbl li.allowed { border-left-color: #5bc46a; } .adm-lbl li.hidden { border-left-color: #777; opacity: .8; }
+.adm-lbl li > span:first-child { display: grid; min-width: 0; } .adm-lbl small { color: var(--muted); } .adm-lbl em { font-style: normal; font-size: .75rem; color: #f0a07a; }
+.adm-lbs { display: flex; align-items: center; gap: 6px; flex: none; } .adm-lbs i { font-style: normal; font-size: .72rem; color: var(--muted); } .adm-lbs i.off { color: #f0a07a; }
+@media (max-width: 560px) { .adm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .adm-cols { grid-template-columns: minmax(0, 1fr); } }
+@media (max-height: 500px) and (orientation: landscape) { .adm-t { padding: 4px 8px; } .adm-t b { font-size: 1.15rem; } .adm-bars { height: 90px; } }
 /* the popup of one event in the calendar (app.js evPop): its icon in its colour, when it runs, what it does */
 .ev-pop .unlock-card { border-color: var(--evc); box-shadow: 0 0 0 4px #000, 0 0 40px -6px var(--evc); }
 .ev-pop .ev-pic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--evc); background: rgba(0, 0, 0, .45); color: var(--evc); }
