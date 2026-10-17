@@ -5135,10 +5135,23 @@
   // plays a scene; resolves when it is done or skipped. In a battle it lies over the field (the battle waits), elsewhere
   // over the chapter's art
   function playScene(k) {
-    const lines = STORY[k]; if (!lines || !lines.length) return Promise.resolve();
+    let lines = STORY[k]; if (!lines || !lines.length) return Promise.resolve();
     S.story[k] = 1; save();
     const c = parseInt(k, 10), inBattle = B && !$('#battle').hidden, host = inBattle ? $('#battle .stage-wrap') || $('#battle') : document.body;
     const heroName = (S.hero && S.hero.name) || S.p.name, heroId = heroId0();
+    // the player's own team tells the story: every companion who speaks (anyone but the hero, a boss or the narrator) is
+    // played by a hero of the team, the first one to speak by the first team member and so on (round the team when more
+    // speak than it has); in a battle the heroes still standing, else the campaign team. A team of the hero alone keeps
+    // the written companions. Their names in the lines change along.
+    const team = (inBattle ? B.b.heroes.filter(u => u.alive).map(u => u.id) : teamIds('campaign')).filter(id => id !== heroId && C[id] && !C[id].pc);
+    const cast = {}; let ci = 0;
+    if (team.length) for (const [who] of lines) {
+      if (/^(hero|narrator)$/i.test(who) || cast[who]) continue;
+      const id = storyId(who); if (id && K.BOSSES[id] && !K.CHAMPS[id]) continue;
+      cast[who] = C[team[ci++ % team.length]].name;
+    }
+    const recast = s => Object.keys(cast).reduce((x, w) => x.split(w).join(cast[w]), s);
+    lines = lines.map(([who, said]) => [cast[who] || who, recast(said)]);
     const el = document.createElement('div');
     el.className = 'story' + (inBattle ? '' : ' page'); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `Chapter ${ROMAN[c]} story`);
     el.innerHTML = `${inBattle ? '' : `<div class="sc-bg" style="--art:url(${chapterArt(c)})"></div>`}<img class="sc-fig sc-l" alt=""><img class="sc-fig sc-r" alt="">
