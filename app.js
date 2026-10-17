@@ -2966,7 +2966,7 @@
     const b = $('#mail'); if (!b) return;
     const n = signedIn() ? mailCount() : 0, badge = b.querySelector('.mail-n');
     badge.hidden = !n; badge.textContent = n > 9 ? '9+' : n; b.classList.toggle('has', n > 0);
-    const mb = document.querySelector('#menubtn .menu-n'); if (mb) { mb.hidden = !n; mb.textContent = n > 9 ? '9+' : n; }
+    const mb = document.querySelector('#menubtn .menu-n'); if (mb) { mb.hidden = !n; mb.title = n ? `${n} new in your Mail` : ''; } // the ☰ button: a red square with an envelope while mail waits
     b.title = n ? `Mail: ${n} new` : 'Mail: gifts and friend requests';
   }
   // what a gift gives, as text and as additions to the save
