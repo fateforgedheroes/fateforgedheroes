@@ -3041,7 +3041,7 @@
     const blocked = (S.cblock || []).includes(m.user_id);
     if (blocked) return '';
     const canDel = m.mine || (CH.tab === 'guild' && (role === 'leader' || role === 'officer'));
-    const menu = CH.menu === m.id ? `<div class="cm-menu">${m.mine ? '' : `<button type="button" data-ch="prof" data-uid="${m.user_id}">Profile</button><button type="button" data-ch="block" data-uid="${m.user_id}" data-name="${esc(m.name)}">Block</button><button type="button" data-ch="report" data-id="${m.id}">Report</button>`}${canDel ? `<button type="button" class="bad" data-ch="del" data-id="${m.id}">Delete</button>` : ''}</div>` : '';
+    const menu = CH.menu === m.id ? `<div class="cm-menu">${m.mine ? '' : `<button type="button" data-ch="prof" data-uid="${m.user_id}">Profile</button>${chFriendBtn(m.user_id)}<button type="button" data-ch="block" data-uid="${m.user_id}" data-name="${esc(m.name)}">Block</button><button type="button" data-ch="report" data-id="${m.id}">Report</button>`}${canDel ? `<button type="button" class="bad" data-ch="del" data-id="${m.id}">Delete</button>` : ''}</div>` : '';
     return `<div class="cm ${m.mine ? 'mine' : ''}" data-mid="${m.id}"><button type="button" class="cm-av" data-ch="menu" data-id="${m.id}" aria-label="${esc(m.name)}">${m.avatar && C[m.avatar] ? por(m.avatar) : ''}</button>
       <div class="cm-b"><div class="cm-h"><button type="button" class="cm-name" data-ch="menu" data-id="${m.id}">${esc(m.name)}</button>${CH.tab === 'world' && m.tag ? `<span class="cm-tag">[${esc(m.tag)}]</span>` : ''}<small>${m.lvl ? `Lv ${m.lvl} · ` : ''}${chTime(m.created_at)}</small></div><p>${esc(m.body)}</p>${menu}</div></div>`;
   }
@@ -3146,6 +3146,10 @@
     else if (k === 'signin') { if (B) { toast('Sign in after the battle.', true); return; } chatOpen(false); cloud().openAccount(); }
     else if (k === 'guild') { if (B) { toast('Not during a battle.', true); return; } chatOpen(false); SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); }
     else if (k === 'prof') { CH.menu = null; chatPaint(true); openProfile(a.dataset.uid); chatTopModal(); }
+    else if (k === 'friend') { // a friend code is the first 8 hex of the account id, so a name in the chat is enough
+      if (a.disabled) return; a.disabled = true; a.textContent = 'Sending…';
+      addFriend(String(a.dataset.uid).replace(/-/g, '').slice(0, 8)).then(() => { CH.menu = null; chatPaint(true); });
+    }
     else if (k === 'block') {
       const uid = a.dataset.uid, name = a.dataset.name;
       confirmBox(`Block ${name}?`, `You will no longer see ${name}'s messages in the chat. You can unblock players in Town Hall → Settings.`, 'Block', () => {
@@ -3202,6 +3206,13 @@
   async function friendAct(fn, body, okMsg) {
     try { await cloud().rpc(fn, body); if (okMsg) toast(okMsg); } catch (e) { toast('That did not work. Try again in a moment.', true); }
     socialLoad();
+  }
+  // the chat's name menu: Add friend, or what is already between you (friends, a request sent, a request to accept)
+  function chFriendBtn(uid) {
+    const f = (SO.friends || []).find(x => x.user_id === uid);
+    if (f && f.kind === 'friend') return '<button type="button" disabled>✓ Friends</button>';
+    if (f && f.kind === 'outgoing') return '<button type="button" disabled>Request sent</button>';
+    return `<button type="button" class="ok" data-ch="friend" data-uid="${uid}">${f && f.kind === 'incoming' ? 'Accept friend' : 'Add friend'}</button>`;
   }
   async function addFriend(raw) {
     const code = String(raw || '').replace(/[^0-9a-f]/gi, '').toUpperCase();
