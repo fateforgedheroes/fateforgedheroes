@@ -2082,7 +2082,12 @@ const K = (function () {
         const kinds = s.fx.map(f => f.t);
         if (s.target === 'deadAlly') { if (dead.length) { skill = s; break; } continue; }
         if (kinds.includes('heal') && !kinds.includes('dmg')) { if (allies.some(a => a.hp < a.maxHp * 0.7) || (kinds.includes('cleanse') && allies.some(a => a.effects.some(e => !EFFECTS[e.k].buff)))) { skill = s; break; } continue; }
-        if (kinds.every(k => k === 'buff' || k === 'shield' || k === 'tmFill')) { const k = s.fx[0].k || 'shield'; const who = s.target === 'self' ? [u] : allies; if (who.every(a => this.has(a, k))) continue; }
+        // a skill that only buffs is skipped while everyone it reaches still has every buff it gives (not only the
+        // first: King's Roar gives Attack Up and Defense Up, and is used again once either of them is gone)
+        if (kinds.every(k => k === 'buff' || k === 'shield' || k === 'tmFill')) {
+          const gives = s.fx.filter(f => f.t === 'buff' || f.t === 'shield'), whoOf = f => (s.target === 'self' || f.to === 'self' ? [u] : allies);
+          if (gives.length && gives.every(f => whoOf(f).every(a => this.has(a, f.t === 'shield' ? 'shield' : f.k)))) continue;
+        }
         if (kinds.includes('summon') && (this.living(this.enemies).length >= 4)) continue;
         if (kinds.includes('dmg') && allHidden && s.cd > 0) continue;
         skill = s; break;
