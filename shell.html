@@ -1962,16 +1962,16 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   .backbar:not(:has(.seg)) { display: none; }
   .mmenu:not([hidden]) { display: block; position: fixed; z-index: 30; right: 8px; top: calc(52px + env(safe-area-inset-top, 0px)); width: min(290px, calc(100vw - 16px));
     /* never taller than the screen below the header: the rest scrolls inside it */
-    max-height: calc(100dvh - 60px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #9c7c37 transparent; }
+    max-height: calc(100dvh - 60px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #9c7c37 transparent; }
   .mm-box { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; border: 1px solid #6e5528;
     background: linear-gradient(180deg, #261e2b, #140f17); box-shadow: 0 0 0 1px #000, 0 14px 30px rgba(0, 0, 0, .7); }
   .mm-it { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); font: 600 16px var(--font-body); text-align: left; cursor: pointer; }
   .mm-it:hover, .mm-it:focus-visible { background: rgba(217, 180, 90, .12); }
   .mm-ic { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: rgba(217, 180, 90, .15); color: var(--gold); font-size: 14px; flex: none; }
   .mm-n { margin-left: auto; min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 12px sans-serif; text-align: center; }
-  .mm-cur { display: grid; grid-template-columns: repeat(3, auto); gap: 6px 10px; justify-content: start; margin-top: 6px; padding: 8px; border-top: 1px solid var(--line); font-size: 14px; }
+  .mm-cur { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px 10px; margin-top: 6px; padding: 8px; border-top: 1px solid var(--line); font-size: 14px; }
   .mm-cur .tag { grid-column: 1 / -1; }
-  .mm-cur span:not(.tag) { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .mm-cur span:not(.tag) { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .mm-cur img { width: 18px; height: 18px; }
   .mm-cur small { color: var(--muted); font-size: 12px; }
 }

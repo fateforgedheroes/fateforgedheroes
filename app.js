@@ -5196,8 +5196,10 @@
   const ADM = { ok: false, who: '', data: null, err: '', busy: false };
   async function admCheck() {
     const cl = cloud(); if (!cl || !cl.signedIn()) { ADM.ok = false; return; }
-    const who = cl.info().email; if (ADM.who === who) return; ADM.who = who;
+    // asked again on every social refresh until it says yes (so running 0016 later needs no reload), once per account after that
+    const who = cl.info().email; if (ADM.who !== who) { ADM.who = who; ADM.ok = false; } if (ADM.ok) return;
     try { ADM.ok = !!(await cl.rpc('admin_check')); } catch (e) { ADM.ok = false; }
+    if (ADM.ok && document.querySelector('.mmenu:not([hidden])')) setMenu(true);
   }
   async function admLoad() {
     if (ADM.busy) return; ADM.busy = true; ADM.err = '';
