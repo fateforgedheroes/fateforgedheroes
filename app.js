@@ -111,6 +111,7 @@
   function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
     if (!s.elx || typeof s.elx !== 'object') s.elx = {}; // Essence Elixirs per essence
+    if (!s.story || typeof s.story !== 'object') s.story = {}; // story scenes seen (story.js)
     if (!s.sg || typeof s.sg !== 'object') s.sg = { best: 0, runs: 0, kills: 0 }; // the Siege: best wave, runs, kills (tickets: sgT, sgAt)
     // energy above the bar is capped at K.ENERGY.over times it (older saves could pile up thousands)
     if (s.p) { const ceil = K.energyMax(effLvl(s)) * K.ENERGY.over; if (s.energy > ceil) s.energy = ceil; }
@@ -916,7 +917,7 @@
     const misc = [[shardIc('fate'), 'Fate Shard', 'first clear of a stage, and now and then'], [shardIc('greater'), 'Greater Shard', 'first clear of the boss'], [stoneIc('lesser'), 'Ascension Stones', 'Lesser on every stage, Greater from bosses'], [elxIc('Aether'), 'Elixirs', `${Math.round(K.ELIXIR.camp * 100)}% a win, of a foe's essence`], [`<span class="sv-coin">${ic('coin')}</span>`, 'Sigils & XP', 'every win']]
       .map(([icon, name, tip]) => `<span class="sv-mi" title="${esc(name)}: ${esc(tip)}">${icon}<small>${esc(name)}</small></span>`).join('');
     const side = `<aside class="sv-side">
-      <div class="sv-ch" style="--art:url(${art})"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3></div>
+      <div class="sv-ch" style="--art:url(${art})"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3>${storyOpen(chap + 's') ? `<div class="sc-btns"><button type="button" class="btn" data-act="story" data-k="${chap}s">📖 Story</button>${storyOpen(chap + 'b') ? `<button type="button" class="btn" data-act="story" data-k="${chap}b">📖 The boss</button>` : ''}</div>` : ''}</div>
       <section class="sv-box"><h4>Gear drops</h4>
         <div class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(set.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></div>
         ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
@@ -1347,8 +1348,9 @@
     const skills = own ? `<button type="button" class="btn small violet lu-sk" data-act="luskill" ${h.sk.every(v => v >= K.SKILL_MAX) ? 'disabled title="All skills are at the maximum level"' : ''} title="Use a spare copy of ${esc(c.short)} to raise one of its skills">Skill up · ${own}× copy</button>` : '';
     const brk = Object.keys(LU.copies).filter(f => LU.copies[f]).reduce((a, f) => a + K.breakStones(f) * LU.copies[f], 0);
     const goTxt = atCap ? `Max level for ${h.stars}★` : !nSel && !nElx ? 'Pick food or elixirs' : LU.arm ? `Includes ${rare} Rare or better · tap to feed` : `Level up${r.lvl > h.lvl ? ` to ${r.lvl}` : ''}`;
-    const m = $('#modal');
-    m.innerHTML = `<div class="modal-box lu" role="dialog" aria-modal="true" aria-labelledby="lu-h">
+    // drawn again after every tap: no pop-in animation, and the food list keeps its scroll position
+    const m = $('#modal'), again = !m.hidden && !!m.querySelector('.modal-box.lu'), grid = again && m.querySelector('.lu-grid'), keepTop = grid ? grid.scrollTop : 0;
+    m.innerHTML = `<div class="modal-box lu ${again ? 'still' : ''}" role="dialog" aria-modal="true" aria-labelledby="lu-h">
       <div class="lu-top"><h2 id="lu-h">Level up · ${esc(c.short)}</h2><button type="button" class="lu-x" data-act="luclose" aria-label="Close">✕</button></div>
       <div class="lu-body">
         <section class="lu-hero rar-${c.rar}" style="--ec:${AFF_COL[c.aff]}">
@@ -1369,6 +1371,7 @@
         </section>
       </div></div>`;
     m.hidden = false;
+    if (keepTop) { const g = m.querySelector('.lu-grid'); if (g) g.scrollTop = keepTop; }
   }
   // the popup's taps (called from the click handler)
   function luAct(act, a) {
@@ -3461,6 +3464,7 @@
     else if (act === 'twrow') { TV.open = TV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); } // a floor row opens and closes
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
     else if (act === 'sggo') startSiege(+a.dataset.n);
+    else if (act === 'story') { if (storyOpen(a.dataset.k)) playScene(a.dataset.k).then(() => render()); }
     else if (act === 'sgrow') { SGV.open = SGV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
     else if (act === 'twgo') openTowerPrep(S.tw.cur || 'Ember'); // Fight opens the team screen first
@@ -4760,12 +4764,16 @@
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeGuidePop(); });
   // Escape closes the Vault's item window
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && tab === 'forge' && (VT.open || FG.mat) && $('#modal').hidden && !B) { VT.open = null; VT.up = null; FG.mat = null; render(); } });
+  // a fight the server already played (the guild boss, an arena fight on auto) is a replay: Skip to the end plays it out
+  // at once (the result is the server's either way)
+  const replayFight = () => !!B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)));
+  $('#b-skip').addEventListener('click', () => { if (!replayFight()) return; spd = 40; SFX.calm = true; toast('Skipping to the end…'); });
+  // the flag cancels the fight (a second tap within 3 s confirms). A replay ends at once with the server's result (the
+  // guild boss keeps the damage the server counted); any other fight is given up
   $('#b-quit').addEventListener('click', () => {
-    // arena: the result is already known, so this skips ahead (fast forward) instead of surrendering
-    if (B && (B.cfg.type === 'gboss' || (B.cfg.type === 'arena' && !(B.cfg.fight && B.cfg.fight.manual)))) { spd = 40; SFX.calm = true; toast('Skipping to the result…'); return; }
     const btn = $('#b-quit');
-    if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to give up'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up'); }, 3000); return; }
-    quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Give up');
+    if (Date.now() - quitArm > 3000) { quitArm = Date.now(); btn.classList.add('armed'); btn.setAttribute('aria-label', 'Tap again to cancel the fight'); setTimeout(() => { btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Cancel the fight'); }, 3000); return; }
+    quitArm = 0; btn.classList.remove('armed'); btn.setAttribute('aria-label', 'Cancel the fight');
     if (!B) return;
     B.b.aborted = true;
     if (pending) { const { u, res, b } = pending; pending = null; res(b.ai(u)); }
@@ -4902,6 +4910,7 @@
     let b = new K.Battle(heroes, enemies, hooks);
     // a manual arena fight starts by hand every time (auto can be switched on for that fight only); its moves go to the server
     const manualArena = cfg.type === 'arena' && cfg.fight && cfg.fight.manual;
+    $('#b-skip').hidden = !(gb || (cfg.type === 'arena' && !manualArena)); // a replay of the server's fight can be skipped
     b.auto = manualArena ? false : arena || !!cfg.rep || (S.auto && autoOk());
     if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
     B = { b, cfg, ph: 0, nPh, moves: [] }; paintVersion();
@@ -4920,6 +4929,7 @@
     await tween(800, k => { const e = ease(k); R.units.forEach(u => { u._rs.ox = (u.side === 'hero' ? -220 : 220) * (1 - e); }); updateOverlay(); });
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
+    if (storyDue(cfg, 's')) await playScene(cfg.stage.chapter + 's'); // the story: the chapter begins
     bannerQ = Promise.resolve();
     await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
@@ -4940,6 +4950,7 @@
       } else if (p) {
         enemies = phaseUnits(cfg, p);
         await nextPhase(heroes, enemies, p);
+        if (p === nPh - 1 && storyDue(cfg, 'b')) await playScene(cfg.stage.chapter + 'b'); // the story: the boss arrives
         b = new K.Battle(heroes, enemies, hooks); b.auto = !!cfg.rep || (S.auto && autoOk());
         B.b = b; B.ph = p;
         const boss = enemies.find(u => u.isBoss);
@@ -4980,7 +4991,7 @@
       await showBanner('Victory!', cfg.title, 'big', 900);
     } else {
       SFX.lose(); R.dim = 0.4;
-      await showBanner(b.aborted ? 'Surrendered' : 'Defeated', cfg.title, 'big lose', 900);
+      await showBanner(b.aborted && !arena ? 'Surrendered' : 'Defeated', cfg.title, 'big lose', 900);
     }
     if (arena) finishArena(cfg); else finishBattle(win);
   }
@@ -5077,6 +5088,90 @@
       ${prog >= K.TOWER.floors ? `<p class="cl-hint">All ${K.TOWER.floors} floors of the ${twName(e)} are cleared. Few heroes ever stand here.</p>` : ''}
       <div class="sv-wrap lfit">${side}<div class="sv-list">${rows}</div></div></div>`;
   }
+  // ---------- The story (story.js STORY_TEXT) ----------
+  // Twenty scenes: one at the start of every chapter (before its first battle) and one at its boss (when the boss walks
+  // onto the field in the boss stage's last phase). Each plays once, the first time a player gets there on Easy
+  // (S.story[key] = seen, key = chapter index + 's' or 'b'); every scene of a chapter reached can be read again from its
+  // Story buttons on the stage view. STORY: key -> [[speaker, text], ...], read from the text in story.js.
+  const STORY = (() => {
+    const o = {}; let cur = null;
+    if (typeof STORY_TEXT === 'undefined') return o;
+    for (const raw of STORY_TEXT.split('\n')) {
+      const l = raw.trim(); if (!l) continue;
+      const h = l.match(/^#+\s*CHAPTER\s+(\d+)\s*\S*\s*(START|BOSS)/i);
+      if (h) { cur = o[(+h[1] - 1) + (h[2].toUpperCase() === 'START' ? 's' : 'b')] = []; continue; }
+      const m = l.match(/^([^:]{1,40}):\s*(.+)$/); if (cur && m) cur.push([m[1].trim(), m[2].trim()]);
+    }
+    return o;
+  })();
+  // a speaker's name -> its id (heroes and bosses), so the scene can show their picture
+  let storyIds = null;
+  const storyId = n => {
+    if (!storyIds) { storyIds = {}; for (const id in K.CHAMPS) storyIds[K.CHAMPS[id].name.toLowerCase()] = id; for (const id in K.BOSSES) storyIds[K.BOSSES[id].name.toLowerCase()] = id; }
+    return storyIds[n.toLowerCase()] || null;
+  };
+  const heroId0 = () => (S.hero && S.roster[S.hero.id] ? S.hero.id : avatarId());
+  // a speaker's picture cut to the figure itself (the pictures have empty room around them), made once per character
+  const STORY_PIC = {};
+  function storyPic(id) {
+    return STORY_PIC[id] || (STORY_PIC[id] = new Promise(res => {
+      const im = new Image();
+      im.onload = () => {
+        try {
+          const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+          const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+          let x0 = c.width, x1 = -1, y0 = c.height, y1 = -1;
+          for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          if (x1 < 0) { res(im.src); return; }
+          const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+          o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); res(o.toDataURL('image/webp', 0.92));
+        } catch (e) { res(im.src); }
+      };
+      im.onerror = () => res(''); im.src = bossBig(id);
+    }));
+  }
+  const storyOpen = k => { const c = parseInt(k, 10), i = c * 7 + (k.endsWith('b') ? 6 : 0); return !!STORY[k] && (S.story[k] || i <= S.cleared + 1); };
+  // plays a scene; resolves when it is done or skipped. In a battle it lies over the field (the battle waits), elsewhere
+  // over the chapter's art
+  function playScene(k) {
+    const lines = STORY[k]; if (!lines || !lines.length) return Promise.resolve();
+    S.story[k] = 1; save();
+    const c = parseInt(k, 10), inBattle = B && !$('#battle').hidden, host = inBattle ? $('#battle .stage-wrap') || $('#battle') : document.body;
+    const heroName = (S.hero && S.hero.name) || S.p.name, heroId = heroId0();
+    const el = document.createElement('div');
+    el.className = 'story' + (inBattle ? '' : ' page'); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `Chapter ${ROMAN[c]} story`);
+    el.innerHTML = `${inBattle ? '' : `<div class="sc-bg" style="--art:url(${chapterArt(c)})"></div>`}<img class="sc-fig sc-l" alt=""><img class="sc-fig sc-r" alt="">
+      <span class="sc-ch">Chapter ${ROMAN[c]} · ${esc(K.CHAPTERS[c].name)}</span><button type="button" class="sc-skip">Skip ›</button>
+      <div class="sc-box"><b class="sc-name"></b><p class="sc-text"></p><span class="sc-next" aria-hidden="true">▼</span></div>`;
+    host.appendChild(el); if (inBattle) $('#battle').classList.add('in-story');
+    const L = el.querySelector('.sc-l'), Rr = el.querySelector('.sc-r'), nm = el.querySelector('.sc-name'), tx = el.querySelector('.sc-text');
+    let i = -1, typing = 0, full = '';
+    for (const [who] of lines) { const id = /^hero$/i.test(who) ? heroId : storyId(who); if (id) storyPic(id); }
+    return new Promise(done => {
+      const finish = () => { clearInterval(typing); document.removeEventListener('keydown', key, true); el.remove(); $('#battle').classList.remove('in-story'); done(); };
+      const show = () => {
+        i++; if (i >= lines.length) { finish(); return; }
+        const [who, said] = lines[i], hero = /^hero$/i.test(who), narr = /^narrator$/i.test(who), id = hero ? heroId : narr ? null : storyId(who);
+        const boss = id && K.BOSSES[id] && !K.CHAMPS[id];
+        if (id) { const img = boss ? Rr : L, at = i; storyPic(id).then(u => { if (u && i === at) { img.src = u; img.classList.add('on'); } }); }
+        L.classList.toggle('talk', !!id && !boss); Rr.classList.toggle('talk', !!boss);
+        el.classList.toggle('narr', narr);
+        nm.textContent = narr ? '' : hero ? heroName : who;
+        full = said.replace(/\{name\}/g, heroName);
+        // the line appears letter by letter; a tap shows it whole, the next tap moves on
+        let n = 0; tx.textContent = ''; clearInterval(typing);
+        typing = setInterval(() => { n += 2; tx.textContent = full.slice(0, n); if (n >= full.length) { clearInterval(typing); typing = 0; } }, 18);
+      };
+      const next = () => { if (typing) { clearInterval(typing); typing = 0; tx.textContent = full; } else show(); };
+      function key(e) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(); } else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); next(); } }
+      el.addEventListener('click', e => { e.stopPropagation(); if (e.target.closest('.sc-skip')) finish(); else next(); });
+      document.addEventListener('keydown', key, true);
+      show();
+    });
+  }
+  // the scene a campaign battle opens with (the chapter's start), or shows when its boss arrives
+  const storyDue = (cfg, part) => cfg.type === 'stage' && !cfg.diff && !cfg.rep && cfg.i > S.cleared && cfg.stage.n === (part === 's' ? 0 : 6) && STORY[cfg.stage.chapter + part] && !S.story[cfg.stage.chapter + part];
+
   // ---------- The Siege (tab `siege`, engine K.SIEGE): an endless defence. The team holds its gate while waves of
   // enemies walk at it (more of them and stronger every wave) until it falls. Every kill pays hero XP and Sigils at
   // once (siegeKill), the first clear of every 25th wave pays a checkpoint reward (siegeReward), and a run may start

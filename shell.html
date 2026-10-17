@@ -447,7 +447,7 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .rb.danger { color: #ff9a8a; }
 .rb.danger.armed { border-color: var(--bad); background: rgba(106,36,36,.92); color: #fff; animation: armpulse .6s ease-in-out infinite alternate; }
 @keyframes armpulse { from { box-shadow: 0 0 0 0 var(--bad); } to { box-shadow: 0 0 0 4px rgba(200,60,60,.35); } }
-.rb.danger.armed::after { content: "Tap again to give up"; position: absolute; top: 40px; right: 0; white-space: nowrap; font-size: .75rem; background: rgba(16,11,16,.9); border: 1px solid var(--bad); padding: 2px 6px; color: #ffd8cc; }
+.rb.danger.armed::after { content: "Tap again to cancel the fight"; position: absolute; top: 40px; right: 0; white-space: nowrap; font-size: .75rem; background: rgba(16,11,16,.9); border: 1px solid var(--bad); padding: 2px 6px; color: #ffd8cc; }
 .b-ctl .rb { position: relative; }
 .btn.on { border-color: var(--gold); color: var(--gold); }
 #b-log { list-style: none; margin: 0; padding: 8px 12px; background: var(--panel); border: 2px solid var(--line); max-height: 96px; overflow-y: auto; font-size: .88rem; color: var(--muted); }
@@ -464,6 +464,7 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .modal-box.lose h2 { color: var(--bad); }
 .modal-box.violet h2 { color: var(--violet); }
 @keyframes pop { from { transform: scale(.92); opacity: 0; } to { transform: none; opacity: 1; } }
+.modal-box.still { animation: none; } /* a popup drawn again in place (Level up after every tap) does not pop in again */
 .rewards { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .rewards li { display: flex; align-items: center; gap: 8px; background: var(--panel-2); padding: 6px 10px; opacity: 0; animation: slidein .35s ease-out forwards; border-left: 4px solid var(--rc, var(--line)); }
 .rewards li img.ic { width: 20px; height: 20px; }
@@ -1946,7 +1947,9 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
   #menubtn .menu-n { position: absolute; top: -5px; right: -5px; }
   .backbar > .btn[data-tab="home"] { display: none; }
   .backbar:not(:has(.seg)) { display: none; }
-  .mmenu:not([hidden]) { display: block; position: fixed; z-index: 30; right: 8px; top: calc(52px + env(safe-area-inset-top, 0px)); width: min(290px, calc(100vw - 16px)); }
+  .mmenu:not([hidden]) { display: block; position: fixed; z-index: 30; right: 8px; top: calc(52px + env(safe-area-inset-top, 0px)); width: min(290px, calc(100vw - 16px));
+    /* never taller than the screen below the header: the rest scrolls inside it */
+    max-height: calc(100dvh - 60px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: #9c7c37 transparent; }
   .mm-box { display: flex; flex-direction: column; gap: 2px; padding: 8px; border-radius: 12px; border: 1px solid #6e5528;
     background: linear-gradient(180deg, #261e2b, #140f17); box-shadow: 0 0 0 1px #000, 0 14px 30px rgba(0, 0, 0, .7); }
   .mm-it { display: flex; align-items: center; gap: 10px; padding: 10px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--fg); font: 600 16px var(--font-body); text-align: left; cursor: pointer; }
@@ -3382,6 +3385,33 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .tws .sv-row.cleared .tw-rfl { border-color: #9fe08a; color: #d8f5c6; }
 .tw-rw img { width: 24px; height: 24px; } .tws .sv-go { gap: 8px; }
 .tws .sv-more .tw-foe { width: 70px; } .tws .sv-more .tw-tiles { display: flex; flex-wrap: wrap; gap: 6px; }
+/* the story (app.js playScene, story.js): a scene over the battlefield (or over the chapter's art when read again), the
+   speaker large on their side (the hero and companions on the left, a boss on the right, mirrored to face left), the
+   other one dimmed, the line in a framed box at the bottom; Narrator lines have no name and no portrait lit */
+.story { position: absolute; inset: 0; z-index: 30; overflow: hidden; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; animation: sfx-fade .35s ease-out;
+  background: linear-gradient(180deg, rgba(6, 4, 10, .35), rgba(6, 4, 10, .55) 55%, rgba(6, 4, 10, .9)); }
+.story.page { position: fixed; z-index: 45; background: #0b0810; }
+.story .sc-bg { position: absolute; inset: 0; background: var(--art) center / cover no-repeat; filter: brightness(.55); }
+.story .sc-fig { position: absolute; bottom: -6%; height: 96%; max-width: 52%; object-fit: contain; object-position: bottom; transition: filter .25s, opacity .25s, transform .3s; filter: brightness(.4) saturate(.7); opacity: 0; }
+.story .sc-fig.on { opacity: 1; } .story .sc-fig.talk { filter: drop-shadow(0 0 18px rgba(255, 230, 170, .25)); }
+.story .sc-l { left: 2%; transform: translateX(-12px); } .story .sc-r { right: 2%; transform: scaleX(-1) translateX(-12px); }
+.story .sc-l.talk { transform: none; } .story .sc-r.talk { transform: scaleX(-1); }
+.story .sc-box { position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%); width: min(92%, 760px); box-sizing: border-box; padding: 12px 18px 14px; border: 1px solid #9c7c37; border-radius: 6px;
+  background: linear-gradient(180deg, rgba(31, 24, 35, .95), rgba(14, 10, 17, .96)); box-shadow: 0 0 0 1px #000, 0 10px 30px rgba(0, 0, 0, .6); }
+.story .sc-name { display: block; font-family: var(--font-display); font-size: 1rem; color: var(--gold); letter-spacing: .04em; margin-bottom: 4px; }
+.story .sc-name:empty { display: none; }
+.story .sc-text { margin: 0; min-height: 2.6em; font-size: 1.02rem; line-height: 1.4; color: #efe6d6; }
+.story.narr .sc-text { font-style: italic; color: #d8cbb5; text-align: center; }
+.story .sc-next { position: absolute; right: 12px; bottom: 6px; color: var(--gold); font-size: .8rem; animation: sfx-blink 1.2s ease-in-out infinite; }
+.story .sc-skip { position: absolute; top: 8px; right: 8px; z-index: 2; font-family: var(--font-tag); font-size: .78rem; letter-spacing: .1em; color: #ddd4ea; background: rgba(0, 0, 0, .5); border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px; padding: 5px 14px; cursor: pointer; }
+.story .sc-ch { position: absolute; top: 10px; left: 12px; z-index: 2; font-family: var(--font-tag); font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: #e8d7a8; text-shadow: 0 1px 2px #000; }
+/* while a scene plays over a battle the battle's own labels, turn order and buttons step aside */
+#battle.in-story #ov, #battle.in-story .order, #battle.in-story .b-ctl, #battle.in-story #b-rep, #battle.in-story .b-top { visibility: hidden; }
+.sv-ch .sc-btns { display: flex; gap: 6px; flex-wrap: wrap; position: relative; z-index: 1; margin-top: 4px; }
+.sv-ch .sc-btns .btn { padding: 3px 10px; min-height: 0; font-size: .72rem; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .story .sc-box { padding: 7px 12px 9px; } .story .sc-name { font-size: .85rem; margin-bottom: 2px; } .story .sc-text { font-size: .86rem; min-height: 2.4em; }
+}
 /* the Siege (app.js siegeHtml, finishSiege): the Tower's layout (.tws, .tw-sidec) with tickets; in battle (#battle.siege)
    every figure is smaller, so the labels shrink too and ordinary enemies show only their HP bar */
 .sg-tk { width: 20px; height: 14px; fill: #e8c46a; stroke: #6a4a12; stroke-width: 1; vertical-align: -2px; }
@@ -3856,7 +3886,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
         <button class="rb" id="b-help" type="button" aria-label="Guide (pauses the battle)" title="Guide (pauses the battle)"><b style="font-size:15px">?</b></button>
         <button class="rb" id="b-auto" type="button" aria-label="Auto battle" aria-pressed="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M13.5 8A5.5 5.5 0 1 1 11.9 4.1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 1.6l3.9.4-.9 3.8z" fill="currentColor"/><path d="M6.4 11 8 5.2 9.6 11M6.9 9.3h2.2" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
         <button class="rb" id="b-speed" type="button" aria-label="Battle speed"><b>1×</b></button>
-        <button class="rb danger" id="b-quit" type="button" aria-label="Give up"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13.5" stroke="currentColor" stroke-width="1.6"/><path d="M4.3 2.2h8.2l-2 3.2 2 3.2H4.3z" fill="currentColor"/></svg></button>
+        <button class="rb" id="b-skip" type="button" aria-label="Skip to the end" title="Skip to the end" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 3l6 5-6 5zM8 3l6 5-6 5z" fill="currentColor"/><path d="M14.5 3v10" stroke="currentColor" stroke-width="1.6"/></svg></button>
+        <button class="rb danger" id="b-quit" type="button" aria-label="Cancel the fight" title="Cancel the fight"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 1.5v13.5" stroke="currentColor" stroke-width="1.6"/><path d="M4.3 2.2h8.2l-2 3.2 2 3.2H4.3z" fill="currentColor"/></svg></button>
       </div>
       <div id="coach" class="coach" role="status" aria-live="polite" hidden></div>
       <button type="button" class="b-chat" id="b-chat" hidden></button>
