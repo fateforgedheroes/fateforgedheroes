@@ -642,15 +642,41 @@
   const unlocked = t => isOpen(S, t);
   // the portrait a player shows: the avatar they picked, else their starter hero, else their first team member
   const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.starter && S.roster[S.starter] ? S.starter : S.team[0]);
+  // linking an account pays LINK_GEMS Crystals once per save (S.lk), the first time the game sees it saved to an account
+  const LINK_GEMS = 100;
+  const linkRw = () => `<div class="lk-rw">${GEM_SVG}<span><b>+${LINK_GEMS} Crystals</b><br><small>for linking your account</small></span></div>`;
+  const guest = () => { const cl = cloud(); return !!(cl && cl.enabled && !cl.signedIn()); };
+  function linkPaid() {
+    const cl = cloud(); if (!S || S.lk || noHero() || !cl || !cl.signedIn() || cl.info().status !== 'saved') return;
+    S.lk = true; S.gems = (S.gems || 0) + LINK_GEMS; save(); hud();
+    if ((B && $('#modal').hidden) || document.querySelector('.unlock-pop')) { toast(`Account linked! +${LINK_GEMS} Crystals`); return; } // in a running battle: a message only
+    const el = document.createElement('div');
+    el.className = 'unlock-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Account linked');
+    el.innerHTML = `<div class="unlock-card"><span class="tag">Account linked</span><h2>Your heroes are safe</h2><p>Your progress is saved to your account: play on any device, and join the Arena, guilds and chat.</p>${linkRw()}<button class="btn primary" type="button">Great!</button></div>`;
+    document.body.appendChild(el); SFX.up();
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
+  }
+  // "Don't want to lose your progress?": a guest is asked to create an account, with the reward shown big
+  function showLinkOffer(tag) {
+    if (!guest() || noHero()) return;
+    const el = document.createElement('div');
+    el.className = 'unlock-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Create an account');
+    el.innerHTML = `<div class="unlock-card"><span class="tag">${tag || 'Playing as a guest'}</span><h2>Don't want to lose your progress?</h2>
+      <p>Create an account! Your heroes are saved only in this browser right now. Link an email to keep them safe, play on any device, and join the Arena, guilds and chat.</p>${linkRw()}
+      <button class="btn primary" type="button" data-link="1">Create an account</button><button class="btn small" type="button">Later</button></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) { el.remove(); if (e.target.closest('[data-link]') && cloud()) cloud().openAccount(); } });
+  }
   function paintAccount() {
+    linkPaid();
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
     // no hero yet (hero creation): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
-    const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : '';
+    const dot = cl && cl.email ? `<i class="acc-dot ${cl.status === 'error' ? 'err' : cl.status === 'syncing' ? 'sync' : ''}"></i>` : cl && cl.enabled && !noHero() ? '<i class="acc-dot guest"></i>' : '';
     b.innerHTML = `${por(avatarId(), 1, 'acc-av')}<span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span><span class="acc-name">${esc(S.p.name)}</span>${dot}`;
-    b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · not signed in' : '');
+    b.title = `${S.p.name} · player level ${S.p.lvl}` + (cl && cl.email ? (cl.status === 'error' ? ' · cloud save failed' : ' · saved to your account') : cl && cl.enabled ? ' · playing as a guest: link an email to keep your progress safe' : '');
     if (tab === 'profiel' && (TH.tab === 'profile' || TH.tab === 'settings') && !B && !$('#screen').hidden && !$('#screen input:focus')) $('#screen').innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${townHallHtml()}</div></div>`;
   }
   function lockedHtml(t, lede) {
@@ -788,7 +814,7 @@
       if (on && card && landPhone()) { const r = on.getBoundingClientRect(); card.classList.add(r.left + r.width / 2 > innerWidth / 2 ? 'tc-left' : 'tc-right'); window.scrollBy({ top: r.top - (innerHeight - r.height) / 2 - 10, behavior: 'smooth' }); }
       else if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
-      if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (discordDue()) setTimeout(showDiscord, 900);
+      if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
@@ -2672,6 +2698,15 @@
   const DISCORD_URL = 'https://discord.gg/xCybP7kkDj', DISCORD_DAYS = 3;
   const DISCORD_SVG = '<svg class="dc-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 5.3A17 17 0 0 0 15.4 4l-.5 1a15.7 15.7 0 0 0-5.8 0l-.5-1a17 17 0 0 0-4.2 1.3C1.7 9.3 1 13.2 1.3 17a17 17 0 0 0 5.2 2.6l1.1-1.7a11 11 0 0 1-1.8-.9l.4-.3a12 12 0 0 0 11.6 0l.4.3a11 11 0 0 1-1.8.9l1.1 1.7a17 17 0 0 0 5.2-2.6c.4-4.4-.6-8.3-3.1-11.7zM8.7 14.7c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2zm6.6 0c-1 0-1.9-1-1.9-2.2s.8-2.2 1.9-2.2 1.9 1 1.9 2.2-.8 2.2-1.9 2.2z"/></svg>';
   const discordDue = () => !noHero() && S.seen.home && S.seen.tour && !loginDue() && today() - (S.disc ?? -99) >= DISCORD_DAYS;
+  // a guest (the cloud is on but nobody signed in) is asked every LINK_DAYS days, from the end of Chapter I, to link an
+  // email, so the progress that lives only in this browser is safe; S.link = the UTC day it was last asked
+  const LINK_DAYS = 3;
+  const linkDue = () => { const cl = cloud(); return !!(cl && cl.enabled && !cl.signedIn() && !noHero() && S.seen.home && S.seen.tour && S.cleared >= 6 && !loginDue() && today() - (S.link ?? -99) >= LINK_DAYS); };
+  function showLink() {
+    if (tab !== 'home' || !linkDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
+    S.link = today(); save();
+    showLinkOffer();
+  }
   function showDiscord() {
     if (tab !== 'home' || !discordDue() || !$('#modal').hidden || document.querySelector('.unlock-pop')) return;
     S.disc = today(); save();
@@ -3181,6 +3216,7 @@
           <div class="xpbar"><i style="width:${p.lvl >= PLAYER_MAX ? 100 : Math.round(p.xp / need * 100)}%"></i></div>
           ${p.lvl >= PLAYER_MAX ? `<div class="prestige-box"><p><b>Maximum level reached!</b> Prestige to start again at level 1 with everything you own, earn prestige emblem ${romanN((p.prestige || 0) + 1)}, ${sigils(PRESTIGE_REWARD.silver)} and a ${esc(K.SHARD.mythic.name)}, and collect every level-up reward again.</p><button class="btn primary" data-act="prestige">Prestige ${romanN((p.prestige || 0) + 1)}</button></div>`
             : `<small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP${p.lvl >= PLAYER_MAX - 10 ? ` · at level ${PLAYER_MAX} you can prestige` : ''}</small>`}</div></div>
+      ${guest() && !S.lk ? `<div class="prof-link"><div><h3>Link your account to an email</h3><p>Your heroes are saved only in this browser. Link an email to keep them safe and play on any device.</p></div>${linkRw()}<button class="btn primary small" data-act="account">Create an account</button></div>` : ''}
       <div class="prof-cols">
         <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out Sigils. Every fifth level also gives a Greater Fate Shard.</p></section>
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
@@ -3195,7 +3231,7 @@
       ? '<p class="empty-note">Offline mode: your progress is saved in this browser only.</p>'
       : cl.email
         ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
-        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
+        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.${S.lk ? '' : ` Linking an account pays <b>${LINK_GEMS} Crystals</b>.`}</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
     // feedback and bug reports go to the Discord, so everything stays in one place
     const feedback = `<section class="prof-acc fb-sec"><h3>Feedback and bugs</h3><p class="empty-note">Found a bug or have an idea? Tell us in the Discord: post it in the feedback or bug channel, with a screenshot if you can.</p><div class="row"><a class="btn dc-btn small" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Give feedback in Discord</a></div></section>`;
     return `<div class="profile">
@@ -5494,6 +5530,11 @@
     m.hidden = false;
     const f = m.querySelector('.btn'); if (f) f.focus();
     setTimeout(() => showUnlocks(unlocks), 500);
+    if (win && first && isStage && cfg.i === 2 && !cfg.diff && guest() && !S.seen.lkOffer) {
+      S.seen.lkOffer = true; save();
+      const offer = (n) => document.querySelector('.unlock-pop') && n < 30 ? setTimeout(() => offer(n + 1), 700) : showLinkOffer('Chapter I · Stage 3 cleared');
+      setTimeout(() => offer(0), 1400);
+    }
     if (cfg.rep) repStep(cfg, win);
   }
   // damage meter: the engine's per-battle meter (uid -> dealt by source, healed by source, taken) added up over the phases
@@ -5690,6 +5731,8 @@
       set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); announceReset(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
+      hasProgress: () => !!S && !noHero() && S.cleared >= 0, // a guest with something to lose (the sign-in screen then says "Save your progress")
+      rewardHtml: () => (S && !S.lk ? linkRw() : ''), // the Crystals for linking, on that screen
       flush: () => save(), // the save in local storage up to date (before switching accounts)
       busy: () => !!B, // in a battle: no switching accounts
       // short description of any save (also an older version), for the "which save to keep" dialog

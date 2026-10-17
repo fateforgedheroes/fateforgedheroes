@@ -121,7 +121,7 @@
   // daily quest and Market counters starting a new day, the Discord popup's day, the save time) nor settings (sound,
   // speed, auto, the chapter or difficulty looked at). Otherwise a device that was only opened again, without playing,
   // counted as "changed" and asked the player to pick between two saves after playing on another device.
-  const VOLATILE = ['savedAt', 'energy', 'enAt', 'disc', 'q', 'mk', 'sound', 'music', 'vol', 'mvol', 'cblock', 'cbname', 'audioWas', 'speed', 'auto', 'chap', 'diff', 'shake', 'sgT', 'sgAt'];
+  const VOLATILE = ['savedAt', 'energy', 'enAt', 'disc', 'q', 'mk', 'sound', 'music', 'vol', 'mvol', 'cblock', 'cbname', 'audioWas', 'speed', 'auto', 'chap', 'diff', 'shake', 'sgT', 'sgAt', 'link'];
   const content = s => { const o = Object.assign({}, s); for (const k of VOLATILE) delete o[k]; return JSON.stringify(o); };
   const oldContent = s => JSON.stringify(Object.assign({}, s, { savedAt: 0 })); // how bases saved before this compared (hash)
   const hash = str => { let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 + str.charCodeAt(i)) | 0; return str.length + ':' + h; };
@@ -208,10 +208,13 @@
     const adding = store.get(ADD_KEY), from = adding && accounts().find(a => a.uid === adding);
     // the sign-in of the account on this device ran out: its other accounts can still be played
     const others = !from && expired ? accounts().filter(a => a.uid !== expired) : [];
+    // a guest with progress links it to an account: a new account takes over the save on this device (sync uploads it)
+    const linking = !from && !others.length && !expired && api && api.hasProgress && api.hasProgress();
     const o = overlay(`
       <img class="auth-logo" src="${typeof LOGO_URL !== 'undefined' ? LOGO_URL : ''}" alt="Fate Forged Heroes">
-      <h2 id="auth-h">${from ? 'Add another account' : 'Sign in to save your progress'}</h2>
-      <p class="auth-sub">${from ? 'Sign in with the other account, or create a new one. You stay signed in on both and can switch any time from your account menu.' : 'Your heroes, gear and progress are stored in your account, so you can continue on any device.'}</p>
+      <h2 id="auth-h">${from ? 'Add another account' : linking ? 'Save your progress' : 'Sign in to save your progress'}</h2>
+      ${linking ? `<p class="auth-sub">Create an account and your heroes, gear and progress on this device are linked to it: safe if this browser is cleared, and playable on any device. Already have an account? Sign in to it instead.</p>${api.rewardHtml ? api.rewardHtml() : ''}` : ''}
+      <p class="auth-sub" ${linking ? 'hidden' : ''}>${from ? 'Sign in with the other account, or create a new one. You stay signed in on both and can switch any time from your account menu.' : 'Your heroes, gear and progress are stored in your account, so you can continue on any device.'}</p>
       ${msg ? `<p class="auth-msg ${isErr ? 'bad' : ''}">${msg}</p>` : ''}
       <button class="btn primary auth-google" type="button" data-auth="google" ${googleOn ? '' : 'hidden'}><svg viewBox="0 0 18 18" aria-hidden="true"><path fill="#EA4335" d="M9 3.5c1.6 0 2.7.7 3.3 1.3l2.4-2.4C13.3 1 11.3 0 9 0 5.5 0 2.4 2 1 5l2.8 2.2C4.4 5.1 6.5 3.5 9 3.5z"/><path fill="#4285F4" d="M17.6 9.2c0-.6-.1-1.1-.2-1.7H9v3.3h4.8c-.2 1.1-.8 2-1.8 2.6l2.7 2.1c1.6-1.5 2.9-3.7 2.9-6.3z"/><path fill="#FBBC05" d="M3.8 10.8c-.2-.5-.3-1.1-.3-1.8s.1-1.2.3-1.8L1 5C.4 6.2 0 7.6 0 9s.4 2.8 1 4l2.8-2.2z"/><path fill="#34A853" d="M9 18c2.4 0 4.5-.8 6-2.2l-2.7-2.1c-.8.5-1.9.9-3.3.9-2.5 0-4.6-1.7-5.3-3.9L1 13c1.5 3 4.5 5 8 5z"/></svg>Continue with Google</button>
       ${googleOn ? '<div class="auth-or"><span>or with email</span></div>' : ''}
@@ -223,7 +226,7 @@
       </form>
       ${others.length ? `<div class="acc-switch"><h3>Or play another account</h3><div class="acc-list">${others.map(a => `<button class="acc-pick" type="button" data-as="${esc(a.uid)}"><b>${esc(a.name || 'Adventurer')}</b><span>${esc(a.email)} · level ${+a.lvl || 1}</span></button>`).join('')}</div></div>` : ''}
       ${from ? `<button class="linkbtn auth-guest" type="button" data-auth="back">‹ Back to ${esc(from.name || from.email)}</button>`
-        : '<button class="linkbtn auth-guest" type="button" data-auth="guest">Play without an account (saves only in this browser)</button>'}
+        : `<button class="linkbtn auth-guest" type="button" data-auth="guest">${linking ? 'Not now: keep playing as a guest' : 'Play without an account (saves only in this browser)'}</button>`}
       <p class="auth-legal">By signing in you agree to our <a href="/privacy.html" target="_blank" rel="noopener">privacy policy</a>.</p>`);
     let mode = 'in';
     o.querySelectorAll('button[type=submit]').forEach(b => b.addEventListener('click', () => (mode = b.dataset.mode)));
@@ -238,7 +241,7 @@
           const u = r && (r.user || r);
           if (r && !r.access_token && u && Array.isArray(u.identities) && u.identities.length === 0) loginScreen('There is already an account with this email. Sign in instead, or use "Forgot password?".', true);
           else if (r && r.access_token) { keep(r); await afterLogin(); }
-          else loginScreen('Check your inbox and click the link in the email to confirm your account. Then sign in here.');
+          else loginScreen('Check your inbox and click the link in the email to confirm your account. Open it on this device, so the progress you have here is linked to it.');
         } else {
           keep(await req('/auth/v1/token?grant_type=password', { method: 'POST', auth: false, body: { email, password } }));
           await afterLogin();
@@ -328,7 +331,7 @@
       if (back) { keep(back); await loadUser(); await afterLogin(); }
       else if (session && (await valid())) { expired = null; await loadUser(); remember(); paintAccount(); await sync(); remember(); }
       else if (was) loginScreen('Your sign-in on this device has expired. Please sign in again.', false, was);
-      else if (store.get(ADD_KEY) || !store.get(GUEST_KEY)) loginScreen();
+      else if (store.get(ADD_KEY)) loginScreen(); // a first visit plays right away as a guest; linking an email comes later
       paintAccount();
       setInterval(() => { if (session) { push(); remember(); } }, 30000);
       // leaving the tab: upload; coming back: pick up progress made on another device in the meantime
