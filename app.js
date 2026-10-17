@@ -768,7 +768,7 @@
   // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
     document.body.dataset.tab = tab; paintVersion(); chatPaintBtn();
-    try { renderScreen(); }
+    try { renderScreen(); if (needName() && !B && tab !== 'home') setTimeout(showNameBox, 300); }
     catch (e) {
       console.error(e);
       $('#screen').innerHTML = `<div class="lockbox"><div><h3>Something went wrong on this screen</h3><p class="empty-note">Please send this message to the developer: <code>${esc(tab)}: ${esc(e && e.message || e)}</code></p><button class="btn primary" data-act="tab" data-tab="home">Back to Home</button></div></div>`;
@@ -1421,7 +1421,10 @@
   let nameOk = null;
   // every player picks a name of their own once (the default "Adventurer" is not one): asked on Home after the first
   // battle, and the popup has no way out but saving a name (the first name is free)
-  const needName = () => !noHero() && !firstSteps() && S.p.name === 'Adventurer' && !S.p.renames;
+  // every player picks a name of their own: one still called "Adventurer" (in any spelling) gets the name box on every
+  // screen after the first battle (render), and nobody can take "Adventurer" back later
+  const isAdv = n => /^\s*adventurer\s*$/i.test(n || 'Adventurer');
+  const needName = () => !noHero() && !firstSteps() && isAdv(S.p.name);
   function showNameBox() {
     const m = $('#modal'); if (!m.hidden || !needName()) return;
     m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="pn-t"><h2 id="pn-t">Choose your player name</h2>
@@ -3253,9 +3256,9 @@
     const name = f.pname.value.replace(/[<>"&\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
     if (name.length < 2) { toast('Pick a name of at least 2 characters.', true); return; }
     const forced = !!f.closest('#modal');
-    if (forced && name.toLowerCase() === 'adventurer') { toast('Pick a name of your own.', true); return; }
+    if (isAdv(name)) { toast('Pick a name of your own.', true); return; }
     if (name === S.p.name) { editName = false; render(); return; }
-    const cost = renameCost();
+    const cost = forced ? 0 : renameCost(); // the name a player has to pick is always free
     if (S.silver < cost) { toast(`Changing your name costs ${cost.toLocaleString('en-US')} Sigils.`, true); return; }
     S.silver -= cost; S.p.renames++;
     S.p.name = name; editName = false; if (forced) $('#modal').hidden = true;
