@@ -2917,7 +2917,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${ADM.ok ? item('admin', '♛', 'Admin') : ''}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${ADM.ok ? item('admin', '♛', 'Admin', ADM.rev ? `<b class="mm-n">${ADM.rev > 9 ? '9+' : ADM.rev}</b>` : '') : ''}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${gemsAll().toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -3527,6 +3527,10 @@
     else if (act === 'evpop') evPop(+a.dataset.d, a.dataset.k);
     else if (act === 'admload') { ADM.data = null; ADM.err = ''; render(); }
     else if (act === 'admlb') admLbSet(a.dataset.uid, a.dataset.s);
+    else if (act === 'admview') { ADM.view = a.dataset.v; render(); window.scrollTo({ top: 0 }); }
+    else if (act === 'admchf') { ADM.chF = a.dataset.k; render(); }
+    else if (act === 'admchopen') { ADM.open = ADM.open === a.dataset.uid ? '' : a.dataset.uid; render(); }
+    else if (act === 'admws') { ADM.ws = a.dataset.k; cloud().rpc('admin_watch', { sort: ADM.ws }).then(w => { ADM.watch = w; if (tab === 'admin') render(); }, () => {}); }
     else if (act === 'story') { if (storyOpen(a.dataset.k)) playScene(a.dataset.k).then(() => render()); }
     else if (act === 'sgrow') { SGV.open = SGV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); }
     else if (act === 'twpick') { const e = S.tw.cur || 'Ember', t = twTeam(e), i = t.indexOf(id); if (!twFits(id, e)) return; if (id === heroId()) { toast('Your hero always climbs with you.'); return; } if (i >= 0) t.splice(i, 1); else if (t.length < 4) t.push(id); else { toast('A tower team has at most four heroes.', true); return; } S.tw.team[e] = t; save(); render(); }
@@ -5204,7 +5208,7 @@
   const evTideOf = aff => { const e = evNow('tide'); return !!e && e.ess === aff; };
   // ---------- Admin (0016_admin.sql): player numbers, only for accounts in the admins table ----------
   // admin_check says whether this account may see them (then the ☰ menu has an Admin item); admin_stats returns them
-  const ADM = { ok: false, who: '', data: null, err: '', busy: false };
+  const ADM = { ok: false, who: '', data: null, err: '', busy: false, view: 'stats', ch: null, chF: 'review', open: '', watch: null, ws: 'gems', rev: 0 };
   async function admCheck() {
     const cl = cloud(); if (!cl || !cl.signedIn()) { ADM.ok = false; return; }
     // asked again on every social refresh until it says yes (so running 0016 later needs no reload), once per account after that
@@ -5216,7 +5220,52 @@
     if (ADM.busy) return; ADM.busy = true; ADM.err = '';
     try { ADM.data = await cloud().rpc('admin_stats'); ADM.at = Date.now(); } catch (e) { ADM.err = String(e && e.message || e); }
     try { ADM.lb = await cloud().rpc('admin_lb_list'); } catch (e) { ADM.lb = null; } // no 0017 yet: no list
+    await admChLoad();
     ADM.busy = false; if (tab === 'admin') render();
+  }
+  // the cheat watch (0019): every flagged or reviewed account, and the richest accounts to compare by hand
+  async function admChLoad() {
+    try { ADM.ch = await cloud().rpc('admin_cheaters'); } catch (e) { ADM.ch = null; } // no 0019 yet: the old list
+    try { ADM.watch = await cloud().rpc('admin_watch', { sort: ADM.ws }); } catch (e) { ADM.watch = null; }
+    ADM.rev = (ADM.ch || []).filter(admToReview).length;
+  }
+  const admToReview = r => !r.state || r.again;
+  const admAgo = t => { if (!t) return '-'; const m = Math.max(0, (Date.now() - new Date(t)) / 60000); return m < 1 ? 'just now' : m < 60 ? Math.round(m) + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+  const admN = v => { v = +v || 0; return v >= 1e9 ? (v / 1e9).toFixed(1) + 'B' : v >= 1e6 ? (v / 1e6).toFixed(1) + 'M' : v >= 1e4 ? Math.round(v / 1e3) + 'k' : v.toLocaleString('en-US'); };
+  function admChCard(r) {
+    const x = r.stats || {}, open = ADM.open === r.user_id, log = r.log || [];
+    const num = (l, v, w) => `<span class="adm-num${w ? ' w' : ''}"><small>${l}</small><b>${v}</b></span>`;
+    const pill = r.again ? '<span class="adm-pill bad">Flagged again after you allowed it</span>' : r.state === 'hidden' ? '<span class="adm-pill off">Hidden by you</span>' : r.state === 'allowed' ? '<span class="adm-pill ok">Allowed by you</span>' : '<span class="adm-pill bad">Suspected · off the leaderboards</span>';
+    const when = t => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const btns = (r.state !== 'hidden' || r.again ? `<button class="btn small danger" data-act="admlb" data-uid="${r.user_id}" data-s="hidden">Hide from the boards</button>` : '')
+      + (r.state !== 'allowed' || r.again ? `<button class="btn small" data-act="admlb" data-uid="${r.user_id}" data-s="allowed">Allow (false alarm)</button>` : '')
+      + (r.state || r.n ? `<button class="btn small" data-act="admlb" data-uid="${r.user_id}" data-s="">Clear</button>` : '')
+      + `<button class="btn small" data-act="admchopen" data-uid="${r.user_id}">${open ? 'Hide history' : `History (${log.length})`}</button>`;
+    return `<li class="adm-cc ${r.again ? 'again' : r.state || 'flag'}">
+      <div class="adm-cc-h"><span><b>${esc(r.name || 'Player')}</b> <small>Lv ${x.lvl || 1}${x.prestige ? ` · Prestige ${x.prestige}` : ''}</small></span>${pill}</div>
+      <div class="adm-cc-who">${esc(r.email || '')} · id ${esc(String(r.user_id).slice(0, 8))} · joined ${admAgo(r.joined)} · last played ${admAgo(r.played)}</div>
+      <div class="adm-cc-when">${r.n ? `Flagged <b>${r.n}×</b> · first ${admAgo(r.first)} · last ${admAgo(r.last)}` : 'Left out by the leaderboard checks'}${r.reviewed ? ` · you decided ${admAgo(r.reviewed)}` : ''}</div>
+      <ul class="adm-why">${(r.reasons || []).map(w => `<li>${esc(w)}</li>`).join('') || '<li>No reason kept</li>'}</ul>
+      <div class="adm-nums">${num('Crystals', admN(x.gems), 1)}${num('Sigils', admN(x.silver), 1)}${num('Legendaries', x.legend || 0, 1)}${num('Mythic shards', x.mythic || 0, 1)}${num('Ancient shards', x.ancient || 0)}${num('Heroes', x.heroes || 0)}${num('Gear', x.gear || 0)}${num('Battles won', admN(x.won))}${num('Progress', x.progress || 0)}${r.rating != null ? num('Arena', r.rating) : ''}</div>
+      ${open ? `<div class="adm-log"><b>Every flagged upload (newest first)</b>${log.map(l => `<div><small>${when(l.at)}</small> ${esc((l.reasons || []).join(' · '))}</div>`).join('') || '<div><small>No history yet (flagged before 0019).</small></div>'}</div>` : ''}
+      <div class="adm-cc-b">${btns}</div></li>`;
+  }
+  function admWatchHtml() {
+    const w = ADM.watch; if (w == null) return '';
+    const sorts = [['gems', 'Crystals'], ['silver', 'Sigils'], ['legend', 'Legendaries'], ['mythic', 'Mythic shards'], ['won', 'Battles won'], ['lvl', 'Level'], ['progress', 'Progress']];
+    const row = (r, i) => { const x = r.stats || {}; return `<tr class="${r.flagged ? 'flag' : ''}${r.state === 'hidden' ? ' hid' : ''}"><td>${i + 1}</td><td><b>${esc(r.name || 'Player')}</b>${r.flagged ? ' <span class="adm-dot" title="Flagged by the checks">●</span>' : ''}<small>${esc(r.email || '')}</small></td><td>${x.lvl || 1}</td><td>${admN(x.gems)}</td><td>${admN(x.silver)}</td><td>${x.legend || 0}</td><td>${x.mythic || 0}</td><td>${admN(x.won)}</td><td>${x.progress || 0}</td><td>${admAgo(r.played)}</td><td>${r.state === 'hidden' ? '<small>Hidden</small>' : `<button class="btn small danger" data-act="admlb" data-uid="${r.user_id}" data-s="hidden">Hide</button>`}</td></tr>`; };
+    return `<section class="adm-sec adm-watch"><h3>Watch list: the top 25 of the last 30 days</h3><p class="empty-note">A careful cheater stays under every limit but still stands out here: lots of Crystals, Legendaries or progress with few battles won. A red dot is already flagged. Sort by:</p>
+      <div class="adm-fs">${sorts.map(([k, l]) => `<button type="button" class="adm-f${ADM.ws === k ? ' on' : ''}" data-act="admws" data-k="${k}">${l}</button>`).join('')}</div>
+      <div class="adm-tw"><table class="adm-tbl"><thead><tr><th>#</th><th>Player</th><th>Lv</th><th>Crystals</th><th>Sigils</th><th>Legend.</th><th>Mythic</th><th>Won</th><th>Progress</th><th>Played</th><th></th></tr></thead><tbody>${w.map(row).join('') || '<tr><td colspan="11">No players yet.</td></tr>'}</tbody></table></div></section>`;
+  }
+  function admChHtml() {
+    const all = ADM.ch || [], ok = r => r.state === 'allowed' && !r.again;
+    const cnt = { review: all.filter(admToReview).length, hidden: all.filter(r => r.state === 'hidden').length, allowed: all.filter(ok).length, all: all.length };
+    const list = all.filter(r => ADM.chF === 'all' ? true : ADM.chF === 'review' ? admToReview(r) : ADM.chF === 'hidden' ? r.state === 'hidden' : ok(r));
+    const chip = (k, l) => `<button type="button" class="adm-f ${k}${ADM.chF === k ? ' on' : ''}" data-act="admchf" data-k="${k}">${l} <b>${cnt[k]}</b></button>`;
+    return `<section class="adm-sec adm-ch"><h3>Cheaters</h3><p class="empty-note adm-help">Flagged by the server's save check and kept off every leaderboard. <b>Hide</b>: off for good · <b>Allow</b>: a false alarm, back on · <b>Clear</b>: forget the flag. Saves are never changed.</p>
+      <div class="adm-fs">${chip('review', 'To review')}${chip('hidden', 'Hidden')}${chip('allowed', 'Allowed')}${chip('all', 'All')}</div>
+      ${list.length ? `<ul class="adm-ccl">${list.map(admChCard).join('')}</ul>` : `<p class="adm-none">${ADM.chF === 'review' ? 'Nobody to review: no cheater found. 👍' : 'Nobody here.'}</p>`}</section>${admWatchHtml()}`;
   }
   // the leaderboard checks (0017): accounts whose save cannot be real are left out; the owner hides or allows by hand
   function admLbHtml() {
@@ -5227,7 +5276,7 @@
     return `<section class="adm-sec adm-lb"><h3>Leaderboard checks</h3><p class="empty-note">Every cloud save is checked by the server (0018): impossible heroes, gear or amounts, and impossible jumps between two uploads (Crystals, shards, stones, progress) flag the account; flagged accounts and saves with more progress than battles won stay off every leaderboard. Hide keeps an account off every board for good; Allow keeps a false alarm on; Clear forgets the flag (a new bad upload flags it again).</p>${rows ? `<ul class="adm-lbl">${rows}</ul>` : '<p class="empty-note">No account flagged. 👍</p>'}</section>`;
   }
   async function admLbSet(uid, s) {
-    try { await cloud().rpc('admin_lb_set', { uid, state: s || null }); ADM.lb = await cloud().rpc('admin_lb_list'); toast(s === 'hidden' ? 'Hidden from the leaderboards.' : s === 'allowed' ? 'Allowed on the leaderboards.' : 'Back to the automatic checks.'); }
+    try { await cloud().rpc('admin_lb_set', { uid, state: s || null }); ADM.lb = await cloud().rpc('admin_lb_list'); await admChLoad(); toast(s === 'hidden' ? 'Hidden from the leaderboards.' : s === 'allowed' ? 'Allowed on the leaderboards.' : 'Back to the automatic checks.'); }
     catch (e) { toast('Could not change it: ' + (e && e.message || e), true); }
     if (tab === 'admin') render();
   }
@@ -5239,13 +5288,17 @@
     const tile = (v, l, s) => `<div class="adm-t"><b>${n(v)}</b><span>${l}</span>${s ? `<small>${s}</small>` : ''}</div>`;
     const bars = (rows, k, col) => { const max = Math.max(1, ...rows.map(r => +r[k] || 0)); return `<div class="adm-bars" style="--bc:${col}">${rows.map(r => `<div class="adm-b" title="${esc(r.d)}: ${n(r[k])}"><i style="height:${Math.round((+r[k] || 0) / max * 100)}%"></i><em>${n(r[k])}</em><small>${esc(r.d.split(' ')[0])}</small></div>`).join('')}</div>`; };
     const days = x.days || [], lv = x.levels || [], lmax = Math.max(1, ...lv.map(r => r.n));
-    return `<div class="adm"><div class="section-head"><div><h2>Admin</h2><p class="lede">Accounts only: guests play in their browser and are not counted. Updated ${new Date(ADM.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</p></div><button class="btn small" data-act="admload">Refresh</button></div>
+    const tabs = ADM.ch == null ? '' : `<div class="adm-tabs"><button type="button" class="${ADM.view === 'stats' ? 'on' : ''}" data-act="admview" data-v="stats">Players</button><button type="button" class="${ADM.view === 'cheat' ? 'on' : ''}" data-act="admview" data-v="cheat">Cheaters${ADM.rev ? ` <b class="adm-badge">${ADM.rev}</b>` : ''}</button></div>`;
+    const head = `<div class="section-head"><div><h2>Admin</h2><p class="lede">Accounts only: guests play in their browser and are not counted. Updated ${new Date(ADM.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</p></div><button class="btn small" data-act="admload">Refresh</button></div>${tabs}`;
+    if (ADM.ch != null && ADM.view === 'cheat') return `<div class="adm">${head}${admChHtml()}</div>`;
+    return `<div class="adm">${head}
+      ${ADM.rev ? `<button type="button" class="adm-alert" data-act="admview" data-v="cheat">⚠ ${ADM.rev} suspected cheater${ADM.rev > 1 ? 's' : ''} to review ›</button>` : ''}
       <div class="adm-tiles">${tile(x.active24h, 'Active today', 'last 24 hours')}${tile(x.active7d, 'Active this week', 'last 7 days')}${tile(x.active30d, 'Active this month', 'last 30 days')}${tile(x.accounts, 'Accounts', `${n(x.new24h)} new today · ${n(x.new7d)} this week`)}
         ${tile(x.arenaWeek, 'In the arena', `this week · ${n(x.arenaFights24h)} fights today`)}${tile(x.chatters7d, 'Chatting', `last 7 days · ${n(x.messages24h)} messages today`)}${tile(x.guilds, 'Guilds', `${n(x.guildMembers)} members`)}${tile(x.bought, 'Bought Crystals', 'in wallets')}</div>
       <div class="adm-cols"><section class="adm-sec"><h3>Active players per day</h3>${bars(days, 'active', '#e9c46f')}<p class="empty-note">A player counts on a day a save of theirs was written (approximate for very busy players).</p></section>
         <section class="adm-sec"><h3>New accounts per day</h3>${bars(days, 'new', '#5fb4e8')}</section>
         <section class="adm-sec"><h3>Player levels</h3><p class="empty-note">Active in the last 30 days.</p><div class="adm-lv">${lv.map(r => `<div><span>Lv ${r.band || 1}${r.band >= 100 ? '' : `-${r.band + 9}`}</span><i style="width:${Math.round(r.n / lmax * 100)}%"></i><b>${n(r.n)}</b></div>`).join('') || '<p class="empty-note">No players yet.</p>'}</div></section></div>
-      ${admLbHtml()}</div>`;
+      ${ADM.ch == null ? admLbHtml() : ''}</div>`;
   }
   // a tap on an event in the calendar: what it is, when it runs and whether it runs now, in a popup
   const evDate = d => { const x = new Date(d * 86400000); return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][x.getUTCDay()]} ${x.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][x.getUTCMonth()]}`; };

@@ -3492,6 +3492,36 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .adm-lbs { display: flex; align-items: center; gap: 6px; flex: none; } .adm-lbs i { font-style: normal; font-size: .72rem; color: var(--muted); } .adm-lbs i.off { color: #f0a07a; }
 @media (max-width: 560px) { .adm-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .adm-cols { grid-template-columns: minmax(0, 1fr); } }
 @media (max-height: 500px) and (orientation: landscape) { .adm-t { padding: 4px 8px; } .adm-t b { font-size: 1.15rem; } .adm-bars { height: 90px; } }
+/* the Admin screen's Cheaters tab (0019): a card per flagged account, filters, and the watch list */
+.adm-tabs { display: flex; gap: 6px; margin-bottom: 8px; }
+.adm-tabs button { padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, .35); color: var(--muted); font: 700 .8rem var(--font-display); cursor: pointer; }
+.adm-tabs button.on { color: var(--gold); border-color: var(--gold); background: rgba(233, 196, 111, .12); }
+.adm-badge { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 5px; border-radius: 999px; background: var(--bad); color: #fff; font: 700 11px sans-serif; text-align: center; }
+.adm-alert { display: block; width: 100%; margin-bottom: 8px; padding: 8px 12px; border: 1px solid var(--bad); border-radius: 8px; background: rgba(217, 83, 63, .18); color: #ffb3a6; font-weight: 700; text-align: left; cursor: pointer; }
+.adm-fs { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.adm-f { padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, .3); color: var(--fg); font-size: .75rem; cursor: pointer; }
+.adm-f.on { border-color: var(--gold); color: var(--gold); } .adm-f.review b { color: #ff8a78; } .adm-f b { font-variant-numeric: tabular-nums; }
+.adm-ccl { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.adm-cc { display: grid; gap: 4px; padding: 8px 10px; border-radius: 8px; background: rgba(0, 0, 0, .35); border-left: 4px solid var(--bad); }
+.adm-cc.hidden { border-left-color: #777; } .adm-cc.allowed { border-left-color: #5bc46a; }
+.adm-cc-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; } .adm-cc-h b { font-size: 1rem; } .adm-cc-h small { color: var(--muted); }
+.adm-pill { padding: 2px 8px; border-radius: 999px; font-size: .7rem; font-weight: 700; white-space: nowrap; }
+.adm-pill.bad { background: rgba(217, 83, 63, .25); color: #ffb3a6; } .adm-pill.off { background: rgba(255, 255, 255, .1); color: var(--muted); } .adm-pill.ok { background: rgba(91, 196, 106, .2); color: #9fe0a8; }
+.adm-cc-who, .adm-cc-when { font-size: .72rem; color: var(--muted); overflow-wrap: anywhere; } .adm-cc-when b { color: var(--fg); }
+.adm-why { margin: 0; padding-left: 18px; font-size: .8rem; color: #ffb3a6; } .adm-why li { margin: 1px 0; }
+.adm-nums { display: flex; flex-wrap: wrap; gap: 4px; }
+.adm-num { display: grid; padding: 2px 8px; border-radius: 6px; background: rgba(255, 255, 255, .05); } .adm-num.w { background: rgba(233, 196, 111, .1); }
+.adm-num small { font-size: .6rem; color: var(--muted); } .adm-num b { font-size: .8rem; font-variant-numeric: tabular-nums; }
+.adm-log { display: grid; gap: 2px; padding: 6px 8px; border-radius: 6px; background: rgba(0, 0, 0, .3); font-size: .72rem; } .adm-log small { color: var(--muted); margin-right: 4px; }
+.adm-cc-b { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-help { font-size: .72rem; margin: 0; }
+.adm-none { margin: 10px 0; color: #9fe0a8; font-weight: 700; }
+.adm-watch { margin-top: 8px; } .adm-tw { overflow-x: auto; }
+.adm-tbl { width: 100%; border-collapse: collapse; font-size: .75rem; font-variant-numeric: tabular-nums; }
+.adm-tbl th { text-align: left; color: var(--muted); font-weight: 600; padding: 3px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.adm-tbl td { padding: 3px 6px; border-bottom: 1px solid rgba(255, 255, 255, .05); white-space: nowrap; }
+.adm-tbl td small { display: block; color: var(--muted); font-size: .65rem; } .adm-tbl tr.flag td { background: rgba(217, 83, 63, .1); } .adm-tbl tr.hid td { opacity: .55; }
+.adm-dot { color: var(--bad); } .adm-tbl .btn { padding: 2px 8px; font-size: .65rem; }
 /* the popup of one event in the calendar (app.js evPop): its icon in its colour, when it runs, what it does */
 .ev-pop .unlock-card { border-color: var(--evc); box-shadow: 0 0 0 4px #000, 0 0 40px -6px var(--evc); }
 .ev-pop .ev-pic { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 50%; border: 2px solid var(--evc); background: rgba(0, 0, 0, .45); color: var(--evc); }
