@@ -5361,24 +5361,37 @@
     return storyIds[n.toLowerCase()] || null;
   };
   const heroId0 = () => (S.hero && S.roster[S.hero.id] ? S.hero.id : avatarId());
-  // a speaker's picture cut to the figure itself (the pictures have empty room around them), made once per character
-  const STORY_PIC = {};
+  // a picture cut to the figure itself (the pictures have empty room around them)
+  const storyCrop = src => new Promise(res => {
+    if (!src) { res(''); return; }
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
+        let x0 = c.width, x1 = -1, y0 = c.height, y1 = -1;
+        for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        if (x1 < 0) { res(im.src); return; }
+        const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
+        o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); res(o.toDataURL('image/webp', 0.92));
+      } catch (e) { res(im.src); }
+    };
+    im.onerror = () => res(''); im.src = src;
+  });
+  // a speaker's picture, as sharp as there is: the Fateborn's painted class art (cards.js CLASS_PANEL, shown whole with
+  // soft edges), a hero's or enemy's k = 4 picture (hi/<id>.js), a boss's k = 4 sheet; else the small one every screen
+  // has (storyLow, also what shows while the sharp one is on its way). { u: picture, paint: painted art }
+  const STORY_PIC = {}, STORY_LOW = {};
+  const storyLow = id => STORY_LOW[id] || (STORY_LOW[id] = storyCrop(bossBig(id)).then(u => ({ u })));
   function storyPic(id) {
-    return STORY_PIC[id] || (STORY_PIC[id] = new Promise(res => {
-      const im = new Image();
-      im.onload = () => {
-        try {
-          const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
-          const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
-          let x0 = c.width, x1 = -1, y0 = c.height, y1 = -1;
-          for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-          if (x1 < 0) { res(im.src); return; }
-          const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
-          o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); res(o.toDataURL('image/webp', 0.92));
-        } catch (e) { res(im.src); }
-      };
-      im.onerror = () => res(''); im.src = bossBig(id);
-    }));
+    return STORY_PIC[id] || (STORY_PIC[id] = (async () => {
+      const panel = C[id] && C[id].pc && typeof CLASS_PANEL !== 'undefined' && CLASS_PANEL[id.slice(3)];
+      if (panel) return { u: panel, paint: true };
+      let src = '';
+      if (typeof MANGA_ART !== 'undefined' && MANGA_ART[id]) { const h = await SPR.loadHi(id); src = h && h.src; }
+      else if (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id]) { const s = await SPR.loadSheet(id); src = s && s.k > (HERO_SHEET[id].k || 1) && s.idle[0].src; }
+      return src ? { u: await storyCrop(src) } : storyLow(id);
+    })());
   }
   // a scene can be read again once its stage was reached on any difficulty
   const storyOpen = k => { const c = parseInt(k, 10), i = c * 7 + (k.endsWith('b') ? 6 : 0); return !!STORY[k] && (!!S.story[k] || K.DIFFS.some((x, d) => i <= clearedOn(d) + 1)); };
@@ -5417,7 +5430,13 @@
         i++; if (i >= lines.length) { finish(); return; }
         const [who, said] = lines[i], hero = /^hero$/i.test(who), narr = /^narrator$/i.test(who), id = hero ? heroId : narr ? null : storyId(who);
         const boss = id && K.BOSSES[id] && !K.CHAMPS[id];
-        if (id) { const img = boss ? Rr : L, at = i; storyPic(id).then(u => { if (u && i === at) { img.src = u; img.classList.add('on'); } }); }
+        if (id) {
+          // the sharp picture; if it is still loading after a moment, the small one stands in until it arrives
+          const img = boss ? Rr : L, at = i; let sharp = false;
+          const put = (p, best) => { if (!p || !p.u || i !== at || (sharp && !best)) return; if (best) sharp = true; img.src = p.u; img.classList.toggle('paint', !!p.paint); img.classList.add('on'); };
+          storyPic(id).then(p => put(p, true));
+          setTimeout(() => { if (!sharp) storyLow(id).then(p => put(p, false)); }, 400);
+        }
         L.classList.toggle('talk', !!id && !boss); Rr.classList.toggle('talk', !!boss);
         el.classList.toggle('narr', narr);
         nm.textContent = narr ? '' : hero ? heroName : who;
