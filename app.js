@@ -5361,36 +5361,24 @@
     return storyIds[n.toLowerCase()] || null;
   };
   const heroId0 = () => (S.hero && S.roster[S.hero.id] ? S.hero.id : avatarId());
-  // a picture cut to the figure itself (the pictures have empty room around them)
-  const storyCrop = src => new Promise(res => {
-    if (!src) { res(''); return; }
-    const im = new Image();
-    im.onload = () => {
-      try {
-        const c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
-        const g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
-        let x0 = c.width, x1 = -1, y0 = c.height, y1 = -1;
-        for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-        if (x1 < 0) { res(im.src); return; }
-        const o = document.createElement('canvas'); o.width = x1 - x0 + 1; o.height = y1 - y0 + 1;
-        o.getContext('2d').drawImage(c, x0, y0, o.width, o.height, 0, 0, o.width, o.height); res(o.toDataURL('image/webp', 0.92));
-      } catch (e) { res(im.src); }
-    };
-    im.onerror = () => res(''); im.src = src;
-  });
-  // a speaker's picture, as sharp as there is: the Fateborn's painted class art (cards.js CLASS_PANEL, shown whole with
-  // soft edges), a hero's or enemy's k = 4 picture (hi/<id>.js), a boss's k = 4 sheet; else the small one every screen
-  // has (storyLow, also what shows while the sharp one is on its way). { u: picture, paint: painted art }
-  const STORY_PIC = {}, STORY_LOW = {};
-  const storyLow = id => STORY_LOW[id] || (STORY_LOW[id] = storyCrop(bossBig(id)).then(u => ({ u })));
-  function storyPic(id) {
-    return STORY_PIC[id] || (STORY_PIC[id] = (async () => {
-      const panel = C[id] && C[id].pc && typeof CLASS_PANEL !== 'undefined' && CLASS_PANEL[id.slice(3)];
-      if (panel) return { u: panel, paint: true };
+  // a speaker as they stand on the battlefield: their battle picture, uncut, at their battle size (game pixels; the scene
+  // turns them into screen pixels with --gp, the battlefield's scale). { w, h, low: the picture every screen has }
+  function storyFig(id) {
+    // (an animated character's loaded sheet, as the battle draws it; a k = 4 sheet has its own canvas size)
+    const sh = typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id];
+    if (sh) { const SH = SPR.sheet(id), f = fitOf(id); return SH ? { w: SH.w * f, h: SH.h * f, low: SH.idle[0].src } : { w: sh.w * f, h: sh.h * f, low: sh.idle[0] }; }
+    const m = info(id); return { w: m.w, h: m.h, low: bossBig(id) };
+  }
+  // the same picture at its sharpest (a hero's or enemy's k = 4 picture from hi/, a boss's k = 4 sheet), loaded once;
+  // STORY_HI[id] holds it once it arrived, so a speaker seen before shows sharp at once
+  const STORY_HI = {}, storyHiWant = {};
+  function storyHi(id) {
+    return storyHiWant[id] || (storyHiWant[id] = (async () => {
       let src = '';
-      if (typeof MANGA_ART !== 'undefined' && MANGA_ART[id]) { const h = await SPR.loadHi(id); src = h && h.src; }
-      else if (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id]) { const s = await SPR.loadSheet(id); src = s && s.k > (HERO_SHEET[id].k || 1) && s.idle[0].src; }
-      return src ? { u: await storyCrop(src) } : storyLow(id);
+      if (typeof HERO_SHEET !== 'undefined' && HERO_SHEET[id]) { const s = await SPR.loadSheet(id); src = s && s.k > (HERO_SHEET[id].k || 1) && s.idle[0].src; }
+      else if (typeof MANGA_ART !== 'undefined' && MANGA_ART[id]) { const h = await SPR.loadHi(id); src = h && h.src; }
+      if (src) STORY_HI[id] = src;
+      return src;
     })());
   }
   // a scene can be read again once its stage was reached on any difficulty
@@ -5423,19 +5411,23 @@
     host.appendChild(el); if (inBattle) $('#battle').classList.add('in-story');
     const L = el.querySelector('.sc-l'), Rr = el.querySelector('.sc-r'), nm = el.querySelector('.sc-name'), tx = el.querySelector('.sc-text');
     let i = -1, typing = 0, full = '';
-    for (const [who] of lines) { const id = /^hero$/i.test(who) ? heroId : storyId(who); if (id) storyPic(id); }
+    // the figures stand at their battle size: --gp is the battlefield's screen pixels per game pixel (the field fills the
+    // screen's height), their feet just above the line box (--boxh)
+    const scale = () => { const bc = inBattle && $('#bc'), r = bc && bc.getBoundingClientRect(); el.style.setProperty('--gp', ((r && r.height) || el.clientHeight) / SPR.BG_H); el.style.setProperty('--boxh', el.querySelector('.sc-box').offsetHeight + 'px'); };
+    scale(); window.addEventListener('resize', scale);
+    for (const [who] of lines) { const id = /^hero$/i.test(who) ? heroId : storyId(who); if (id) storyHi(id); }
     return new Promise(done => {
-      const finish = () => { clearInterval(typing); document.removeEventListener('keydown', key, true); el.remove(); $('#battle').classList.remove('in-story'); done(); };
+      const finish = () => { clearInterval(typing); document.removeEventListener('keydown', key, true); window.removeEventListener('resize', scale); el.remove(); $('#battle').classList.remove('in-story'); done(); };
       const show = () => {
         i++; if (i >= lines.length) { finish(); return; }
         const [who, said] = lines[i], hero = /^hero$/i.test(who), narr = /^narrator$/i.test(who), id = hero ? heroId : narr ? null : storyId(who);
         const boss = id && K.BOSSES[id] && !K.CHAMPS[id];
         if (id) {
-          // the sharp picture; if it is still loading after a moment, the small one stands in until it arrives
-          const img = boss ? Rr : L, at = i; let sharp = false;
-          const put = (p, best) => { if (!p || !p.u || i !== at || (sharp && !best)) return; if (best) sharp = true; img.src = p.u; img.classList.toggle('paint', !!p.paint); img.classList.add('on'); };
-          storyPic(id).then(p => put(p, true));
-          setTimeout(() => { if (!sharp) storyLow(id).then(p => put(p, false)); }, 400);
+          // the battle picture at its battle size; the sharp version replaces it as soon as it is there (same size)
+          const img = boss ? Rr : L, at = i;
+          const put = src => { const f = storyFig(id); img.style.width = `calc(var(--gp) * ${f.w.toFixed(1)}px)`; img.style.height = `calc(var(--gp) * ${f.h.toFixed(1)}px)`; img.style[boss ? 'marginRight' : 'marginLeft'] = `calc(var(--gp) * ${(-f.w / 2).toFixed(1)}px)`; img.src = src || f.low; img.classList.add('on'); };
+          put(STORY_HI[id]);
+          if (!STORY_HI[id]) storyHi(id).then(u => { if (u && i === at) put(u); });
         }
         L.classList.toggle('talk', !!id && !boss); Rr.classList.toggle('talk', !!boss);
         el.classList.toggle('narr', narr);
