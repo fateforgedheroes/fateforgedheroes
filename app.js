@@ -2049,12 +2049,14 @@
     w.hp = fx.some(f => f.t === 'shield') ? 0.25 : 0;
     if (fx.some(f => f.t === 'heal' || f.t === 'revive')) w.off = Math.min(w.off, 0.15);
     if (!fx.some(f => f.t === 'dmg' || f.m)) w.off = Math.min(w.off, 0.05);
+    // a hero whose hits scale with its Defense (D by: def, the guardian tanks) gets its damage from Defense, not Attack
+    { const dm = fx.filter(f => f.t === 'dmg'); w.byDef = dm.length > 0 && dm.filter(f => f.by === 'def').length * 2 > dm.length; }
     w.roles = [c.role, c.role2].filter(Boolean);
     return (FIT[id] = w);
   }
   function gearFit(id, h, items) {
     const s = K.heroStats(id, h, items), w = roleW(id), L = Math.log;
-    const off = s.atk * (1 + Math.min(s.crit, K.CRIT_CAP) / 100 * s.cdmg / 100), tough = s.hp * (100 + s.def) / 100;
+    const off = (w.byDef ? s.def : s.atk) * (1 + Math.min(s.crit, K.CRIT_CAP) / 100 * s.cdmg / 100), tough = s.hp * (100 + s.def) / 100;
     let v = w.off * L(off) + w.tough * L(tough) + w.hp * L(s.hp) + w.spd * L(s.spd) + w.acc * L(1 + Math.max(0, s.acc) / 100) + w.res * L(1 + Math.max(0, s.res) / 100);
     for (const t of K.setTiers(items)) {
       if (!t.flag) continue;
@@ -4571,7 +4573,7 @@
     bang: 'M6.4 1.3h3.2L9 10H7zM6.7 11.4h2.6v2.9H6.7z',
     cross: 'M7.2.8h1.6v4.4H7.2zM7.2 10.8h1.6v4.4H7.2zM.8 7.2h4.4v1.6H.8zM10.8 7.2h4.4v1.6h-4.4zM8 5.4a2.6 2.6 0 1 1 0 5.2 2.6 2.6 0 0 1 0-5.2z',
   };
-  const FX_ICON = { atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', iceTomb: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull', ironhide: 'shield', swift: 'bolt' };
+  const FX_ICON = { tauntBuff: 'bang', protect: 'shield', strengthen: 'shield', atkUp: 'sword', atkDown: 'sword', defUp: 'shield', defDown: 'shield', spdUp: 'bolt', spdDown: 'bolt', critUp: 'target', cdmgUp: 'star', shield: 'shield', regen: 'plus', stealth: 'eye', immune: 'shield', counter: 'counter', burrow: 'down', burn: 'flame', bleed: 'drop', poison: 'skull', freeze: 'snow', iceTomb: 'snow', stun: 'stun', silence: 'mute', healRed: 'heart', accDown: 'eye', taunt: 'bang', mark: 'cross', broken: 'bolt', enrage: 'flame', blight: 'skull', ironhide: 'shield', swift: 'bolt' };
   const fxSvg = k => `<svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="${FXP[FX_ICON[k] || 'star']}"/></svg>`;
   // one badge; n = turns left (none for lasting effects), extra = a count shown instead (stacks)
   function fxBadge(k, n, title, extra) {

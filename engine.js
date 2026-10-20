@@ -54,6 +54,11 @@ const K = (function () {
     stealth: { n: 'Stealth', s: 'STL', buff: true, d: 'Cannot be targeted by single-target attacks' },
     immune: { n: 'Immunity', s: 'IMM', buff: true, d: 'Blocks new debuffs' },
     counter: { n: 'Counterattack', s: 'CTR', buff: true, d: '50% chance to strike back when hit' },
+    // tank tools, as in RAID: a Taunt on the tank itself (not a debuff on the enemies, so it cannot be resisted), Ally
+    // Protection (the protector takes a share of the direct damage its allies take) and Strengthen (less damage taken)
+    tauntBuff: { n: 'Taunt', s: 'TNT', buff: true, d: 'Enemies must aim their single-target attacks at this hero' },
+    protect: { n: 'Ally Protection', s: 'PRT', buff: true, d: 'Its protector takes 25% of the direct damage it receives' },
+    strengthen: { n: 'Strengthen', s: 'STR', buff: true, d: 'Takes 25% less damage' },
     burrow: { n: 'Burrowed', s: 'BUR', buff: true, d: 'Untargetable and immune to damage' },
     enrage: { n: 'Enrage', s: 'RGE', buff: true, d: 'The boss took too long to beat: +25% Attack per stack, one more stack every 2 of its turns' },
     blight: { n: 'Blight Aura', s: 'BLT', buff: true, d: 'Each of its turns every enemy loses part of its max HP, whatever its Defense: only healing and shields keep a team standing' },
@@ -224,7 +229,7 @@ const K = (function () {
       skills: [
         SK('Horn Charge', 'enemy', 'melee', 'smash', 0, 'Heavy strike of 110%.', [D(1.1)]),
         SK('Crush', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 80%. 40% chance of Defense Down for 2 turns.', [D(0.8), DB('defDown', 2, 0.4)]),
-        SK('Unstoppable', 'enemy', 'melee', 'smash', 4, 'Gains Defense Up and Counterattack for 2 turns, then strikes for 130%.', [BF('defUp', 2, 'self'), BF('counter', 2, 'self'), D(1.3)]),
+        SK('Unstoppable', 'enemy', 'melee', 'smash', 4, 'Gains Taunt, Defense Up and Counterattack for 2 turns, then strikes for 130%.', [BF('tauntBuff', 2, 'self'), BF('defUp', 2, 'self'), BF('counter', 2, 'self'), D(1.3)]),
       ] },
     aurelion: { name: 'Aurelion', faction: 'Grey Flame', role: 'Tank', role2: 'Support', rar: 4, aff: 'Radiant',
       passive: 'divineward', passiveName: 'Divine Ward', passiveDesc: 'At the start of battle, all allies gain a shield of 12% of Aurelion’s max HP for 3 turns.',
@@ -290,11 +295,11 @@ const K = (function () {
         SK('Mass Silence', 'enemies', 'magic', 'dark', 5, 'Hits all enemies for 60%. 60% chance of Silence for 2 turns.', [D(0.6), DB('silence', 2, 0.6)]),
       ] },
     bromir: { name: 'Bromir', faction: 'Beast Horde', role: 'Tank', role2: 'Warrior', rar: 1, aff: 'Frost',
-      passive: 'thickhide', passiveName: 'Thick Fur', passiveDesc: 'Takes 10% less damage.',
+      passive: 'bearguard', passiveName: 'Bear Guard', passiveDesc: 'Takes 10% less damage. While he stands, he takes 15% of the direct damage his allies receive.',
       skills: [
-        SK('Bear Claw', 'enemy', 'melee', 'claw', 0, 'Strike of 95%.', [D(0.95)]),
-        SK('Growl', 'enemies', 'buff', 'dark', 4, '70% chance to Taunt all enemies for 2 turns. Gains Defense Up for 2 turns.', [DB('taunt', 2, 0.7), BF('defUp', 2, 'self')]),
-        SK('Mauling Strike', 'enemy', 'melee', 'claw', 3, 'Strike of 140% and Speed Down for 2 turns.', [D(1.4), DB('spdDown', 2, 1)]),
+        SK('Bear Claw', 'enemy', 'melee', 'claw', 0, 'Strike of 150% of his Defense.', [D(1.5, { by: 'def' })]),
+        SK('Growl', 'self', 'buff', 'dark', 4, 'Gains Taunt and Defense Up for 2 turns: enemies must aim their single-target attacks at him.', [BF('tauntBuff', 2, 'self'), BF('defUp', 2, 'self')]),
+        SK('Mauling Strike', 'enemy', 'melee', 'claw', 3, 'Strike of 220% of his Defense and Speed Down for 2 turns.', [D(2.2, { by: 'def' }), DB('spdDown', 2, 1)]),
       ] },
     morgrim: { name: 'Morgrim', faction: 'Hellwardens', role: 'Mage', rar: 2, aff: 'Ember',
       passive: 'hellbrand', passiveName: 'Hellbrand', passiveDesc: '+50% damage against enemies with a debuff.',
@@ -306,9 +311,9 @@ const K = (function () {
     vorlund: { name: 'Vorlund', faction: 'Grey Flame', role: 'Tank', rar: 1, aff: 'Radiant',
       passive: 'retribution', passiveName: 'Retribution', passiveDesc: '30% chance to counterattack when hit.',
       skills: [
-        SK('Lance Thrust', 'enemy', 'melee', 'stab', 0, 'Thrust of 100%. 50% chance of Taunt for 1 turn.', [D(1.0), DB('taunt', 1, 0.5)]),
-        SK('Golden Bulwark', 'allies', 'buff', 'shield', 4, 'All allies gain Defense Up for 2 turns and a shield of 12% of his max HP.', [BF('defUp', 2), SH(0.12, 2)]),
-        SK('Radiant Judgment', 'enemy', 'melee', 'stab', 3, 'Strike of 130%. 60% chance of Attack Down and 50% chance of Defense Down, each for 2 turns.', [D(1.3), DB('atkDown', 2, 0.6), DB('defDown', 2, 0.5)], { startCd: 1 }),
+        SK('Lance Thrust', 'enemy', 'melee', 'stab', 0, 'Thrust of 150% of his Defense. 50% chance of Taunt for 1 turn.', [D(1.5, { by: 'def' }), DB('taunt', 1, 0.5)]),
+        SK('Golden Bulwark', 'allies', 'buff', 'shield', 4, 'Gains Taunt for 2 turns. All allies gain Defense Up and Ally Protection for 2 turns (he takes 25% of the direct damage they receive) and a shield of 12% of his max HP.', [BF('tauntBuff', 2, 'self'), BF('defUp', 2), BF('protect', 2), SH(0.12, 2)]),
+        SK('Radiant Judgment', 'enemy', 'melee', 'stab', 3, 'Strike of 200% of his Defense. 60% chance of Attack Down and 50% chance of Defense Down, each for 2 turns.', [D(2.0, { by: 'def' }), DB('atkDown', 2, 0.6), DB('defDown', 2, 0.5)], { startCd: 1 }),
       ] },
     karnok: { name: 'Karnok', faction: 'Ironbeard Clans', role: 'Warrior', rar: 1, aff: 'Storm',
       skills: [
@@ -441,7 +446,7 @@ const K = (function () {
       skills: [
         SK('Thunder Fist', 'enemy', 'melee', 'smash', 0, 'Strike of 100%. 20% chance to Stun for 1 turn.', [D(1.0), DB('stun', 1, 0.2)]),
         SK('Storm Slam', 'enemies', 'slam', 'quake', 3, 'Hits all enemies for 75%. 30% chance of Speed Down for 2 turns.', [D(0.75), DB('spdDown', 2, 0.3)]),
-        SK('Overload', 'enemies', 'buff', 'rune', 4, '70% chance to Taunt all enemies for 2 turns. Gains Defense Up and Counterattack for 2 turns.', [DB('taunt', 2, 0.7), BF('defUp', 2, 'self'), BF('counter', 2, 'self')]),
+        SK('Overload', 'self', 'buff', 'rune', 4, 'Gains Taunt, Defense Up and Counterattack for 2 turns. All allies gain Strengthen for 2 turns (25% less damage taken).', [BF('tauntBuff', 2, 'self'), BF('defUp', 2, 'self'), BF('counter', 2, 'self'), BF('strengthen', 2, 'allAllies')]),
       ] },
     seraphine: { name: 'Seraphine', faction: 'Grey Flame', role: 'Support', rar: 3, aff: 'Radiant',
       passive: 'divineward', passiveName: 'Guardian Wings', passiveDesc: 'At the start of battle, all allies gain a shield of 12% of Seraphine’s max HP for 3 turns.',
@@ -1697,8 +1702,15 @@ const K = (function () {
     }
     tauntTarget(u) {
       const e = u.effects.find(e => e.k === 'taunt');
-      if (!e) return null;
-      return this.foes(u).find(x => x.uid === e.src && x.alive) || null;
+      if (e) { const t = this.foes(u).find(x => x.uid === e.src && x.alive); if (t) return t; }
+      const tb = this.foes(u).filter(x => x.alive && this.has(x, 'tauntBuff') && !this.has(x, 'burrow'));
+      return tb.length ? tb.reduce((a, b) => (a.hp / a.maxHp >= b.hp / b.maxHp ? a : b)) : null;
+    }
+    // who takes a share of the hits on t: the hero whose Ally Protection is on t (25%), else a living ally with the passive
+    // Bear Guard (15%); never t itself
+    protector(t) {
+      const e = t.effects.find(e => e.k === 'protect'), p = e && this.allies(t).find(x => x.uid === e.src && x.alive && x !== t);
+      return p || this.living(this.allies(t)).find(x => x !== t && x.passive === 'bearguard') || null;
     }
     targetable(list) {
       const open = list.filter(f => !this.has(f, 'burrow'));
@@ -1769,7 +1781,8 @@ const K = (function () {
               const r = this.calc(u, t, fx.m * lvMult, fx, skill);
               const was = t.alive;
               this.h.impact && this.h.impact(u, skill, t, i);
-              const dealt = this.damage(t, r.dmg, u, r);
+              const guard = this.protector(t), share = guard ? Math.round(r.dmg * (this.has(t, 'protect') && guard.uid === (t.effects.find(e => e.k === 'protect') || {}).src ? 0.25 : 0.15)) : 0;
+              const dealt = this.damage(t, r.dmg - share, u, r) + (share ? this.damage(guard, share, u, { skill, kind: 'protect' }) : 0);
               if (r.crit) { u.flags.crit = true; if (u.passive === 'eagleeye') t.tm = Math.max(0, t.tm - 10); }
               if (fx.steal) this.heal(u, dealt * fx.steal, u, 'Lifesteal');
               if (u.sets.lifesteal) this.heal(u, dealt * 0.3, u, 'Lifesteal');
@@ -1801,7 +1814,7 @@ const K = (function () {
           for (const t of targets.filter(t => t.alive && t.side !== u.side)) { if (this.has(t, 'immune')) continue; if (rnd() < 0.6) this.addEffect(t, { k: pick(['atkDown', 'defDown', 'spdDown', 'poison', 'burn', 'silence', 'accDown']), n: 2 }); }
         } else if (fx.t === 'buff') {
           const list = fx.to === 'self' ? [u] : fx.to === 'allAllies' ? this.living(this.allies(u)) : targets.filter(t => t.side === u.side);
-          for (const t of (list.length ? list : [u]).filter(t => t.alive)) this.addEffect(t, { k: fx.k, n: fx.n });
+          for (const t of (list.length ? list : [u]).filter(t => t.alive && !(fx.k === 'protect' && t === u))) this.addEffect(t, { k: fx.k, n: fx.n, src: u.uid });
         } else if (fx.t === 'heal') {
           const list = fx.to === 'lowestAlly' ? [lowest(this.living(this.allies(u)))] : targets.filter(t => t.side === u.side);
           for (const t of list.filter(t => t.alive)) { this.heal(t, t.maxHp * fx.pct * lvMult * (u.passive === 'bloom' ? 1.2 : 1), u, skill.name); if (u.sets.healCleanse) this.cleanseOne(t, u.sets.healCleanse === 2); }
@@ -1917,7 +1930,7 @@ const K = (function () {
       let hit = hitType(a.aff, t.aff);
       if (t.passive === 'aethercore' || a.passive === 'aethercore') hit = 'normal';
       const H = HIT[hit];
-      let raw = m * atk;
+      let raw = m * (fx && fx.by === 'def' ? a.def * (this.has(a, 'defUp') ? 1.6 : 1) * (this.has(a, 'defDown') ? 0.4 : 1) : atk);
       let crit = false;
       if (H.crit) {
         let cr = a.crit + (this.has(a, 'critUp') ? 25 : 0);
@@ -1943,7 +1956,8 @@ const K = (function () {
       if (t.passive === 'voidarmor' && t.brk > t.breakMax * 0.5) d *= 0.9;
       if (t.passive === 'deepwater' && t.hp > t.maxHp * 0.7) d *= 0.75;
       if (t.passive === 'scalearmor' && skill && skill.anim === 'melee') d *= 0.75;
-      if (t.passive === 'thickhide') d *= 0.9;
+      if (t.passive === 'thickhide' || t.passive === 'bearguard') d *= 0.9;
+      if (this.has(t, 'strengthen')) d *= 0.75;
       if (this.living(this.allies(t)).some(x => x.passive === 'lightbearer')) d *= 0.9;
       // boss sets: the attacker's damage boosts, then the target's protection
       const A = a.sets, T = t.sets, aoe = skill && skill.target === 'enemies';
