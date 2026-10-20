@@ -1195,12 +1195,14 @@
       <div class="hx-tslots">${slots}</div>
       ${rolesHtml(S.team)}</section>`;
   }
+  // a big hero picture (data-big) swaps to the sharp art as soon as that arrived (sprites.js big)
+  addEventListener('ffh-big', e => { for (const im of document.querySelectorAll(`img[data-big="${e.detail}"]`)) im.src = SPR.url(e.detail, 2); });
   // the middle in the hero view: the hero on its essence's stage, who it is, level and power, team and lock
   function hxHero(id) {
     const c = C[id], r = S.roster[id], st = statsOf(id), cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap, inTeam = S.team.includes(id);
     const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name));
     return `<section class="hx-col hx-mid" style="--ec:${AFF_COL[c.aff]}">
-      <div class="fg-art hx-art"><div class="fg-scene" style="--scene:url(${CHAPTER_BG[ESS_BG[c.aff] || 0]})"></div><div class="fg-ring"></div><div class="fg-floor"></div><img class="${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""></div>
+      <div class="fg-art hx-art"><div class="fg-scene" style="--scene:url(${CHAPTER_BG[ESS_BG[c.aff] || 0]})"></div><div class="fg-ring"></div><div class="fg-floor"></div><img class="${c.dev ? 'dev-art' : ''}" data-big="${id}" src="${SPR.url(id, 2)}" alt=""></div>
       <div class="hx-id"><div class="fg-name">${essBadge(c.aff, 'big')}<div><h2>${esc(c.name)}</h2>${starStr(r.stars, mxs)}</div><div class="hx-pow"><small>Power</small><b>${power(st).toLocaleString('en-US')}</b></div></div>
         <div class="fg-sub"><span class="rartxt rar-${c.rar}">${K.RARITIES[c.rar]}</span> · ${roleStr(c)} · ${c.aff}</div>
         <div class="hx-lvl"><b>Lv ${r.lvl}</b><span>/ ${cap}</span><div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div><small class="empty-note">${atCap ? (r.stars < mxs ? 'Max for this star: ascend' : 'Max level') : `${r.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP`}</small></div></div>
@@ -1281,7 +1283,7 @@
     const st = r ? statsOf(id) : K.heroStats(id, { lvl: 1, xp: 0, stars: K.baseStars(id), sk: c.skills.map(() => 0) }, []);
     const row = (k, pct) => `<dt>${K.STAT_NAMES[k]}</dt><dd>${st[k]}${pct ? '%' : ''}</dd>`;
     m.innerHTML = `<div class="modal-box hero-pop rar-${c.rar}" role="dialog" aria-modal="true" aria-labelledby="hp-t">
-      <div class="hp-head"><img class="spr bigspr ${r ? '' : 'missing'} ${c.dev ? 'dev-art' : ''}" src="${SPR.url(id, 2)}" alt=""><div>
+      <div class="hp-head"><img class="spr bigspr ${r ? '' : 'missing'} ${c.dev ? 'dev-art' : ''}" data-big="${id}" src="${SPR.url(id, 2)}" alt=""><div>
         <h2 id="hp-t">${esc(c.name)}</h2>
         <div class="tags"><span class="rartxt">${K.RARITIES[c.rar]}</span> · ${esc(c.faction)} · ${roleStr(c)} · ${affChip(c.aff)} ${c.aff}</div>
         <div>${r ? `${starStr(r.stars, K.maxStars(id))} · Level <b>${r.lvl}</b> / ${K.maxLvl(r.stars, id)} · Power <b>${power(st).toLocaleString('en-US')}</b>${S.team.includes(id) ? ' <span class="team-tag">In your team</span>' : ''}` : `<span class="tag">Not unlocked</span> <span class="empty-note">${esc(heroSource(id))}</span>`}</div>
@@ -1373,7 +1375,7 @@
       <div class="lu-top"><h2 id="lu-h">Level up · ${esc(c.short)}</h2><button type="button" class="lu-x" data-act="luclose" aria-label="Close">✕</button></div>
       <div class="lu-body">
         <section class="lu-hero rar-${c.rar}" style="--ec:${AFF_COL[c.aff]}">
-          <img class="lu-art" src="${SPR.url(id, 2)}" alt="">
+          <img class="lu-art" data-big="${id}" src="${SPR.url(id, 2)}" alt="">
           <div class="lu-lv"><span class="lu-stars">${'★'.repeat(h.stars)}</span><b>Lv ${h.lvl}${r.lvl > h.lvl ? ` <span class="lu-arrow">→</span> <span class="lu-new">${r.lvl}</span>` : ''}</b><small>/ ${cap}</small></div>
           ${bar}
           <p class="lu-gain">${gain ? `+${gain.toLocaleString('en-US')} XP` : atCap ? 'Ascend for a higher cap' : `${(need - h.xp).toLocaleString('en-US')} XP to level ${h.lvl + 1}`}${r.wasted > 0 ? ` <span class="warn">· ${r.wasted.toLocaleString('en-US')} past the cap</span>` : ''}</p>
@@ -3801,7 +3803,7 @@
     let show = res.filter(r => r.rar >= 3); if (!show.length) show = [res.find(r => r.rar === best)];
     show = show.slice().sort((a, b) => b.rar - a.rar);
     const calmFx = matchMedia('(prefers-reduced-motion: reduce)').matches, STEP = calmFx ? 350 : 950;
-    const art = {}; show.forEach(r => SPR.loadHi(r.id).then(h => { if (h) art[r.id] = h.src; })); // the sharp picture (k = 4), on its way while the shard charges
+    const art = {}; show.forEach(r => SPR.loadHi(r.id).then(h => { if (h) art[r.id] = SPR.url(r.id, 2); })); // the sharp picture (k = 4, cut to the figure), on its way while the shard charges
     const el = document.createElement('div'); el.className = 'sfx lv2 charge'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Summoning');
     const motes = Array.from({ length: 28 }, () => { const a = Math.random() * 6.283, d = 34 + Math.random() * 30; return `<i style="--dx:${(Math.cos(a) * d).toFixed(1)}vmin;--dy:${(Math.sin(a) * d).toFixed(1)}vmin;animation-delay:${(-Math.random() * 1.2).toFixed(2)}s"></i>`; }).join('');
     const sparks = Array.from({ length: 34 }, () => { const a = Math.random() * 6.283, d = 30 + Math.random() * 45; return `<i style="--dx:${(Math.cos(a) * d).toFixed(1)}vmin;--dy:${(Math.sin(a) * d).toFixed(1)}vmin;--s:${(0.5 + Math.random()).toFixed(2)}"></i>`; }).join('');
@@ -3822,7 +3824,7 @@
     function reveal(n) {
       const r = show[n], c = C[r.id]; idx = n; phase = 'reveal'; shownAt = Date.now();
       if (n) { flash(); SFX.sumBurst(r.rar); }
-      el.querySelector('.sfx-stage').innerHTML = `<div class="sfx-hw"><div class="sfx-rays"></div><img class="sfx-hero" src="${art[r.id] || bossBig(r.id)}" alt=""></div>
+      el.querySelector('.sfx-stage').innerHTML = `<div class="sfx-hw"><div class="sfx-rays"></div><img class="sfx-hero" src="${art[r.id] || SPR.url(r.id, 2)}" alt=""></div>
         <div class="sfx-info" style="--ec:${AFF_COL[c.aff]}"><small class="sfx-rar">${K.RARITIES[r.rar]}</small><h2>${esc(c.name)}</h2>${starStr(K.baseStars(r.id), r.rar + 1)}
         <span class="sfx-id">${essBadge(c.aff)}<span>${c.aff} · ${roleStr(c)}</span></span>${r.isNew ? '<span class="sfx-new">New hero!</span>' : '<small class="sfx-dup">Spare copy: feed it to level a skill</small>'}</div>
         <div class="sfx-tap">${show.length > 1 ? `${n + 1} / ${show.length} · ` : ''}Tap to continue</div>`;
@@ -3949,8 +3951,6 @@
   let RS = 1; // device pixels per game pixel on the battle canvas (set in runBattle)
   const pctX = x => ((x - VIEW.x) / VIEW.w * 100) + '%', pctW = w => (w / VIEW.w * 100) + '%', pctY = y => (y / H * 100) + '%';
 
-  // manga heroes in battle: a little taller and narrower than drawn (the painted figures are broad: wide capes and weapons)
-  const STRETCH = [0.9, 1.12], baseStretch = id => (SPR.manga(id) && K.CHAMPS[id] ? STRETCH : [1, 1]);
   // size per character in battle: the figure's height from crown to feet in game pixels (the field is 270 high), set by
   // the owner per character so a goblin or a hound stands smaller than a hero and a boss towers over them; a character
   // not listed keeps the size it was drawn at. The scale reaching that height (fitOf) is folded into stretch(), so every
@@ -3984,15 +3984,21 @@
     for (let y = 0; y < s.height; y++) for (let x = 0; x < s.width; x++) if (d[(y * s.width + x) * 4 + 3]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     return (boxes[id] = { w: s.width, h: s.height, x0, x1, y0, y1 });
   }
-  // the share of a figure's box above its crown, for those whose staff, bow or flames reach well above the head (measured
-  // on their sharp art): their height and name bar go by the head, or they would stand about a fifth smaller than the rest
-  const CROWN = { celesthyr: 0.186, krogash: 0.222, elyndra: 0.195, oraneth: 0.178, theryn: 0.185 };
+  // the share of a figure's box above its crown, for those whose staff, bow, wings or flames reach well above the head
+  // (8% or more, read off their sharp art): their height and bars go by the head, or they would stand up to a quarter
+  // smaller than the rest
+  const CROWN = {
+    arkanis: 0.24, astraea: 0.12, bloodsnarl: 0.11, celesthyr: 0.21, dio: 0.17, draelyn: 0.19, drakulen: 0.13, elyndra: 0.155, faedrin: 0.17,
+    grimtar: 0.14, ignara: 0.14, ithyra: 0.09, kaelira: 0.17, krogash: 0.23, liora: 0.19, malreth: 0.16, mirella: 0.08, morgrim: 0.12, morveth: 0.23,
+    nithara: 0.12, nyressa: 0.09, oraneth: 0.15, selenia: 0.17, seraphine: 0.13, sylvara: 0.13, thalessa: 0.18, theryn: 0.22, vaessa: 0.13,
+    vorlund: 0.27, zulgroth: 0.2
+  };
   const crownH = (id, h) => h * (1 - (CROWN[id] || 0));
   const fits = {};
   function fitOf(id) {
     if (fits[id] != null) return fits[id];
     const want = BATTLE_H[id]; if (!want) return (fits[id] = 1);
-    const b = bbox(id), top = crownH(id, b.y1 - b.y0) / SPR.k(id) * baseStretch(id)[1];
+    const b = bbox(id), top = crownH(id, b.y1 - b.y0) / SPR.k(id);
     return (fits[id] = top > 0 ? want / top : 1);
   }
   // FIG: the whole battle's figure scale (1; the Siege draws everyone smaller so ten enemies fit, SIEGE_FIG); a change
@@ -4001,7 +4007,7 @@
   const setFig = v => { if (v === FIG) return; FIG = v; for (const k in metrics) delete metrics[k]; };
   // (a boss shrinks less, so it still towers over the rest)
   const figOf = id => (FIG < 1 && K.BOSSES[id] ? Math.min(1, FIG * 1.3) : FIG);
-  const stretch = id => { const [x, y] = baseStretch(id), f = fitOf(id) * figOf(id); return [x * f, y * f]; };
+  const stretch = id => { const f = fitOf(id) * figOf(id); return [f, f]; };
   // sprite metrics: feet offset + content box, from the idle frame
   const metrics = {};
   // a character whose sharp art (sprites.js hires) was just switched on is measured again
@@ -4009,8 +4015,7 @@
   function info(id) {
     if (metrics[id]) return metrics[id];
     const s = bbox(id), { x0, x1, y0, y1 } = s;
-    // a fine picture (manga figure) counts in game pixels; manga heroes are drawn a little taller and narrower (STRETCH),
-    // and every figure is scaled to its BATTLE_H
+    // a fine picture (manga figure) counts in game pixels, and every figure is scaled to its BATTLE_H
     const k = SPR.k(id), [sx, sy] = stretch(id);
     return (metrics[id] = { w: s.w / k * sx, h: s.h / k * sy, fy: y1 / k * sy, top: crownH(id, y1 - y0) / k * sy, cx: (x0 + x1) / 2 / k * sx, cw: (x1 - x0) / k * sx });
   }

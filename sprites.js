@@ -336,13 +336,28 @@ const SPR = (function () {
       s.onload = done; s.onerror = () => res(null); document.head.appendChild(s);
     }));
   }
-  const cropSheets = () => Promise.all(Object.keys(typeof HERO_SHEET !== 'undefined' ? HERO_SHEET : {}).map(async id => {
-    const im = await loadImg(HERO_SHEET[id].idle[0]); if (!im) return;
+  // a picture cut to its figure, square with the feet at the bottom, for big pictures
+  function crop(im) {
     const c = canvas(im.width, im.height), g = c.getContext('2d'); g.drawImage(im, 0, 0); const d = g.getImageData(0, 0, c.width, c.height).data;
     let x0 = c.width, x1 = 0, y0 = c.height, y1 = 0; for (let y = 0; y < c.height; y++) for (let x = 0; x < c.width; x++) if (d[(y * c.width + x) * 4 + 3] > 20) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
     const s = Math.max(x1 - x0, y1 - y0) + 4, o = canvas(s, s), og = o.getContext('2d'); og.imageSmoothingQuality = 'high';
-    og.drawImage(c, x0 - (s - (x1 - x0)) / 2, y0 - (s - (y1 - y0)), s, s, 0, 0, s, s); fullCrop[id] = o.toDataURL('image/webp', 0.92);
+    og.drawImage(c, x0 - (s - (x1 - x0)) / 2, y0 - (s - (y1 - y0)), s, s, 0, 0, s, s); return o.toDataURL('image/webp', 0.92);
+  }
+  const cropSheets = () => Promise.all(Object.keys(typeof HERO_SHEET !== 'undefined' ? HERO_SHEET : {}).map(async id => {
+    const im = await loadImg(HERO_SHEET[id].idle[0]); if (im) fullCrop[id] = crop(im);
   }));
+  // a manga figure's big picture (the Heroes screen, a hero's details, level up, the summon reveal): its sharp art (k = 4,
+  // hi/<id>.js) once that arrived, else the k = 2 figure, which a phone stretches about three times and blurs; asking
+  // for it loads the sharp file, and window gets an ffh-big event with the id when it is in, so app.js can swap the
+  // pictures on screen. A figure with poses stands on a canvas that holds every pose (the dead one lies wide), so the
+  // picture is cut to the standing figure.
+  const bigCrop = {};
+  function big(id) {
+    if (typeof MANGA_ART === 'undefined' || !MANGA_ART[id]) return fullCrop[id] || ART[id].full;
+    if (HI[id]) return bigCrop[id] || (bigCrop[id] = crop(HI[id].body));
+    loadHi(id).then(h => { if (h) window.dispatchEvent(new CustomEvent('ffh-big', { detail: id })); });
+    return fullCrop[id] || (heroCv[id] ? (fullCrop[id] = crop(heroCv[id])) : ART[id].full);
+  }
   function preload() {
     return Promise.all([loadChapterBgs(), cropSheets(), ...Object.keys(ART).map(id => new Promise(res => {
       const img = new Image();
@@ -419,7 +434,7 @@ const SPR = (function () {
   const urls = {};
   function url(id, scale, flip) {
     if (POR[id] && (scale || 1) < 2) return POR[id];
-    if (isHero(id)) return (scale || 1) >= 2 ? fullCrop[id] || ART[id].full : ART[id].face;
+    if (isHero(id)) return (scale || 1) >= 2 ? big(id) : ART[id].face;
     const k = scale || 1, key = id + '@' + k + (flip ? 'f' : '');
     if (urls[key]) return urls[key];
     const s = frame(id, 'idle0', flip ? 'flip' : '');
