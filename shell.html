@@ -379,7 +379,10 @@ dl.stats dd small { color: var(--good); margin-left: 4px; }
 .hp i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--good); transition: width .25s; }
 .hp b { position: absolute; left: 0; top: 0; bottom: 0; background: #f0e0b0; transition: width .6s .25s; }
 .ou.enemy .hp i { background: var(--bad); }
-.hp em { position: absolute; left: 0; top: 0; height: 45%; background: #bfe0ff; transition: width .25s; }
+/* a shield: its own thin bar right above the health bar (app.js updateOverlay), as long as the shield is against max HP */
+.bars { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.shb { position: relative; width: 100%; height: clamp(3px, .55vw, 5px); background: rgba(10, 20, 35, .85); border: 1px solid #000; }
+.shb i { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(180deg, #e6f4ff, #8cc6ff); box-shadow: 0 0 4px rgba(150, 205, 255, .8); transition: width .25s; }
 .fxrow { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; min-height: 1px; }
 .fxc { font-family: var(--font-tag); font-size: clamp(7px, .85vw, 9px); line-height: 1; padding: 1px 2px; background: #2c5a3a; color: #dff5d8; }
 .fxc.bad { background: #6a2424; color: #ffd8cc; }
@@ -546,7 +549,7 @@ h1, h2, h3, .tabs button, .btn, .seg button, .iconbtn, .st-n, .card .nm, .slot b
 .pop.strong { color: #ffd060; font-size: clamp(8px, 1.1vw, 12px); letter-spacing: .06em; }
 .pop.weak { color: #9aa4b8; font-size: clamp(8px, 1.1vw, 12px); letter-spacing: .06em; }
 .pop.bleed { color: #ff5a64; }
-.ou .onm .ph { font-size: .8em; color: #f0c0b0; font-weight: 400; }
+.ou .onm .ph { font-size: .85em; color: #f0c0b0; font-weight: 700; }
 .brk { position: relative; width: 100%; height: clamp(4px, .7vw, 6px); background: #1a1410; border: 1px solid #000; margin-top: 1px; }
 .brk i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #c88a2a, #ffd060); transition: width .25s; }
 .brk span { position: absolute; right: 0; top: 100%; font-family: var(--font-tag); font-size: clamp(6px, .75vw, 8px); color: #ffd060; text-shadow: 1px 1px 0 #000; line-height: 1.1; }
@@ -618,7 +621,7 @@ img.spr[src^="data:image/jpeg"] { image-rendering: auto; object-fit: cover; }
 .ess-chip { color: #140f12; }
 .ess-chip svg, .ess svg { width: 78%; height: 78%; display: block; }
 .hprow { display: flex; align-items: center; gap: 2px; width: 100%; }
-.hprow .hp { flex: 1; }
+.hprow .hp { width: 100%; }
 .ess { flex: none; width: clamp(10px, 1.35vw, 15px); height: clamp(10px, 1.35vw, 15px); display: grid; place-items: center; background: #120c10; border: 1px solid var(--c); color: var(--c); box-shadow: 0 0 0 1px #000; }
 .chap-desc { margin: -2px 0 10px; color: var(--muted); font-style: italic; }
 .fs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }

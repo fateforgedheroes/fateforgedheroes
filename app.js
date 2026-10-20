@@ -4052,7 +4052,7 @@
     o.className = `ou ${u.side}${u.boss ? ' boss' : ''}`;
     o.style.left = pctX(rs.x); o.style.top = pctY(rs.y - m.top - 3);
     if (u.big) o.style.width = '17%';
-    o.innerHTML = `<span class="onm">${esc(u.name)}${u.isBoss ? ` <small class="ph"></small>` : ''}</span><div class="hprow"><span class="ess" style="--c:${AFF_COL[u.aff]}" title="${u.aff}">${essIcon(u.aff)}</span><div class="hp"><b></b><i></i><em></em></div></div>${u.isBoss ? '<div class="brk" title="Break Meter"><i></i><span></span></div>' : ''}<div class="fxrow"></div>`;
+    o.innerHTML = `${u.isBoss ? '<span class="onm"><small class="ph"></small></span>' : ''}<div class="hprow"><span class="ess" style="--c:${AFF_COL[u.aff]}" title="${u.aff}">${essIcon(u.aff)}</span><div class="bars"><div class="shb" hidden title="Shield"><i></i></div><div class="hp"><b></b><i></i></div></div></div>${u.isBoss ? '<div class="brk" title="Break Meter"><i></i><span></span></div>' : ''}<div class="fxrow"></div>`;
     ov.appendChild(o); rs.el = o;
     const hb = document.createElement('button');
     hb.className = 'hitbox ' + u.side; hb.type = 'button'; hb.tabIndex = -1;
@@ -4082,7 +4082,8 @@
       const w = Math.max(0, u.hp / u.maxHp * 100) + '%';
       rs.el.querySelector('.hp i').style.width = w; rs.el.querySelector('.hp b').style.width = w;
       const sh = u.effects.find(e => e.k === 'shield');
-      rs.el.querySelector('.hp em').style.width = sh ? Math.min(100, sh.v / u.maxHp * 100) + '%' : '0';
+      // a shield shows as its own bar above the health bar (its size against max HP)
+      const sb = rs.el.querySelector('.shb'); sb.hidden = !sh; if (sh) sb.querySelector('i').style.width = Math.min(100, sh.v / u.maxHp * 100) + '%';
       // status badges (fxBadge): an icon per effect, turns left in the corner
       const chips = u.effects.map(e => e.k === 'enrage' ? fxBadge('enrage', null, `Enraged: +${Math.round(K.ENRAGE.atk * e.v * 100)}% Attack, growing every ${K.ENRAGE.every} of its turns`, '×' + e.v) : fxBadge(e.k, e.n));
       // a boss shows how many of its turns are left before it enrages
@@ -4094,8 +4095,8 @@
         bk.classList.toggle('broken', broken);
         bk.querySelector('i').style.width = (broken ? 100 : u.brk / u.breakMax * 100) + '%';
         bk.querySelector('span').textContent = broken ? 'BROKEN' : `${Math.ceil(u.brk)}/${u.breakMax}`;
-        rs.el.querySelector('.ph').textContent = `· Phase ${u.phase + 1}/${u.nPhases}`;
-        if (u.immortal && B) { const m = B.b.meter[u.uid]; rs.el.querySelector('.ph').textContent = `· ${Math.round(m ? m.taken : 0).toLocaleString('en-US')} damage`; }
+        rs.el.querySelector('.ph').textContent = `Phase ${u.phase + 1}/${u.nPhases}`;
+        if (u.immortal && B) { const m = B.b.meter[u.uid]; rs.el.querySelector('.ph').textContent = `${Math.round(m ? m.taken : 0).toLocaleString('en-US')} damage`; }
       }
       rs.el.querySelector('.fxrow').innerHTML = chips.join('');
       rs.hb.classList.toggle('valid', R.hl.has(u));
