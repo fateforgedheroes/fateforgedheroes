@@ -812,6 +812,12 @@ button, a, input { touch-action: manipulation; }
 .cm-name { padding: 0; background: none; border: 0; color: var(--gold); font: 700 .88rem var(--font-display); cursor: pointer; } .cm-name:hover { text-decoration: underline; }
 .cm-tag { color: #9fd3ff; font: 700 .72rem var(--font-tag); } .cm-h small { margin-left: auto; color: var(--muted); font-size: .72rem; font-variant-numeric: tabular-nums; }
 .cm p { margin: 2px 0 0; overflow-wrap: anywhere; font-size: .95rem; line-height: 1.35; }
+/* an announcement (0021): a hero ascended to 6 stars (gold) or a Legendary summoned (brighter gold), with the hero */
+.cm.sys { grid-template-columns: 44px minmax(0, 1fr); align-items: center; }
+.cm.sys .cs-av { width: 44px; height: 44px; border-radius: 8px; overflow: hidden; border: 1px solid var(--gold); box-shadow: 0 0 10px rgba(233, 196, 111, .45); } .cm.sys .cs-av img { width: 100%; height: 100%; object-fit: cover; }
+.cm.sys .cm-b { background: linear-gradient(90deg, rgba(233, 196, 111, .2), rgba(233, 196, 111, .05)); border-color: rgba(233, 196, 111, .55); border-radius: 10px; }
+.cm.sys.leg .cm-b { background: linear-gradient(90deg, rgba(255, 170, 60, .3), rgba(233, 196, 111, .06)); border-color: #f2b544; box-shadow: 0 0 12px rgba(255, 180, 70, .25); }
+.cm.sys p { margin: 0; font-size: .9rem; } .cm.sys .cs-h { color: #ffd77a; } .cm.sys .cs-st { color: #ffa94d; letter-spacing: -1px; } .cm.sys small { color: var(--muted); font-size: .7rem; }
 .cm-menu { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 .cm-menu button { padding: 4px 10px; border: 1px solid #5a4523; border-radius: 3px; background: #1a131d; color: var(--fg); font: .8rem var(--font-tag); cursor: pointer; } .cm-menu button.bad { color: var(--bad); border-color: rgba(255,90,90,.4); }
 .cm-menu button.ok { color: #9fe08a; border-color: #3f6b38; } .cm-menu button:disabled { opacity: .6; cursor: default; }
@@ -1493,6 +1499,11 @@ div.stage { cursor: default; color: inherit; font: inherit; }
 .gm-stat { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 5px 10px; background: linear-gradient(180deg, #1b1520, #120e15); border: 1px solid color-mix(in srgb, var(--gold) 16%, var(--line)); box-shadow: inset 0 1px 0 rgba(255, 240, 200, .04); }
 .gm-stat small { font-family: var(--font-tag); font-size: .58rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .gm-stat b { font-variant-numeric: tabular-nums; font-size: .98rem; white-space: nowrap; }
+.gm-stat.on b { color: #7ee07a; } .gm-stat.on b::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 4px; border-radius: 50%; background: #5fd35a; box-shadow: 0 0 6px #5fd35a; vertical-align: middle; }
+.gm-stat.ok b { color: #9fe08a; } .gm-stat.away b { color: #f08a7a; }
+.g-act { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 12px; margin: 0 0 8px; font-size: .8rem; color: var(--muted); }
+.g-act b { color: var(--fg); font-variant-numeric: tabular-nums; } .g-act b.on { color: #7ee07a; } .g-act b.away { color: #f08a7a; }
+.g-sorts { display: flex; align-items: center; gap: 4px; } .g-sort { padding: 2px 9px; border: 1px solid var(--line); border-radius: 999px; background: rgba(0, 0, 0, .3); color: var(--fg); font-size: .72rem; cursor: pointer; } .g-sort.on { border-color: var(--gold); color: var(--gold); }
 .gm-stat.gold { border-color: color-mix(in srgb, var(--gold) 45%, var(--line)); background: linear-gradient(180deg, #2a2114, #16110c); }
 .gm-stat.gold b { color: var(--gold); }
 .gm-acts { grid-area: acts; justify-self: end; flex-wrap: wrap; }
@@ -3013,6 +3024,17 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 @keyframes chestHop { 0%, 100% { transform: translateY(0) rotate(0); } 40% { transform: translateY(-5px) rotate(-4deg); } 60% { transform: translateY(-3px) rotate(3deg); } }
 @media (prefers-reduced-motion: reduce) { .cl-chestb.ready svg { animation: none; } }
 .ch-pop .ch-big svg { width: 96px; height: 86px; filter: drop-shadow(0 0 18px rgba(255, 210, 100, .8)); }
+/* a set that drops somewhere: tap it for what it does (app.js setPop) */
+.cl-set.tap, .bs-sn.tap { cursor: pointer; border-radius: 6px; transition: background .15s; } .cl-set.tap:hover, .bs-sn.tap:hover { background: rgba(233, 196, 111, .12); }
+.cl-set.tap b::after, .bs-sn.tap b::after { content: " \24D8"; font-size: .8em; color: var(--gold); opacity: .8; }
+.set-pop .unlock-card { max-width: 460px; text-align: left; } .set-pop h2 { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.set-pop .bs-tiers { list-style: none; margin: 6px 0; padding: 0; display: grid; gap: 6px; } .set-pop .bs-tiers li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start; font-size: .9rem; line-height: 1.35; }
+.set-pop .bs-tiers i { font-style: normal; font-weight: 700; text-align: center; border-radius: 6px; padding: 1px 0; background: rgba(233, 196, 111, .18); color: var(--gold); } .set-pop .bs-tiers li.asc i { color: #ffa94d; } .set-pop .bs-tiers li.fam i { color: #b9a0ff; }
+.set-pop .bs-tiers li span { white-space: normal; overflow: visible; }
+.set-pop .unlock-card { max-height: calc(100vh - 20px); max-height: calc(100dvh - 20px); overflow-y: auto; }
+@media (max-height: 500px) and (orientation: landscape) { .set-pop .unlock-card { max-width: 620px; padding: 10px 14px; gap: 4px; } .set-pop h2 { font-size: 1.05rem; margin: 0; } .set-pop .bs-tiers { gap: 3px; margin: 2px 0; } .set-pop .bs-tiers li { font-size: .74rem; line-height: 1.25; grid-template-columns: 20px 1fr; } .set-pop p { font-size: .72rem; margin: 2px 0; } .set-pop .btn { padding: 4px 18px; } }
+.set-pop p { margin: 4px 0; font-size: .85rem; color: var(--muted); } .set-pop .sp-own { color: var(--fg); }
+.ml-pop .exr-h i { color: var(--gold); }
 /* the expedition's return (app.js expClaim): the crew with its XP, then the rewards */
 .ex-pop .exr-crew { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
 .ex-pop .exr-h { position: relative; display: grid; justify-items: center; gap: 1px; width: 74px; padding: 5px 3px; border-radius: 8px; background: rgba(0, 0, 0, .35); border: 1px solid color-mix(in srgb, var(--rc, var(--gold)) 60%, transparent); }
@@ -3663,6 +3685,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .mk-wrap .mk-buy { width: 100%; min-width: 0; min-height: 0; padding: 3px 6px; font-size: .78rem; } .mk-wrap .mk-buy .gem-ic { width: 14px; height: 14px; }
   .section-head:has(.mk-bal) { align-items: center; } .mk-bal { padding: 3px 10px; } .mk-bal b { font-size: 1rem; } .mk-bal .gem-ic { width: 18px; height: 18px; }
 }
+/* guild activity (0021): the member numbers wrap instead of being cut off on a phone on its side */
+@media (max-height: 500px) and (orientation: landscape) { .gm-stats { display: flex; flex-wrap: wrap; overflow: visible; } .g-act { font-size: .7rem; margin-bottom: 4px; } }
 /* very short phones on their side (status bar showing): the screen title gives way where tabs already say where you are */
 @media (max-height: 360px) and (orientation: landscape) {
   .section-head:has(+ .ar-wrap), .section-head:has(+ .dc-banner) { display: none; }

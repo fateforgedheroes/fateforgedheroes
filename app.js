@@ -890,7 +890,7 @@
         <span class="cl-num">${ROMAN[c]}</span>
         <span class="cl-t"><small>Chapter ${ROMAN[c]}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${esc(ch.name)}</b><span class="cl-desc">${esc(ch.desc)}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${[0, 1, 2, 3, 4, 5, 6].map(k => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</span>${done}/7${chest ? ' · <b class="cl-chest">Reward ready</b>' : ''}` : `${LOCK_SVG} Clear Chapter ${ROMAN[c - 1]} first`}${boss ? `<span class="cl-boss">Boss: ${esc(boss)}</span>` : ''}</span></span>
-        <span class="cl-gear ${open ? 'has-chest' : ''}">${open ? chestBtn(c, d, done) : ''}<span class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
+        <span class="cl-gear ${open ? 'has-chest' : ''}">${open ? chestBtn(c, d, done) : ''}<span class="cl-set tap" style="--rc:var(--r${hi})" role="button" tabindex="0" data-act="setpop" title="What does this set do?" data-set="${ch.set}"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></span>
           ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
           <small>${own} ${own === 1 ? 'piece' : 'pieces'} owned</small></span></button>`;
     }).join('');
@@ -938,7 +938,7 @@
     const side = `<aside class="sv-side">
       <div class="sv-ch" style="--art:url(${art})"><small>Chapter ${ROMAN[chap]}${d ? ` · ${esc(D.name)}` : ''}</small><h3>${esc(ch.name)}</h3>${storyOpen(chap + 's') ? `<div class="sc-btns"><button type="button" class="btn" data-act="story" data-k="${chap}s">📖 Story</button>${storyOpen(chap + 'b') ? `<button type="button" class="btn" data-act="story" data-k="${chap}b">📖 The boss</button>` : ''}</div>` : ''}</div>
       <section class="sv-box"><h4>Gear drops</h4>
-        <div class="cl-set" style="--rc:var(--r${hi})"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(set.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></div>
+        <div class="cl-set tap" style="--rc:var(--r${hi})" role="button" tabindex="0" data-act="setpop" title="What does this set do?" data-set="${ch.set}"><img src="${gearArt('borstpantser', hi, 0)}" alt=""><span><b>${esc(set.name)}</b><em><i>${esc(need)}</i> ${esc(bonus)}</em></span></div>
         ${D.rars.map((r, i) => `<span class="cl-rrow" style="--rc:var(--r${r})" title="${K.RARITIES[r]}${D.rars.length > 1 ? ` ${Math.round((i ? K.LOOT_UP : 1 - K.LOOT_UP) * 100)}%` : ''}"><span class="cl-slots">${SLOT_ORDER.map(s => `<img class="gt-ic" src="${GEAR_TILE[s][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} ${K.SLOT_NAMES[s].toLowerCase()}">`).join('')}</span></span>`).join('')}
         <small class="sv-note">${own} ${own === 1 ? 'piece' : 'pieces'} owned · one slot per stage, the boss drops a random one</small></section>
       <section class="sv-box"><h4>Other drops</h4><div class="sv-misc">${misc}</div></section>
@@ -1001,7 +1001,7 @@
         <span class="cl-num bl-por">${open ? por(id) : LOCK_SVG}</span>
         <span class="cl-t"><small>Boss ${i + 1} · <span style="color:${AFF_COL[bo.aff]}">${bo.aff}</span> · ${esc(bo.arch)}${cur ? ' · <b>you are here</b>' : ''}</small><b class="cl-name">${open ? esc(bo.name) : '???'}${evHunted(id) ? '<span class="ev-badge" style="--evc:#e8933a">Hunted today</span>' : ''}</b><span class="cl-desc">${open ? `<b>${esc(bo.passiveName)}</b>: ${esc(bo.passiveDesc)}` : ''}</span>
           <span class="cl-prog">${open ? `<span class="cv-dots">${Array.from({ length: K.BOSS_LEVELS }, (_, k) => `<i class="${k < best ? 'on' : ''}"></i>`).join('')}</span>${best}/${K.BOSS_LEVELS}` : `${LOCK_SVG} ${esc(bhLockTxt(i))}`}</span></span>
-        <span class="cl-gear"><span class="cl-set" style="--rc:var(--r${K.bossLoot(nx).rars.slice(-1)[0]})"><img src="${gearArt('borstpantser', 4, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(SS.role)}</i> six-piece set</em></span></span>
+        <span class="cl-gear"><span class="cl-set tap" style="--rc:var(--r${K.bossLoot(nx).rars.slice(-1)[0]})" role="button" tabindex="0" data-act="setpop" title="What does this set do?" data-set="${K.bossSets(i)[0]}"><img src="${gearArt('borstpantser', 4, 0)}" alt=""><span><b>${esc(SS.name)}</b><em><i>${esc(SS.role)}</i> six-piece set</em></span></span>
           <small>Level ${nx} drops ${rarsHtml(K.bossLoot(nx).rars)}</small></span></button>`;
     }).join('');
     return `<div class="campaign cv cl bhl">${bhHead('')}${evHint(evNow('hunt'))}
@@ -1029,7 +1029,7 @@
         <p title="${esc(B0.passiveDesc)}"><b>${esc(B0.passiveName)}</b> ${esc(B0.passiveDesc)}</p>
         <p><b>Strong against it</b> ${beaten.length ? beaten.map(e => `<span style="color:${AFF_COL[e]}">${e}</span>`).join(', ') : 'nobody: no essence has the edge'} · Break ${B0.breakMax}</p>
         <p title="${esc(tef.d)}"><b>${tef.n}</b> from level ${K.BTRAIT.from}: ${esc(tef.d)}. ${canAnswer ? '<span class="ok">Your team can answer it.</span>' : '<span class="warn">Nobody in your team can.</span>'}</p></section>
-      <section class="sv-box bs-set"><h4>Gear drops</h4><div class="bs-sn">${setDot(K.bossSets(ci)[0])}<b>${esc(SS.name)}</b><small>${esc(SS.role)}</small></div><ul class="bs-tiers">${tiers}</ul></section></aside>`;
+      <section class="sv-box bs-set"><h4>Gear drops</h4><div class="bs-sn tap" role="button" tabindex="0" data-act="setpop" title="What does this set do?" data-set="${K.bossSets(ci)[0]}">${setDot(K.bossSets(ci)[0])}<b>${esc(SS.name)}</b><small>${esc(SS.role)}</small></div><ul class="bs-tiers">${tiers}</ul></section></aside>`;
     // a row per level: its drops, difficulty, state and enemy level, the boss, Auto ×10 (once beaten) and Fight; tap a
     // row for its phases
     const rows = Array.from({ length: K.BOSS_LEVELS }, (_, k) => k + 1).map(n => {
@@ -1815,6 +1815,21 @@
   // a guild boss difficulty is open when that campaign difficulty is (the server checks the same)
   const gbOpen = d => d === 0 || (d === 1 ? S.cleared >= K.STAGES.length - 1 : clearedOn(d - 1) >= K.STAGES.length - 1);
   const myGuildRow = () => (GD.mine && GD.mine.members.find(m => m.me)) || { points: 0, hits: 0 };
+  // guild activity (0021): when each member was last seen, their guild boss keys today and how many of the last 7 days
+  // they were active; a summary over the member list and a sort (rank, last seen, boss points)
+  const gAgo = t => { const m = (Date.now() - new Date(t)) / 60000; return m < 1 ? 1 : m; };
+  function gSeen(t) {
+    if (!t) return ['Never', 'away'];
+    const m = gAgo(t);
+    return m < 10 ? ['Online', 'on'] : m < 60 ? [`${Math.round(m)} min ago`, 'ok'] : m < 1440 ? [`${Math.round(m / 60)} h ago`, ''] : [`${Math.round(m / 1440)} d ago`, m >= 4320 ? 'away' : ''];
+  }
+  const gSorted = ms => GD.msort === 'seen' ? [...ms].sort((a, b) => (b.seen ? +new Date(b.seen) : 0) - (a.seen ? +new Date(a.seen) : 0)) : GD.msort === 'points' ? [...ms].sort((a, b) => Number(b.points) - Number(a.points)) : ms;
+  function gActivity(ms) {
+    if (!ms.length || ms[0].seen === undefined) return '';
+    const on = ms.filter(m => m.seen && gAgo(m.seen) < 10).length, day = ms.filter(m => m.seen && gAgo(m.seen) < 1440).length, away = ms.filter(m => !m.seen || gAgo(m.seen) >= 4320).length;
+    const keys = ms.reduce((t, m) => t + Math.min(K.GBOSS.keys, m.today || 0), 0), chip = (k, l) => `<button type="button" class="g-sort ${(GD.msort || 'rank') === k ? 'on' : ''}" data-act="gsort" data-k="${k}">${l}</button>`;
+    return `<div class="g-act"><span class="g-act-n"><b class="on">${on}</b> online · <b>${day}</b> active today · <b class="${away ? 'away' : ''}">${away}</b> away 3+ days · keys used today <b>${keys}/${ms.length * K.GBOSS.keys}</b></span><span class="g-sorts">Sort: ${chip('rank', 'Rank')}${chip('seen', 'Last seen')}${chip('points', 'Boss points')}</span></div>`;
+  }
   function guildHtml() {
     if (!signedIn()) return needAccount('Guilds');
     if (!unlocked('guild')) return `<div class="lockbox">${LOCK_SVG}<div><h3>Guilds open after ${needTxt('guild')}</h3><p class="empty-note">Campaign (Easy): ${S.cleared + 1} of ${UNLOCKS.guild.ch * 7} stages cleared.</p></div></div>`;
@@ -1857,7 +1872,7 @@
       const cell = (label, value, cls) => `<span class="gm-stat ${cls || ''}"><small>${label}</small><b>${value}</b></span>`;
       return `<li class="gm-row pf-open ${m.me ? 'me' : ''}" data-act="profile" data-id="${m.user_id}" title="View profile"><span class="gm-av">${m.avatar && C[m.avatar] ? por(m.avatar) : ''}${m.lvl ? `<span class="gm-lv">${m.lvl}</span>` : ''}</span>
         <span class="gm-id"><b>${esc(m.name)}${m.me ? ' <small>(you)</small>' : ''}</b>${roleChip(m.role)}</span>
-        <span class="gm-stats">${cell('Level', m.lvl || '?')}${cell('Campaign', esc(camp))}${cell('Boss points', Number(m.points).toLocaleString('en-US'), 'gold')}${cell('Fights', `${m.hits}`)}</span>
+        <span class="gm-stats">${cell('Level', m.lvl || '?')}${cell('Campaign', esc(camp))}${cell('Boss points', Number(m.points).toLocaleString('en-US'), 'gold')}${cell('Fights', `${m.hits}`)}${m.seen !== undefined ? cell('Last seen', gSeen(m.seen)[0], gSeen(m.seen)[1]) + cell('Keys today', `${m.today || 0}/${K.GBOSS.keys}`, (m.today || 0) >= K.GBOSS.keys ? 'ok' : '') + cell('Active', `${m.days7 || 0}/7 days`, (m.days7 || 0) >= 5 ? 'ok' : (m.days7 || 0) <= 1 ? 'away' : '') : ''}</span>
         ${acts.length ? `<span class="fr-acts gm-acts">${acts.join('')}</span>` : ''}</li>`;
     };
     const keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
@@ -1872,7 +1887,7 @@
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
       <div class="row g-leave">${me === 'leader' || me === 'officer' ? '<button class="btn small primary" data-act="ginvopen">Invite members</button>' : ''}<button class="btn small danger" data-act="gleave">Leave guild</button></div></div>
-      <section class="fr-sec g-mem"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3><ul class="fr-list g-members">${g.members.map(memberRow).join('')}</ul></section></div>`;
+      <section class="fr-sec g-mem"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3>${gActivity(g.members)}<ul class="fr-list g-members">${gSorted(g.members).map(memberRow).join('')}</ul></section></div>`;
   }
   // Guildmaster and officers: invite by friend code, or one of your friends who is not in this guild yet
   const friendCode = uid => String(uid).replace(/-/g, '').slice(0, 8).toUpperCase();
@@ -1972,6 +1987,21 @@
   const setEss = k => (K.SETS[k] && K.SETS[k].ess) || null;
   // a set's bonuses as [pieces, text] (boss sets: 2/4/6, the Ascended version left out; campaign sets: one bonus)
   const setTiersOf = k => { const SS = K.SETS[k]; return SS.tiers ? SS.tiers.filter(t => !t.asc).map(t => [t.n, t.d]) : [[SS.n, SS.desc.replace(/^\d pieces: /, '')]]; };
+  // a tap on a set that drops somewhere (campaign chapters, the Boss Hall): what it is and what every bonus does, in a popup
+  function setPop(k) {
+    const SS = K.SETS[k]; if (!SS) return;
+    const ch = K.CHAPTERS.findIndex(c => c.set === k), bi = K.BOSS_ORDER.findIndex((id, i) => K.bossSets(i)[0] === k), fam = SS.ess && SS.tiers && K.SET_FAMILY[SS.ess];
+    const tiers = (SS.tiers || [{ n: SS.n, d: SS.desc.replace(/^\d pieces: /, '') }]).map(t => `<li${t.asc ? ' class="asc"' : ''}><i>${t.asc ? '★' : t.n}</i><span>${t.asc ? '<b>Ascended:</b> ' : `<b>${t.n} pieces:</b> `}${esc(t.d)}${t.asc ? ' (all six pieces at <span class="asc-st">★★★</span>)' : ''}</span></li>`).join('')
+      + (fam ? `<li class="fam"><i>✦</i><span><b>${SS.ess} family:</b> ${esc(fam.d)} (4+ pieces from two ${SS.ess} boss sets)</span></li>` : '');
+    const own = S.inv.filter(it => it.set === k), worn = own.filter(it => it.owner).length;
+    const from = bi >= 0 ? `Drops from ${esc(K.BOSSES[K.BOSS_ORDER[bi]].name)} in the Boss Hall, one random slot per win.` : ch >= 0 ? `Drops in Chapter ${ROMAN[ch]} of the campaign: one slot per stage, a random slot from the boss.` : '';
+    const el = document.createElement('div');
+    el.className = 'unlock-pop set-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', SS.name);
+    el.innerHTML = `<div class="unlock-card"><span class="tag">${SS.tiers ? 'Six-piece boss set' : `${SS.n}-piece set`}${SS.role ? ` · ${esc(SS.role)}` : ''}</span><h2>${essBadge(SS.ess)}${esc(SS.name)}</h2>
+      <ul class="bs-tiers">${tiers}</ul><p>${from} Sets do not stack: each set counts once.</p><p class="sp-own">You own ${own.length} ${own.length === 1 ? 'piece' : 'pieces'}${own.length ? `, ${worn} worn` : ''}.</p><button class="btn primary" type="button">OK</button></div>`;
+    document.body.appendChild(el); el.querySelector('button').focus();
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
+  }
   const statMap = it => { const o = {}; if (it) for (const [k, v] of K.gearStats(it)) o[k] = (o[k] || 0) + v; return o; };
   const fmtDelta = (k, v) => `${v > 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString('en-US')}${K.PCT_STATS && K.PCT_STATS.includes(k) ? '%' : ''}`;
   const fmtVal = (k, v) => K.fmtStat(k, v).replace(/^[^+]*\+/, '+');
@@ -3040,6 +3070,12 @@
   function chatMsg(m, role) {
     const blocked = (S.cblock || []).includes(m.user_id);
     if (blocked) return '';
+    // an announcement the database wrote (0021: a hero ascended to 6 stars, a Legendary summoned): a gold banner with the hero
+    if (m.kind === 'sys') {
+      const x = m.data || {}, hid = C[x.hero] ? x.hero : null, leg = x.ev === 'leg';
+      const what = hid ? (leg ? `summoned the <b class="cs-h">Legendary</b> hero <b class="cs-h">${esc(C[hid].name)}</b>!` : `ascended <b class="cs-h">${esc(C[hid].name)}</b> to <span class="cs-st">★★★★★★</span>!`) : esc(m.body);
+      return `<div class="cm sys ${leg ? 'leg' : 'asc'}" data-mid="${m.id}">${hid ? `<span class="cs-av">${por(hid)}</span>` : ''}<div class="cm-b"><p>${hid ? `<button type="button" class="cm-name" data-ch="menu" data-id="${m.id}">${esc(m.name)}</button>${CH.tab === 'world' && m.tag ? ` <span class="cm-tag">[${esc(m.tag)}]</span>` : ''} ${what}` : what}</p><small>${chTime(m.created_at)}</small>${CH.menu === m.id && !m.mine ? `<div class="cm-menu"><button type="button" data-ch="prof" data-uid="${m.user_id}">Profile</button>${chFriendBtn(m.user_id)}</div>` : ''}</div></div>`;
+    }
     const canDel = m.mine || (CH.tab === 'guild' && (role === 'leader' || role === 'officer'));
     const menu = CH.menu === m.id ? `<div class="cm-menu">${m.mine ? '' : `<button type="button" data-ch="prof" data-uid="${m.user_id}">Profile</button>${chFriendBtn(m.user_id)}<button type="button" data-ch="block" data-uid="${m.user_id}" data-name="${esc(m.name)}">Block</button><button type="button" data-ch="report" data-id="${m.id}">Report</button>`}${canDel ? `<button type="button" class="bad" data-ch="del" data-id="${m.id}">Delete</button>` : ''}</div>` : '';
     return `<div class="cm ${m.mine ? 'mine' : ''}" data-mid="${m.id}"><button type="button" class="cm-av" data-ch="menu" data-id="${m.id}" aria-label="${esc(m.name)}">${m.avatar && C[m.avatar] ? por(m.avatar) : ''}</button>
@@ -3116,7 +3152,7 @@
     const el = $('#b-chat'); if (!el || !lastId) return;
     let r; try { r = await cloud().rpc('chat_list', { ch: k, after: lastId - 1 }); } catch (e) { return; }
     const m = r && r.msgs && r.msgs[r.msgs.length - 1]; if (!m || m.mine || (S.cblock || []).includes(m.user_id) || !B) return;
-    el.innerHTML = `${k === 'guild' ? '<b class="g">Guild</b>' : ''}<b>${esc(m.name)}</b> ${esc(m.body)}`; el.dataset.t = k; el.hidden = false;
+    el.innerHTML = `${k === 'guild' ? '<b class="g">Guild</b>' : ''}${m.kind === 'sys' ? '★ ' : `<b>${esc(m.name)}</b> `}${esc(m.body)}`; el.dataset.t = k; el.hidden = false;
     clearTimeout(tickT); tickT = setTimeout(() => { el.hidden = true; }, 7000);
   }
   function chatOpen(open) {
@@ -3225,9 +3261,25 @@
   async function claimMail(id) {
     let r; try { r = await cloud().rpc('claim_mail', { mail_id: +id }); } catch (e) { toast('Could not claim this gift. Try again.', true); return; }
     if (!r) { toast('This gift was already claimed.'); socialLoad(); return; }
+    const m = (SO.mail || []).find(x => String(x.id) === String(id)), spare = !!(r.hero && C[r.hero] && S.roster[r.hero]);
     grantGift(r); save(); hud(); SFX.up();
-    toast(`Claimed: ${giftParts(r).join(' · ') || 'a gift'}.`, false, 4000);
+    mailPop(r, m && m.title, spare);
     socialLoad();
+  }
+  // what a claimed gift gave, in a popup: a hero (new or a spare copy) and every reward as a tile
+  function mailPop(r, title, spare) {
+    const n = v => (+v).toLocaleString('en-US'), tile = (icon, v, t) => `<span class="cv-rw" title="${esc(t)}">${icon}<b>${v}</b></span>`;
+    const hero = r.hero && C[r.hero] ? `<div class="exr-crew"><span class="exr-h rar-${C[r.hero].rar}">${por(r.hero)}<b>${esc(C[r.hero].short)}</b><i>${spare ? 'Spare copy' : 'New hero!'}</i></span></div>` : '';
+    const tiles = [...(+r.silver > 0 ? [tile(ic('coin'), n(r.silver), `${n(r.silver)} Sigils`)] : []), ...(+r.gems > 0 ? [tile(GEM_SVG, n(r.gems), `${n(r.gems)} Crystals`)] : []),
+      ...(+r.energy > 0 ? [tile(EN_SVG, n(r.energy), `${n(r.energy)} Energy`)] : []),
+      ...RW_KEYS.filter(k => r.fs && +r.fs[k] > 0).map(k => tile(shardIc(k), n(r.fs[k]), `${n(r.fs[k])} × ${K.SHARD[k].name}`)),
+      ...stoneParts(r).map(([t, v]) => tile(stoneIc(t), n(v), `${n(v)} × ${stoneName(t, v)}`)),
+      ...(r.elx ? K.ESSENCES.filter(e => +r.elx[e] > 0).map(e => tile(elxIc(e), n(r.elx[e]), `${n(r.elx[e])} × ${e} Elixir`)) : [])].join('');
+    const el = document.createElement('div');
+    el.className = 'unlock-pop ex-pop ml-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Gift claimed');
+    el.innerHTML = `<div class="unlock-card">${title ? `<span class="tag">${esc(title)}</span>` : ''}<h2>Gift claimed!</h2>${hero}${tiles ? `<div class="cv-rws">${tiles}</div>` : ''}${hero || tiles ? '' : '<p>A gift.</p>'}<button class="btn primary" type="button">OK</button></div>`;
+    document.body.appendChild(el); el.querySelector('button').focus();
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
   }
   // Start over: a player may wipe their own progress and create a new hero, at any time.
   // The current progress is kept as a backup first.
@@ -3526,6 +3578,8 @@
     else if (act === 'sggo') startSiege(+a.dataset.n);
     else if (act === 'evpop') evPop(+a.dataset.d, a.dataset.k);
     else if (act === 'admload') { ADM.data = null; ADM.err = ''; render(); }
+    else if (act === 'setpop') setPop(a.dataset.set);
+    else if (act === 'gsort') { GD.msort = a.dataset.k; render(); }
     else if (act === 'admlb') admLbSet(a.dataset.uid, a.dataset.s);
     else if (act === 'admview') { ADM.view = a.dataset.v; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'admchf') { ADM.chF = a.dataset.k; render(); }
