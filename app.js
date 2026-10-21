@@ -677,6 +677,7 @@
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
     if (signedIn() && PING.who !== cloud().info().email) { PING.who = cloud().info().email; playPing(true); } // the play signal counts the account
+    if (signedIn() && PT.who !== cloud().info().email) ptTick(); // the playtime chests of this account
     if (!B && noHero() && prologueDue()) setTimeout(() => { if (!B && prologueDue()) startPrologue(); }); // a new account synced: now the prologue
     // no hero yet (hero creation): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
@@ -771,7 +772,7 @@
       return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
         <img class="hb-bg" src="${MENU_ART[z.go]}" alt=""><span class="hb-txt"><b class="hb-name">${esc(z.label)}</b><span class="hb-st">${st}</span></span>${dot ? '<i class="hb-dot" aria-hidden="true"></i>' : ''}</button>`;
     };
-    return `${tut ? '' : evRibbon()}<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
+    return `${tut ? '' : `<div class="hm-ribs">${evRibbon()}${ptRibbon()}</div>`}<div class="home ${tut ? 'tut' : ''} ${tour ? 'touring' : ''}">${HOME_LIST.map(btn).join('')}</div>${tour ? tourCard() : ''}`;
   }
   // the icon bar on the left of every screen but Home (and the battle): the Home buildings with their banner icons
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
@@ -2363,6 +2364,64 @@
     } else { if (BEG.st) BEG.st.today = !!res.today; toast(res.done ? `You collected all ${BEG.days.length} days.` : 'Already collected today: come back tomorrow.'); }
   }
 
+  // ---------- playtime chests (0025_playtime_chests.sql), as RAID's playtime rewards: four chests a UTC day, open after
+  // 15, 30, 60 and 120 minutes of play, which add up over the whole day (breaks count nothing but lose nothing). The
+  // server counts the time: while the game is shown it gets a tick about every 2 minutes (ptTick) and adds the real time
+  // since the previous one; it opens a chest only when enough was played (playtime_claim returns the reward). A strip on
+  // Home (ptRibbon) shows today's minutes and the chests; tapping it opens them (ptPop). A guest sees what they hold.
+  const PT = { st: null, chests: null, at: 0, who: '', busy: false };
+  async function ptTick() {
+    const cl = cloud(); if (!cl || !cl.enabled || document.hidden) return;
+    try {
+      if (cl.signedIn()) { const who = cl.info().email; if (PT.who !== who) Object.assign(PT, { who, st: null }); PT.st = await cl.rpc('playtime_tick'); PT.chests = PT.st.chests; PT.at = Date.now(); }
+      else if (!PT.chests) PT.chests = await cl.pub('ffh_playtime_chests');
+    } catch (e) { return; } // a database without 0025: no chests
+    paintPt();
+  }
+  // seconds played today: the server's count plus the little time since its last answer (it adds that at the next tick)
+  const ptSecs = () => (PT.st ? PT.st.secs + (PT.at ? Math.min(150, (Date.now() - PT.at) / 1000) : 0) : 0);
+  const ptLabel = m => (m >= 60 ? `${m / 60} h` : `${m} min`);
+  // a chest's state: 'got' (opened today), 'ready' (enough played), 'wait'
+  const ptState = (c, i) => (PT.st && PT.st.claimed.includes(i) ? 'got' : ptSecs() >= c.min * 60 && signedIn() ? 'ready' : 'wait');
+  const ptReady = () => !!(PT.chests && signedIn() && PT.chests.some((c, i) => ptState(c, i) === 'ready'));
+  function ptRibbon() {
+    if (!PT.chests) return '';
+    const mins = Math.floor(ptSecs() / 60), next = PT.chests.find((c, i) => ptState(c, i) === 'wait'), prev = next ? [...PT.chests].reverse().find(c => c.min < next.min) : null;
+    const pct = next ? Math.round((mins - (prev ? prev.min : 0)) / (next.min - (prev ? prev.min : 0)) * 100) : 100;
+    const chests = PT.chests.map((c, i) => { const s = ptState(c, i); return `<span class="pt-c ${s}" title="${ptLabel(c.min)}">${CHEST_ART(s === 'got')}<small>${ptLabel(c.min)}</small></span>`; }).join('');
+    return `<button type="button" class="ev-rib pt-rib ${ptReady() ? 'ready' : ''}" data-act="ptopen"><span class="ev-tag">Playtime</span><span class="pt-mid"><b>${signedIn() ? `${mins} min today` : 'Chests for playing'}</b><span class="pt-bar"><i style="width:${Math.max(0, Math.min(100, pct))}%"></i></span></span><span class="pt-cs">${chests}</span><span class="ev-go">›</span></button>`;
+  }
+  function paintPt() { const el = document.querySelector('.pt-rib'); if (el) el.outerHTML = ptRibbon(); else if (tab === 'home' && !B && PT.chests && document.querySelector('.home')) render(); }
+  function ptPop() {
+    if (!PT.chests) { ptTick().then(() => { if (PT.chests) ptPop(); }); return; }
+    document.querySelector('.pt-pop')?.remove();
+    const guest = !signedIn(), mins = Math.floor(ptSecs() / 60);
+    const tiles = PT.chests.map((c, i) => {
+      const s = guest ? 'wait' : ptState(c, i), p = begParts(c.r), left = Math.max(1, Math.ceil(c.min - ptSecs() / 60));
+      const foot = s === 'ready' ? `<button type="button" class="btn primary small" data-ptc="${i}">Open</button>` : s === 'got' ? '<span class="lg-ok" aria-label="opened">✓</span>' : `<small class="pt-left">${guest ? ptLabel(c.min) : `in ${left} min`}</small>`;
+      return `<li class="lg-day pt-day ${s === 'ready' ? 'today' : s === 'got' ? 'done' : 'next'}"><span class="lg-n">${ptLabel(c.min)}</span><span class="pt-big">${CHEST_ART(s === 'got')}</span><span class="lg-amt">${p.map(x => `<b>${x[1]}</b>`).join('')}</span>${foot}</li>`;
+    }).join('');
+    const el = document.createElement('div');
+    el.className = 'unlock-pop login-pop pt-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Playtime chests');
+    el.innerHTML = `<div class="unlock-card login-card"><div class="lg-head"><span class="lg-orn" aria-hidden="true"></span><span class="tag">Playtime chests · ${guest ? 'every day' : `${mins} min played today`}</span><span class="lg-orn" aria-hidden="true"></span></div>
+      <h2>Rewards for playing</h2><p class="lg-sub">Four chests every day. Your play time adds up over the whole day: play a little now and a little later.</p><ol class="lg-days pt-days">${tiles}</ol>
+      ${guest ? '<button class="btn primary lg-claim" type="button" data-link="1">Create an account to collect</button>' : ''}<small class="lg-foot">The chests and the count start again at midnight (UTC).</small><button class="btn small beg-close" type="button">Close</button></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('[data-ptc]'); if (b) { ptClaim(+b.dataset.ptc, el); return; }
+      if (e.target.closest('[data-link]')) { el.remove(); if (cloud()) cloud().openAccount(); return; }
+      if (e.target === el || e.target.closest('.beg-close')) el.remove();
+    });
+  }
+  async function ptClaim(i, el) {
+    if (PT.busy) return; PT.busy = true;
+    let res = null; try { res = await cloud().rpc('playtime_claim', { i }); } catch (e) { toast('No connection to the server. Try again in a moment.', true); }
+    PT.busy = false; if (!res) return;
+    if (res.state) { PT.st = res.state; PT.at = Date.now(); }
+    if (res.rewards) { el.remove(); grantGift(res.rewards); save(); hud(); SFX.up(); mailPop(res.rewards, `Playtime chest · ${ptLabel(PT.chests[i].min)}`); paintPt(); }
+    else { toast('Not yet: keep playing a little longer.'); el.remove(); ptPop(); }
+  }
+
   // ================= TOWN HALL: QUESTS, MISSIONS, COLLECTION, ACHIEVEMENTS =================
   // The Town Hall has five tabs (TH.tab): Profile, Quests (daily + weekly), Missions (a long path of goals in chapters),
   // Collection (heroes and captured enemies ever owned) and Achievements (tiered feats). Rewards lean on Energy,
@@ -3527,6 +3586,7 @@
     else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') openGuildPrep();
+    else if (act === 'ptopen') ptPop(); // the playtime chests
     else if (act === 'profile') openProfile(id);
     else if (act === 'ginvf') sendInvite(a.dataset.code);
     else if (act === 'ginvopen') openInvite();
@@ -6567,6 +6627,7 @@
     setInterval(() => { if (document.visibilityState === 'visible') checkVersion(); }, 300000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
     playPing(); setInterval(() => { if (document.visibilityState === 'visible') playPing(); }, 60000);
+    ptTick(); setInterval(() => { if (document.visibilityState === 'visible') ptTick(); }, 120000); // playtime chests: the server counts the time
     document.addEventListener('visibilitychange', () => { if (!document.hidden) playPing(); });
     if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;

@@ -3511,6 +3511,24 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .ev-chip .ev-ic { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--evc, #9c7c37); color: #120c18; flex: none; }
 .ev-chip .ev-ic svg { width: 13px; height: 13px; fill: currentColor; } .ev-chip .ev-ic img { width: 16px; height: 16px; }
 .ev-rib .ev-go { flex: none; color: var(--gold); font-weight: 700; }
+/* the playtime strip on Home (app.js ptRibbon): today's minutes, a bar to the next chest and the four chests; a chest
+   ready to open glows and hops (the strip too); the popup (ptPop) uses the daily-reward card with big chests */
+.pt-rib { margin-top: 4px; }
+.pt-rib .pt-mid { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; font-size: .78rem; text-align: left; }
+.pt-rib .pt-mid b { font-weight: 600; color: #f3e6c8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pt-bar { display: block; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .45); box-shadow: inset 0 0 0 1px rgba(217, 180, 90, .35); overflow: hidden; }
+.pt-bar i { display: block; height: 100%; background: linear-gradient(90deg, #b8862e, #ffd86a); }
+.pt-cs { display: flex; gap: 4px; flex: none; }
+.pt-c { display: flex; flex-direction: column; align-items: center; width: 30px; opacity: .55; }
+.pt-c svg { width: 26px; height: 24px; } .pt-c small { font-size: .55rem; color: #cdbb94; line-height: 1; }
+.pt-c.got { opacity: .4; } .pt-c.ready { opacity: 1; filter: drop-shadow(0 0 5px rgba(255, 210, 100, .9)); animation: pthop 1.1s ease-in-out infinite; }
+.pt-rib.ready { box-shadow: 0 0 14px -2px rgba(255, 210, 100, .7); }
+@keyframes pthop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.pt-pop .pt-days { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pt-pop .pt-big svg { width: 54px; height: 48px; filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .7)); }
+.pt-pop .lg-day.today .pt-big svg { filter: drop-shadow(0 0 8px rgba(255, 210, 100, .9)); animation: pthop 1.1s ease-in-out infinite; }
+.pt-pop .lg-day .btn { margin-top: 4px; } .pt-pop .pt-left { color: #cdbb94; margin-top: 4px; }
+.pt-pop .beg-close, .beg-pop .beg-close { width: auto; align-self: center; }
 .evs { display: flex; flex-direction: column; gap: 10px; }
 .ev-now { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .ev-card { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--evc, #9c7c37); border-radius: 6px; background: linear-gradient(160deg, color-mix(in srgb, var(--evc, #9c7c37) 22%, #1a1320), #120d15 70%); box-shadow: 0 0 0 1px #000; }
@@ -3588,10 +3606,13 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .ev-hint { display: flex; align-items: center; gap: 8px; padding: 6px 10px; margin: 0 0 8px; border-radius: 6px; border: 1px solid var(--evc); background: color-mix(in srgb, var(--evc) 18%, #140e18); font-size: .85rem; }
 .ev-hint .ev-ic { width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--evc); color: #120c18; flex: none; } .ev-hint .ev-ic svg { width: 14px; height: 14px; fill: currentColor; }
 .ev-badge { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: var(--evc); color: #120c18; font: 700 .62rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; vertical-align: middle; }
-.ev-rib + .home { margin-top: 4px; }
+.ev-rib + .home, .hm-ribs + .home { margin-top: 4px; }
 @media (max-height: 500px) and (orientation: landscape) {
   .ev-rib { max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); margin: 2px auto 0; padding: 2px 8px; } .ev-chip { font-size: .72rem; padding: 1px 7px 1px 3px; } .ev-chip .ev-ic { width: 16px; height: 16px; }
-  .ev-rib + .home { max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); }
+  .ev-rib + .home, .hm-ribs + .home { max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); }
+  /* the Events ribbon and the Playtime strip share one line, the strip compact (no chest labels), so six rows still fit */
+  .hm-ribs { display: flex; gap: 6px; max-width: calc((100dvh - 124px) / 6 * 6.97 * 2 + 8px); margin: 2px auto 0; } .hm-ribs .ev-rib { flex: 1 1 0; min-width: 0; max-width: none; margin: 0; }
+  .pt-rib .pt-c small { display: none; } .pt-rib .pt-c { width: 20px; } .pt-rib .pt-c svg { width: 18px; height: 16px; } .pt-rib .pt-mid { font-size: .68rem; gap: 2px; } .pt-bar { height: 4px; }
   .ev-now { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; } .ev-card { padding: 7px 9px; gap: 4px; } .ev-card p { font-size: .76rem; } .ev-card h3 { font-size: .9rem; }
   .ev-card header .ev-ic { width: 26px; height: 26px; } .ev-card .btn { padding: 3px 10px; min-height: 0; font-size: .7rem; }
   .ev-cal { grid-template-columns: 74px repeat(7, minmax(0, 1fr)); font-size: .64rem; } .ev-day { min-height: 30px; }
