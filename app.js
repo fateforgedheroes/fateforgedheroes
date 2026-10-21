@@ -677,6 +677,7 @@
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
     if (signedIn() && PING.who !== cloud().info().email) { PING.who = cloud().info().email; playPing(true); } // the play signal counts the account
+    if (!B && noHero() && prologueDue()) setTimeout(() => { if (!B && prologueDue()) startPrologue(); }); // a new account synced: now the prologue
     // no hero yet (hero creation): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
@@ -5291,7 +5292,24 @@
   // broke into the Fate Shards. Nothing is earned: only S.seen.prologue is kept; giving up goes straight on. Then Create
   // your hero. Measured (auto): the Titan (Boss Hall level 2, 1.15× HP, 1.6× Attack) falls in ~25 turns (about 5 rounds), always.
   const PRO_IDS = ['aurelion', 'celesthyr', 'velmira', 'liora'];
-  const prologueDue = () => noHero() && !S.seen.prologue && S.cleared < 0 && !(S.p.st && S.p.st.won + S.p.st.lost) && !Object.keys(S.roster).some(id => C[id] && !C[id].pc);
+  const prologueDue = () => noHero() && !S.seen.prologue && S.cleared < 0 && !(S.p.st && S.p.st.won + S.p.st.lost) && !Object.keys(S.roster).some(id => C[id] && !C[id].pc) && cloudSettled();
+  // signing in starts from an empty save until the account's own save arrives from the cloud: no prologue until the
+  // cloud has synced (a brand-new account has nothing to load and then gets it), never while the sign-in screen is
+  // open or another account is being added; a guest without any stored sign-in plays it at once
+  function cloudSettled() {
+    const cl = cloud(); if (!cl || !cl.enabled) return true;
+    const auth = $('#auth'); if (auth && !auth.hidden) return false;
+    let stored = false; try { const s = localStorage.getItem('ffh-session'); stored = !!(s && s !== 'null') || !!localStorage.getItem('ffh-adding'); } catch (e) { /* no storage: a guest */ }
+    return !stored || (cl.signedIn() && cl.info().status === 'saved');
+  }
+  // the account's save arrived during the prologue (it has a hero): the prologue ends at once, without its last scene
+  function stopPrologue() {
+    if (!B || B.cfg.type !== 'prologue') return;
+    B.b.aborted = true;
+    document.querySelector('.story .sc-skip')?.click();
+    const cp = $('#coach-pop'); if (cp && !cp.hidden) cp.querySelector('button')?.click();
+    if (pending) { const { u, res, b } = pending; pending = null; res(b.ai(u)); }
+  }
   function prologueUnits() {
     const gear = k => K.SLOTS.map((slot, i) => { const it = K.genGear({ il: 60, slot, rars: [4], up: 0.5 }, (k + 1) * 10 + i + 1); while (it.lvl < 12) { it.lvl++; K.upgradeMilestone(it); } return it; });
     const heroes = PRO_IDS.map((id, k) => K.heroUnit(id, { lvl: 60, xp: 0, stars: 6, sk: [5, 5, 5] }, gear(k)));
@@ -6521,7 +6539,7 @@
     fixup(S);
     if (window.FFH_CLOUD) window.FFH_CLOUD.attach({
       get: () => S,
-      set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (!B) render(); else hud(); announceReset(); },
+      set: ns => { const m = migrate(ns); if (!m) return; S = fixup(m); save(); if (B && B.cfg.type === 'prologue' && !noHero()) stopPrologue(); else if (!B) render(); else hud(); announceReset(); },
       toast: msg => toast(msg),
       paint: () => paintAccount(),
       hasProgress: () => !!S && !noHero() && S.cleared >= 0, // a guest with something to lose (the sign-in screen then says "Save your progress")
