@@ -645,19 +645,20 @@
   const unlocked = t => isOpen(S, t);
   // the portrait a player shows: the avatar they picked, else their starter hero, else their first team member
   const avatarId = () => (S.p.avatar && S.roster[S.p.avatar] ? S.p.avatar : S.starter && S.roster[S.starter] ? S.starter : S.team[0]);
-  // linking an account pays LINK_GEMS Crystals once per save (S.lk), the first time the game sees it saved to an account
+  // linking an account pays LINK_GEMS Crystals once per save (S.lk), the first time the game sees it saved to an account;
+  // every account also gets a Legendary Fate Shard by mail, sent by the server (0023_account_gift.sql), shown first
   const LINK_GEMS = 100;
-  const linkRw = () => `<div class="lk-rw">${GEM_SVG}<span><b>+${LINK_GEMS} Crystals</b><br><small>for linking your account</small></span></div>`;
+  const linkRw = () => `<div class="lk-rws"><div class="lk-rw leg"><img class="lk-shard" src="${SHARD_ART.legendary0}" alt=""><span><b>Legendary Fate Shard</b><br><small>free for every account</small></span></div><div class="lk-rw">${GEM_SVG}<span><b>+${LINK_GEMS} Crystals</b><br><small>for linking your account</small></span></div></div>`;
   const guest = () => { const cl = cloud(); return !!(cl && cl.enabled && !cl.signedIn()); };
   function linkPaid() {
     const cl = cloud(); if (!S || S.lk || noHero() || !cl || !cl.signedIn() || cl.info().status !== 'saved') return;
     S.lk = true; S.gems = (S.gems || 0) + LINK_GEMS; save(); hud();
-    if ((B && $('#modal').hidden) || document.querySelector('.unlock-pop')) { toast(`Account linked! +${LINK_GEMS} Crystals`); return; } // in a running battle: a message only
+    if ((B && $('#modal').hidden) || document.querySelector('.unlock-pop')) { toast(`Account linked! +${LINK_GEMS} Crystals, and a Legendary Fate Shard waits in your Mail`); return; } // in a running battle: a message only
     const el = document.createElement('div');
     el.className = 'unlock-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Account linked');
-    el.innerHTML = `<div class="unlock-card"><span class="tag">Account linked</span><h2>Your heroes are safe</h2><p>Your progress is saved to your account: play on any device, and join the Arena, guilds and chat.</p>${linkRw()}<button class="btn primary" type="button">Great!</button></div>`;
-    document.body.appendChild(el); SFX.up();
-    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) el.remove(); });
+    el.innerHTML = `<div class="unlock-card"><span class="tag">Account linked</span><h2>Your heroes are safe</h2><p>Your progress is saved to your account: play on any device, and join the Arena, guilds and chat. Your <b>Legendary Fate Shard</b> is waiting in your Mail.</p>${linkRw()}<button class="btn primary" type="button" data-mail="1">Open Mail</button><button class="btn small" type="button">Later</button></div>`;
+    document.body.appendChild(el); SFX.up(); socialLoad();
+    el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) { el.remove(); if (e.target.closest('[data-mail]') && !B) setTab('mail'); } });
   }
   // "Don't want to lose your progress?": a guest is asked to create an account, with the reward shown big
   function showLinkOffer(tag) {
@@ -665,7 +666,7 @@
     const el = document.createElement('div');
     el.className = 'unlock-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Create an account');
     el.innerHTML = `<div class="unlock-card"><span class="tag">${tag || 'Playing as a guest'}</span><h2>Don't want to lose your progress?</h2>
-      <p>Create an account! Your heroes are saved only in this browser right now. Link an email to keep them safe, play on any device, and join the Arena, guilds and chat.</p>${linkRw()}
+      <p>Create an account and get a <b>free Legendary Fate Shard</b>! Your heroes are saved only in this browser right now. Link an email to keep them safe, play on any device, and join the Arena, guilds and chat.</p>${linkRw()}
       <button class="btn primary" type="button" data-link="1">Create an account</button><button class="btn small" type="button">Later</button></div>`;
     document.body.appendChild(el);
     el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) { el.remove(); if (e.target.closest('[data-link]') && cloud()) cloud().openAccount(); } });
@@ -3338,7 +3339,7 @@
           <div class="xpbar"><i style="width:${p.lvl >= PLAYER_MAX ? 100 : Math.round(p.xp / need * 100)}%"></i></div>
           ${p.lvl >= PLAYER_MAX ? `<div class="prestige-box"><p><b>Maximum level reached!</b> Prestige to start again at level 1 with everything you own, earn prestige emblem ${romanN((p.prestige || 0) + 1)}, ${sigils(PRESTIGE_REWARD.silver)} and a ${esc(K.SHARD.mythic.name)}, and collect every level-up reward again.</p><button class="btn primary" data-act="prestige">Prestige ${romanN((p.prestige || 0) + 1)}</button></div>`
             : `<small class="empty-note">${p.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP to level ${p.lvl + 1} · win battles to earn player XP${p.lvl >= PLAYER_MAX - 10 ? ` · at level ${PLAYER_MAX} you can prestige` : ''}</small>`}</div></div>
-      ${guest() && !S.lk ? `<div class="prof-link"><div><h3>Link your account to an email</h3><p>Your heroes are saved only in this browser. Link an email to keep them safe and play on any device.</p></div>${linkRw()}<button class="btn primary small" data-act="account">Create an account</button></div>` : ''}
+      ${guest() && !S.lk ? `<div class="prof-link"><div><h3>Link your account to an email</h3><p>Your heroes are saved only in this browser. Link an email to keep them safe, play on any device and get a free Legendary Fate Shard.</p></div>${linkRw()}<button class="btn primary small" data-act="account">Create an account</button></div>` : ''}
       <div class="prof-cols">
         <section><h3>Unlocks</h3><ul class="road">${road}</ul><p class="empty-note">Every level up pays out Sigils. Every fifth level also gives a Greater Fate Shard.</p></section>
         <section><h3>Statistics</h3><dl class="stats">${stat('Battles won', p.st.won)}${stat('Battles lost', p.st.lost)}${stat('Campaign stages cleared', `${S.cleared + 1} / ${K.STAGES.length}`)}${K.DIFFS.slice(1).map((x, i) => S.dcl[i + 1] >= 0 ? stat(`${x.name} stages cleared`, `${S.dcl[i + 1] + 1} / ${K.STAGES.length}`) : '').join('')}${stat('Boss victories', p.st.bossWon)}${stat('Bosses beaten', `${bossesBeaten} / ${K.BOSS_ORDER.length}`)}${stat('Heroes collected', `${heroes} / ${K.CHAMP_ORDER.length}`)}${stat('Summons', p.st.summons)}${stat('Team power', teamPower())}</dl></section>
@@ -3353,7 +3354,7 @@
       ? '<p class="empty-note">Offline mode: your progress is saved in this browser only.</p>'
       : cl.email
         ? `<p class="empty-note">Signed in as <b>${esc(cl.email)}</b>. ${cl.status === 'error' ? 'The last cloud save failed.' : 'Your progress saves to your account automatically.'}</p><div class="row"><button class="btn small" data-act="account">Account settings</button></div>`
-        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.${S.lk ? '' : ` Linking an account pays <b>${LINK_GEMS} Crystals</b>.`}</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
+        : `<p class="empty-note">Not signed in: your progress is only saved in this browser. Sign in to keep it safe and play on any device.${S.lk ? '' : ` A new account gets a <b>Legendary Fate Shard</b> in its Mail, and linking pays <b>${LINK_GEMS} Crystals</b>.`}</p><div class="row"><button class="btn primary small" data-act="account">Sign in or create an account</button></div>`;
     // feedback and bug reports go to the Discord, so everything stays in one place
     const feedback = `<section class="prof-acc fb-sec"><h3>Feedback and bugs</h3><p class="empty-note">Found a bug or have an idea? Tell us in the Discord: post it in the feedback or bug channel, with a screenshot if you can.</p><div class="row"><a class="btn dc-btn small" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}Give feedback in Discord</a></div></section>`;
     return `<div class="profile settings">

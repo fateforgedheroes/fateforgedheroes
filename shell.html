@@ -683,9 +683,15 @@ img.shard-ic.ic { width: 22px; height: 22px; vertical-align: middle; }
 .lk-rw { display: inline-flex; align-items: center; gap: 8px; margin: 6px auto; padding: 6px 14px 6px 8px; border-radius: 999px; border: 1px solid #6fd3ff; background: linear-gradient(180deg, rgba(60, 140, 200, .35), rgba(20, 40, 70, .6)); color: #dff4ff; box-shadow: 0 0 16px rgba(90, 190, 255, .35); }
 .lk-rw .gem-ic { width: 30px; height: 30px; } .lk-rw b { font-size: 1.1rem; color: #fff; } .lk-rw small { color: #bfe6ff; }
 .auth-box .lk-rw, .unlock-card .lk-rw { display: flex; width: fit-content; }
+/* the account rewards side by side: the Legendary Fate Shard (gold, first) and the Crystals */
+.lk-rws { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px; margin: 6px auto; }
+.lk-rws .lk-rw { margin: 0; }
+.lk-rw.leg { border-color: #ffd36b; background: linear-gradient(180deg, rgba(200, 150, 50, .4), rgba(70, 40, 10, .65)); color: #fff1cf; box-shadow: 0 0 18px rgba(255, 200, 90, .45); }
+.lk-rw.leg small { color: #ffe3a3; } .lk-shard { width: 32px; height: 32px; object-fit: contain; filter: drop-shadow(0 0 6px rgba(255, 210, 110, .8)); }
+.prof-link .lk-rws { margin: 0; }
 .prof-link { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin: 10px 0; border: 1px solid #6fd3ff; border-radius: 6px; background: linear-gradient(90deg, rgba(60, 140, 200, .25), rgba(20, 30, 50, .5)); }
 .prof-link > div { flex: 1 1 220px; min-width: 0; } .prof-link h3 { margin: 0; font-size: 1rem; } .prof-link p { margin: 2px 0 0; font-size: .85rem; color: var(--muted); } .prof-link .lk-rw { margin: 0; }
-@media (max-height: 500px) and (orientation: landscape) { .prof-link { padding: 4px 10px; margin: 4px 0; gap: 8px; } .prof-link p { display: none; } .prof-link .lk-rw .gem-ic { width: 22px; height: 22px; } .prof-link h3 { font-size: .8rem; flex-basis: 100%; } .prof-link > div { flex: 1 1 100%; } .prof-link .lk-rw { padding: 2px 10px 2px 4px; } .prof-link .lk-rw b { font-size: .85rem; } .prof-link .lk-rw small { font-size: .6rem; } .prof-link .btn { padding: 3px 10px; min-height: 0; font-size: .72rem; } }
+@media (max-height: 500px) and (orientation: landscape) { .prof-link { padding: 4px 10px; margin: 4px 0; gap: 8px; } .prof-link p { display: none; } .prof-link .lk-rw .gem-ic { width: 22px; height: 22px; } .prof-link .lk-shard { width: 22px; height: 22px; } .prof-link h3 { font-size: .8rem; flex-basis: 100%; } .prof-link > div { flex: 1 1 100%; } .prof-link .lk-rw { padding: 2px 10px 2px 4px; } .prof-link .lk-rw b { font-size: .85rem; } .prof-link .lk-rw small { font-size: .6rem; } .prof-link .btn { padding: 3px 10px; min-height: 0; font-size: .72rem; } }
 #auth { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(8,6,10,.82); backdrop-filter: blur(3px); }
 .auth-box { width: min(420px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--panel); border: 2px solid var(--gold); box-shadow: 0 0 0 2px #000, 0 20px 60px rgba(0,0,0,.6); padding: 22px 22px 18px; display: flex; flex-direction: column; gap: 10px; }
 .auth-logo { width: 240px; max-width: 80%; align-self: center; margin-bottom: 4px; }
@@ -4004,11 +4010,11 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .th-body .profile .prof-link { padding: 5px 8px !important; gap: 4px 8px; align-items: center; }
   .th-body .profile .prof-link h3 { font-size: .74rem; margin: 0; }
   .th-body .profile .prof-link .lk-rw { padding: 2px 10px 2px 4px; gap: 5px; flex: 0 0 auto; }
-  .th-body .profile .prof-link .lk-rw .gem-ic { width: 20px; height: 20px; }
+  .th-body .profile .prof-link .lk-rw .gem-ic { width: 20px; height: 20px; } .th-body .profile .prof-link .lk-shard { width: 20px; height: 20px; }
   .th-body .profile .prof-link .lk-rw b { font-size: .78rem; } .th-body .profile .prof-link .lk-rw small, .th-body .profile .prof-link .lk-rw br { display: none; }
   .th-body .profile .prof-link .btn { padding: 3px 10px; min-height: 0; font-size: .7rem; flex: 1 1 auto; }
-  .unlock-card .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .unlock-card .lk-rw .gem-ic { width: 22px; height: 22px; } .unlock-card .lk-rw b { font-size: .9rem; } .unlock-card .lk-rw small { font-size: .65rem; }
-  .auth-box .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .auth-box .lk-rw .gem-ic { width: 22px; height: 22px; }
+  .unlock-card .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .unlock-card .lk-rw .gem-ic { width: 22px; height: 22px; } .unlock-card .lk-shard { width: 24px; height: 24px; } .unlock-card .lk-rw b { font-size: .9rem; } .unlock-card .lk-rw small { font-size: .65rem; }
+  .auth-box .lk-rw { margin: 2px auto; padding: 3px 12px 3px 6px; } .auth-box .lk-rw .gem-ic { width: 22px; height: 22px; } .auth-box .lk-shard { width: 24px; height: 24px; }
 }
 /* Settings on a phone on its side: the same even grid, not the Profile tab's three columns */
 @media (max-height: 500px) and (orientation: landscape) {
