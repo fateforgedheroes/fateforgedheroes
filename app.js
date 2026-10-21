@@ -1508,7 +1508,7 @@
   // cards (one row on wide screens, a grid on phones); tapping one shows its kit below. New players and older saves without a hero see this
   // first; an older save's hero starts at the level of its best hero, so it is useful straight away.
   const STARTER_BG = 4; // chapter background: the brick-and-lava dungeon hall
-  let pcSel = { g: 'm', cls: null, name: '' };
+  let pcSel = { g: 'm', cls: 'tank', name: '' }; // the screen opens with Tank picked, its details shown
   const pcName = () => (pcSel.name || '').replace(/[<>&"]/g, '').trim().slice(0, 16);
   const pcReady = () => !!(pcSel.cls && pcName());
   // the look of the six classes: a colour each (card glow, the details panel's light) and a small icon
@@ -1587,7 +1587,7 @@
     if (!S.starter) S.starter = id;
     delete S.needStarter;
     linkTeams(S); syncHero(S);
-    pcSel = { g: 'm', cls: null, name: '' };
+    pcSel = { g: 'm', cls: 'tank', name: '' };
     tab = 'home'; save(); render();
     const call = $('.tut-call'); if (call) call.scrollIntoView({ block: 'center', behavior: 'smooth' });
     toast(old ? `${name} joins your teams and will fight at your side in every battle.` : `${name} is ready. Tap the Campaign to begin your adventure.`, false, 4500);
