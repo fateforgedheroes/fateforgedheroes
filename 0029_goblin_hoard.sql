@@ -1,8 +1,8 @@
 -- Fate Forged Heroes: the Goblin Hoard, a secret level behind a rare portal (like Diablo's Cow Level). Run once after 0028.
 -- After every battle a player wins, the game asks the server to roll for a portal (hoard_roll). The server decides:
 -- only with the Boss Hall open (Chapter III cleared on Easy, read from the save), at most one roll a minute (by the
--- server's clock, so calling faster rolls nothing), never within 4 days of the last portal, then a 1 in 150 chance; an
--- active player finds about one a week. A portal stays open 24 hours and is good for one run. The run itself is played
+-- server's clock, so calling faster rolls nothing), never within 4 days of the last portal, then a 3% chance; an
+-- active player finds one every 4-5 days. A portal stays open 24 hours and is good for one run. The run itself is played
 -- by the Edge Function (`arena`, action 'hoard', engine K.hoardFight): it checks the open portal, plays the fight, pays
 -- the Sigils and marks the portal used (hoard_portals.used_at, run), so a portal is never used twice.
 -- A portal for a player by hand (a gift or a test), in the SQL Editor:
@@ -28,7 +28,7 @@ alter table public.hoard_rolls enable row level security;
 -- the rules: one roll per `gap` seconds, no portal within `rest` days of the last one, the chance per roll, hours open
 create or replace function public.ffh_hoard_def()
 returns jsonb language sql immutable set search_path = ''
-as $$ select '{"gap": 60, "rest": 4, "chance": 0.00667, "hours": 24, "stage": 20}'::jsonb $$;
+as $$ select '{"gap": 60, "rest": 4, "chance": 0.03, "hours": 24, "stage": 20}'::jsonb $$;
 
 -- the open portal of a player (not used, not expired), or null
 create or replace function public.ffh_hoard_open(uid uuid)

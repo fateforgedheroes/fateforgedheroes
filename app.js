@@ -1001,7 +1001,7 @@
   const bhDrops = n => K.bossLoot(n).rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE.random[Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear, a random slot">`).join('');
   // ---------- The Goblin Hoard (0029_goblin_hoard.sql, engine HOARD): a secret level behind a rare golden portal, like
   // Diablo's Cow Level. After every battle won the game asks the server to roll for a portal (hoardRoll; the server
-  // decides: at most one roll a minute, never within 4 days of the last portal, about one a week for an active player).
+  // decides: at most one roll a minute, never within 4 days of the last portal, then 3% a roll: every 4-5 days for an active player).
   // A portal stays open 24 hours for one run; while it is open the Boss Hall shows the Hoard at the top of its list and
   // nowhere else does. The run is the server's (Edge Function action 'hoard'); the game replays it (runBattle type
   // 'hoard': loot goblins spill coins when slain and run off with their sacks when they reach their turn, the Goblin King
