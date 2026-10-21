@@ -666,7 +666,7 @@
     const el = document.createElement('div');
     el.className = 'unlock-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Create an account');
     el.innerHTML = `<div class="unlock-card"><span class="tag">${tag || 'Playing as a guest'}</span><h2>Don't want to lose your progress?</h2>
-      <p>Create an account and get a <b>free Legendary Fate Shard</b>! Your heroes are saved only in this browser right now. Link an email to keep them safe, play on any device, and join the Arena, guilds and chat.</p>${linkRw()}
+      <p>Create an account and get a <b>free Legendary Fate Shard</b>, plus a <b>28-day beginner calendar</b> with a Legendary hero on day 28! Your heroes are saved only in this browser right now. Link an email to keep them safe, play on any device, and join the Arena, guilds and chat.</p>${linkRw()}
       <button class="btn primary" type="button" data-link="1">Create an account</button><button class="btn small" type="button">Later</button></div>`;
     document.body.appendChild(el);
     el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) { el.remove(); if (e.target.closest('[data-link]') && cloud()) cloud().openAccount(); } });
@@ -811,6 +811,7 @@
     if (!B) MUSIC.play(tab === 'kerkers' || (tab === 'prep' && PREP.boss) ? 'boss' : 'home'); // the Boss Hall keeps the boss track from its screen through every fight
     hud();
     const el = $('#screen');
+    if (noHero() && prologueDue()) { el.innerHTML = ''; if (!B) setTimeout(() => { if (!B && prologueDue()) startPrologue(); }); return; } // a new player: the prologue first
     if (noHero()) { el.innerHTML = createHtml(); navTop(); hxFit(); return; }
     if (tab === 'home') {
       el.innerHTML = homeHtml();
@@ -820,7 +821,7 @@
       if (on && card && landPhone()) { const r = on.getBoundingClientRect(); card.classList.add(r.left + r.width / 2 > innerWidth / 2 ? 'tc-left' : 'tc-right'); window.scrollBy({ top: r.top - (innerHeight - r.height) / 2 - 10, behavior: 'smooth' }); }
       else if (on && card) { const r = on.getBoundingClientRect(), room = card.getBoundingClientRect().top - 70; window.scrollBy({ top: r.top - 70 - Math.max(0, (room - r.height) / 2), behavior: 'smooth' }); }
       // the daily reward pops up on the homebase once a day (after the first battle and the tour)
-      if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
+      if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (begDue()) setTimeout(showBeginner, 700); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
     el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'events' ? eventsHtml() : tab === 'admin' ? adminHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
@@ -2291,10 +2292,74 @@
       const r = loginReward(n);
       grantGift(r); S.login = { last: today(), n: n + 1 }; save(); hud(); SFX.up();
       el.remove(); toast(`Daily reward: ${giftParts(r).join(' · ')}`, false, 3500);
-      setTimeout(showDiscord, 1500);
+      setTimeout(() => (begDue() ? showBeginner() : showDiscord()), 1500); // the beginner calendar next, else the Discord
       if (tab === 'home') render();
     });
     el.querySelector('button').focus();
+  }
+
+  // ---------- the beginner calendar (0024_beginner_calendar.sql), as RAID's new-player login rewards: 28 rewards, one
+  // for every day the player logs in and claims (missing a day loses nothing); day 7 Seraphine, 14 Thalnir, 21 a Mythic
+  // Fate Shard, 28 Aurelion. The server decides which day may be claimed and what it gives (beginner_claim returns the
+  // reward, the game adds it, as with mail). A popup on Home once a day (after the daily reward) while a day waits, and
+  // an item in the ☰ menu; a guest sees what it holds (ffh_beginner_days) and is asked to create an account to collect.
+  const BEG = { st: null, days: null, who: '', shown: false, busy: false };
+  async function begLoad() {
+    const cl = cloud(); if (!cl || !cl.enabled) return;
+    try {
+      if (cl.signedIn()) { const who = cl.info().email; if (BEG.who !== who) Object.assign(BEG, { who, shown: false }); BEG.st = await cl.rpc('beginner_state'); BEG.days = BEG.st.days; }
+      else if (!BEG.days) BEG.days = await cl.pub('ffh_beginner_days');
+    } catch (e) { return; } // a database without 0024: no calendar
+    if (tab === 'home' && !B && begDue() && $('#modal').hidden && !document.querySelector('.unlock-pop')) setTimeout(showBeginner, 900);
+  }
+  const begLeft = () => !!(BEG.st && BEG.days && BEG.st.n < BEG.days.length);
+  const begDue = () => !BEG.shown && signedIn() && begLeft() && !BEG.st.today && !noHero() && S.seen.home && S.seen.tour && !loginDue();
+  // a reward as medallion icons and amount lines (a hero as its portrait)
+  const begParts = r => [...(r.hero && C[r.hero] ? [[`<span class="beg-por">${por(r.hero)}</span>`, `${esc(C[r.hero].short)} · ${K.RARITIES[C[r.hero].rar]}`]] : []),
+    ...(r.silver ? [[ic('coin'), `${(+r.silver).toLocaleString('en-US')} Sigils`]] : []), ...(r.gems ? [[GEM_SVG, `${r.gems} Crystals`]] : []), ...(r.energy ? [[EN_SVG, `${r.energy} Energy`]] : []),
+    ...stoneParts(r).map(([t, n]) => [stoneIc(t), `${n} ${t[0].toUpperCase() + t.slice(1)} ${n === 1 ? 'Stone' : 'Stones'}`]),
+    ...Object.keys(r.fs || {}).map(k => [shardIc(k), `${r.fs[k]} ${K.SHARD[k].name}${r.fs[k] > 1 ? 's' : ''}`]),
+    ...Object.keys(r.elx || {}).map(e => [elxIc(e), `${r.elx[e]} ${e} Elixir${r.elx[e] > 1 ? 's' : ''}`])];
+  function showBeginner(wk) {
+    if (!BEG.days) { begLoad().then(() => { if (BEG.days) showBeginner(wk); }); return; }
+    if (document.querySelector('.beg-pop')) return;
+    BEG.shown = true;
+    const guest = !signedIn(), total = BEG.days.length, n = guest || !BEG.st ? 0 : BEG.st.n, today = !guest && BEG.st && BEG.st.today, done = n >= total;
+    const w = wk ?? Math.min(Math.floor(Math.min(n, total - 1) / 7), Math.ceil(total / 7) - 1), last = BEG.days[total - 1].r.hero;
+    const tiles = BEG.days.slice(w * 7, w * 7 + 7).map((d, i) => {
+      const k = w * 7 + i, state = k < n ? 'done' : k === n && !today && !guest ? 'today' : 'next', p = begParts(d.r);
+      const ribbon = state === 'today' ? '<span class="lg-rib">Today</span>' : d.big ? '<span class="lg-rib best">Best</span>' : '';
+      return `<li class="lg-day ${state} ${d.big ? 'big' : ''}">${ribbon}<span class="lg-n">Day ${k + 1}</span><span class="lg-medal">${p.map(x => x[0]).join('')}</span><span class="lg-amt">${p.map(x => `<b>${x[1]}</b>`).join('')}</span>${state === 'done' ? '<span class="lg-ok" aria-label="claimed">✓</span>' : ''}</li>`;
+    }).join('');
+    const weeks = Array.from({ length: Math.ceil(total / 7) }, (_, k) => `<button type="button" class="${k === w ? 'on' : ''}" data-wk="${k}" aria-pressed="${k === w}">Week ${k + 1}</button>`).join('');
+    const btn = guest ? '<button class="btn primary lg-claim" type="button" data-link="1">Create an account to collect</button>'
+      : done ? '<button class="btn primary lg-claim" type="button" disabled>All days collected</button>'
+      : today ? '<button class="btn primary lg-claim" type="button" disabled>Come back tomorrow</button>'
+      : `<button class="btn primary lg-claim" type="button" data-claim="1">Claim day ${n + 1}</button>`;
+    const el = document.createElement('div');
+    el.className = 'unlock-pop login-pop beg-pop'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Beginner calendar');
+    el.innerHTML = `<div class="unlock-card login-card"><div class="lg-head"><span class="lg-orn" aria-hidden="true"></span><span class="tag">Beginner calendar · ${guest ? '28 days' : `day ${Math.min(n + (today || done ? 0 : 1), total)} of ${total}`}</span><span class="lg-orn" aria-hidden="true"></span></div>
+      <h2>A gift for every day</h2><p class="lg-sub">${total} rewards, one for every day you log in.${last && C[last] ? ` Day ${total}: <b>${esc(C[last].name)}</b>, a ${K.RARITIES[C[last].rar]} hero.` : ''}</p>
+      <div class="seg beg-wk" role="group" aria-label="Week">${weeks}</div><ol class="lg-days">${tiles}</ol>
+      ${btn}<small class="lg-foot">${guest ? 'Your account keeps your heroes safe and collects one reward every day.' : 'A new day at midnight (UTC). Missing a day loses nothing.'}</small><button class="btn small beg-close" type="button">Close</button></div>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', e => {
+      const wb = e.target.closest('[data-wk]'); if (wb) { el.remove(); showBeginner(+wb.dataset.wk); return; }
+      if (e.target.closest('[data-claim]')) { begClaim(el); return; }
+      if (e.target.closest('[data-link]')) { el.remove(); if (cloud()) cloud().openAccount(); return; }
+      if (e.target === el || e.target.closest('.beg-close')) el.remove();
+    });
+  }
+  async function begClaim(el) {
+    if (BEG.busy) return; BEG.busy = true;
+    let res = null; try { res = await cloud().rpc('beginner_claim'); } catch (e) { toast('No connection to the server. Try again in a moment.', true); }
+    BEG.busy = false; if (!res) return;
+    el.remove();
+    if (res.rewards) {
+      const r = res.rewards, spare = !!(r.hero && S.roster[r.hero]);
+      grantGift(r); save(); hud(); SFX.up(); Object.assign(BEG.st, { n: res.day, today: true });
+      mailPop(r, `Beginner calendar · day ${res.day}`, spare); if (tab === 'home') render();
+    } else { if (BEG.st) BEG.st.today = !!res.today; toast(res.done ? `You collected all ${BEG.days.length} days.` : 'Already collected today: come back tomorrow.'); }
   }
 
   // ================= TOWN HALL: QUESTS, MISSIONS, COLLECTION, ACHIEVEMENTS =================
@@ -2890,7 +2955,7 @@
   async function socialLoad() {
     if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
-    paidLoad(); admCheck();
+    paidLoad(); admCheck(); begLoad();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -2928,7 +2993,7 @@
     const n = signedIn() ? mailCount() : 0;
     const item = (act, icon, label, extra) => `<button type="button" class="mm-it" data-mm="${act}"><span class="mm-ic">${icon}</span><span>${label}</span>${extra || ''}</button>`;
     return `<div class="mm-box" role="menu">
-      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${ADM.ok ? item('admin', '♛', 'Admin', ADM.rev ? `<b class="mm-n">${ADM.rev > 9 ? '9+' : ADM.rev}</b>` : '') : ''}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
+      <a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener"><span class="mm-ic">${DISCORD_SVG}</span><span>Discord</span></a><a class="mm-it" href="${DISCORD_URL}" target="_blank" rel="noopener" title="Report a bug or share an idea in the Discord"><span class="mm-ic">!</span><span>Feedback and bugs</span></a>${item('events', '★', 'Events')}${!noHero() && (signedIn() ? begLeft() : cloud() && cloud().enabled) ? item('beginner', '✦', 'Beginner calendar', signedIn() && BEG.st && !BEG.st.today ? '<b class="mm-n">!</b>' : '') : ''}${ADM.ok ? item('admin', '♛', 'Admin', ADM.rev ? `<b class="mm-n">${ADM.rev > 9 ? '9+' : ADM.rev}</b>` : '') : ''}${item('guide', '?', 'Guide')}${item('mail', '✉', 'Mail', n ? `<b class="mm-n">${n > 9 ? '9+' : n}</b>` : '')}${item('profile', '♜', 'Profile')}
       <div class="mm-it mm-vol">${volSlider('music')}</div><div class="mm-it mm-vol">${volSlider('sfx')}</div>
       <div class="mm-cur"><span class="tag">Crystals</span><span>${GEM_SVG} ${gemsAll().toLocaleString('en-US')} <small>Crystals</small></span>
         <span class="tag">Fate Shards</span>${K.FATE_SHARDS.map(f => `<span>${shardIc(f.id)} ${S.fs[f.id] || 0} <small>${esc(f.name.replace(/ Fate Shard$/, '').replace(/^Fate Shard$/, 'Fate'))}</small></span>`).join('')}
@@ -2945,6 +3010,7 @@
     if (it) {
       const a = it.dataset.mm; setMenu(false);
       if (a === 'events') { if (B) toast('Not during a battle.', true); else setTab('events'); return; }
+      if (a === 'beginner') { if (B) toast('Not during a battle.', true); else showBeginner(); return; }
       if (a === 'admin') { if (B) toast('Not during a battle.', true); else { ADM.data = null; setTab('admin'); } return; }
       ({ guide: '#guide', mail: '#mail', profile: '#account' })[a] && $(({ guide: '#guide', mail: '#mail', profile: '#account' })[a]).click();
       return;
@@ -5036,8 +5102,31 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
   }
+  // ----- the prologue (a new player's first minutes, as RAID opens with a taste of power): before making their own hero
+  // the player fights the Void Titan with four Legendaries of old at full strength (level 60, 6 stars, skills 5,
+  // Legendary +12 gear), between the scenes PROLOGUE START and END of story.js: how the Titan was sealed and its prison
+  // broke into the Fate Shards. Nothing is earned: only S.seen.prologue is kept; giving up goes straight on. Then Create
+  // your hero. Measured (auto): the Titan (Boss Hall level 2, 1.15× HP, 1.6× Attack) falls in ~25 turns (about 5 rounds), always.
+  const PRO_IDS = ['aurelion', 'celesthyr', 'velmira', 'liora'];
+  const prologueDue = () => noHero() && !S.seen.prologue && S.cleared < 0 && !(S.p.st && S.p.st.won + S.p.st.lost) && !Object.keys(S.roster).some(id => C[id] && !C[id].pc);
+  function prologueUnits() {
+    const gear = k => K.SLOTS.map((slot, i) => { const it = K.genGear({ il: 60, slot, rars: [4], up: 0.5 }, (k + 1) * 10 + i + 1); while (it.lvl < 12) { it.lvl++; K.upgradeMilestone(it); } return it; });
+    const heroes = PRO_IDS.map((id, k) => K.heroUnit(id, { lvl: 60, xp: 0, stars: 6, sk: [5, 5, 5] }, gear(k)));
+    const enemies = K.bossUnits('voidtitan', 2, 2); for (const u of enemies) { u.maxHp = u.hp = Math.round(u.maxHp * 1.15); u.atk = Math.round(u.atk * 1.6); }
+    return { heroes, enemies };
+  }
+  function startPrologue() { runBattle({ type: 'prologue', nPh: 1, title: 'The Sealing', area: 4, bg: 'h9' }); }
+  async function prologueEnd(won) {
+    if (won) {
+      SFX.win();
+      await showBanner('The Titan is bound', 'Long ago · the Sealing', 'big', 1100);
+      await playScene('pe');
+    }
+    S.seen.prologue = true; save();
+    endBattleView(); B = null; render(); window.scrollTo({ top: 0 });
+  }
   async function runBattle(cfg) {
-    SFX.unlock(); MUSIC.play(cfg.type === 'gboss' || cfg.type === 'boss' || (cfg.stage && cfg.stage.boss) ? 'boss' : 'battle');
+    SFX.unlock(); MUSIC.play(cfg.type === 'gboss' || cfg.type === 'boss' || cfg.type === 'prologue' || (cfg.stage && cfg.stage.boss) ? 'boss' : 'battle');
     // Arena: both teams come from the server's snapshots and the dice from its seed (K.arenaSetup). A manual fight
     // (cfg.fight.manual) is played here by hand and its moves go to the server, which replays it (K.arenaReplay) and decides.
     // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
@@ -5045,6 +5134,7 @@
     let heroes, enemies;
     if (gb) ({ heroes, enemies } = K.gbossSetup(cfg.team, cfg.d, cfg.ess, cfg.seed));
     else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
+    else if (cfg.type === 'prologue') ({ heroes, enemies } = prologueUnits());
     else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
     $('#screen').hidden = true; $('#tabs').hidden = true; $('#battle').hidden = false; document.body.classList.add('in-battle');
     { const cb = $('#chatbtn'), ctl = $('#battle .b-ctl'); if (cb && ctl) ctl.appendChild(cb); } // the chat button joins the round controls
@@ -5061,7 +5151,7 @@
     RS = Math.max(1, Math.min(4, Math.ceil((cvs.getBoundingClientRect().width || VIEW.w * 2) * (window.devicePixelRatio || 1) / VIEW.w)));
     cvs.width = VIEW.w * RS; cvs.height = H * RS; g.imageSmoothingEnabled = false;
     $('.stage-wrap').style.aspectRatio = narrow ? '4 / 3' : '16 / 9';
-    speeds = speedsFor(cfg);
+    speeds = cfg.type === 'prologue' ? [1, 2] : speedsFor(cfg);
     // Auto ×10 runs may go 8× (only those), and show which battle of the run this is
     if (cfg.rep) speeds = [...speeds, 8];
     $('#b-rep').hidden = !cfg.rep && !siege; if (cfg.rep) $('#b-rep').innerHTML = `Auto <b>${cfg.rep.k}</b> / ${cfg.rep.n}`;
@@ -5091,8 +5181,9 @@
     R.units.forEach(u => { u._rs.walking = false; u._rs.ox = 0; });
     updateOverlay();
     if (storyDue(cfg, 's')) await playScene(cfg.stage.chapter + 's'); // the story: the chapter begins
+    if (cfg.type === 'prologue') { await playScene('ps'); await coach('<b>The heroes of old against the Void Titan.</b> Fight it as they did: tap a skill on the right, then the Titan. Their skills are at full power.', 'Fight!'); }
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : cfg.type === 'prologue' ? 'Long ago · the heroes of old against the Void Titan' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
@@ -5128,6 +5219,7 @@
       if (res !== 'win' || b.aborted) break;
     }
     if (arena) K.setRng(null);
+    if (cfg.type === 'prologue') { await prologueEnd(res === 'win' && !b.aborted); return; }
     b.stats = tot; b.turns = tot.turns; b.meterAll = meter;
     // arena: the server's result counts (the replay should always agree; warn if it ever does not)
     if (gb) { finishGboss(cfg, b); return; }
@@ -5459,6 +5551,8 @@
       const l = raw.trim(); if (!l) continue;
       const h = l.match(/^#+\s*CHAPTER\s+(\d+)\s*\S*\s*(START|BOSS)/i);
       if (h) { cur = o[(+h[1] - 1) + (h[2].toUpperCase() === 'START' ? 's' : 'b')] = []; continue; }
+      const pr = l.match(/^#+\s*PROLOGUE\s*\S*\s*(START|END)/i); // the prologue: keys ps and pe
+      if (pr) { cur = o['p' + pr[1][0].toLowerCase()] = []; continue; }
       const m = l.match(/^([^:]{1,40}):\s*(.+)$/); if (cur && m) cur.push([m[1].trim(), m[2].trim()]);
     }
     return o;
@@ -5497,13 +5591,13 @@
   function playScene(k) {
     let lines = STORY[k]; if (!lines || !lines.length) return Promise.resolve();
     S.story[k] = 1; save();
-    const c = parseInt(k, 10), inBattle = B && !$('#battle').hidden, host = inBattle ? $('#battle .stage-wrap') || $('#battle') : document.body;
+    const pro = k[0] === 'p', c = pro ? 9 : parseInt(k, 10), inBattle = B && !$('#battle').hidden, host = inBattle ? $('#battle .stage-wrap') || $('#battle') : document.body;
     const heroName = (S.hero && S.hero.name) || S.p.name, heroId = heroId0();
     // the player's own team tells the story: every companion who speaks (anyone but the hero, a boss or the narrator) is
     // played by a hero of the team, the first one to speak by the first team member and so on (round the team when more
     // speak than it has); in a battle the heroes still standing, else the campaign team. A team of the hero alone keeps
     // the written companions. Their names in the lines change along.
-    const team = (inBattle ? B.b.heroes.filter(u => u.alive).map(u => u.id) : teamIds('campaign')).filter(id => id !== heroId && C[id] && !C[id].pc);
+    const team = pro ? [] : (inBattle ? B.b.heroes.filter(u => u.alive).map(u => u.id) : teamIds('campaign')).filter(id => id !== heroId && C[id] && !C[id].pc);
     const cast = {}; let ci = 0;
     if (team.length) for (const [who] of lines) {
       if (/^(hero|narrator)$/i.test(who) || cast[who]) continue;
@@ -5513,9 +5607,9 @@
     const recast = s => Object.keys(cast).reduce((x, w) => x.split(w).join(cast[w]), s);
     lines = lines.map(([who, said]) => [cast[who] || who, recast(said)]);
     const el = document.createElement('div');
-    el.className = 'story' + (inBattle ? '' : ' page'); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', `Chapter ${ROMAN[c]} story`);
+    el.className = 'story' + (inBattle ? '' : ' page'); el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', pro ? 'Prologue' : `Chapter ${ROMAN[c]} story`);
     el.innerHTML = `${inBattle ? '' : `<div class="sc-bg" style="--art:url(${chapterArt(c)})"></div>`}<img class="sc-fig sc-l" alt=""><img class="sc-fig sc-r" alt="">
-      <span class="sc-ch">Chapter ${ROMAN[c]} · ${esc(K.CHAPTERS[c].name)}</span><button type="button" class="sc-skip">Skip ›</button>
+      <span class="sc-ch">${pro ? 'Prologue · Long ago' : `Chapter ${ROMAN[c]} · ${esc(K.CHAPTERS[c].name)}`}</span><button type="button" class="sc-skip">Skip ›</button>
       <div class="sc-box"><b class="sc-name"></b><p class="sc-text"></p><span class="sc-next" aria-hidden="true">▼</span></div>`;
     host.appendChild(el); if (inBattle) $('#battle').classList.add('in-story');
     const L = el.querySelector('.sc-l'), Rr = el.querySelector('.sc-r'), nm = el.querySelector('.sc-name'), tx = el.querySelector('.sc-text');

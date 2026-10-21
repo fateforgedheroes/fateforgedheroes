@@ -1599,6 +1599,11 @@ input::placeholder, textarea::placeholder { color: color-mix(in srgb, var(--mute
 .lg-rib.best { background: linear-gradient(180deg, #ffb07a, var(--ember)); }
 .lg-day.big { min-height: 150px; border-color: color-mix(in srgb, var(--gold) 60%, var(--line)); background: radial-gradient(100% 70% at 50% 30%, rgba(232, 184, 59, .2), transparent 70%), linear-gradient(180deg, #33261a, #18131c); }
 .lg-day.big .lg-medal { width: 70px; height: 70px; box-shadow: 0 0 0 2px var(--gold), 0 0 0 4px #000, 0 0 18px -2px var(--gold), inset 0 0 14px rgba(0, 0, 0, .8); }
+/* the beginner calendar (app.js showBeginner): the daily-reward card with week tabs; a hero day shows its portrait as the medal */
+.beg-pop .beg-wk { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px; margin: 2px auto 8px; } .beg-pop .beg-wk button { padding: 3px 10px; font-size: .75rem; }
+.lg-medal .beg-por { display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; }
+.lg-day .lg-medal .beg-por img, .lg-day.big .lg-medal .beg-por img { width: 100%; height: 100%; margin: 0; object-fit: cover; filter: none; } /* fills the round medal (the big medal's own img size would leave it small) */
+.beg-pop .beg-close { display: block; margin: 6px auto 0; }
 .lg-day.big .lg-medal img { width: 40px; height: 40px; }
 .lg-day.big .lg-medal img + img { width: 32px; height: 32px; }
 .lg-day.today { border: 2px solid var(--gold); transform: translateY(-4px); background: radial-gradient(100% 70% at 50% 25%, rgba(232, 184, 59, .28), transparent 70%), linear-gradient(180deg, #3a2c18, #1b151e); animation: lgpulse 1.6s ease-in-out infinite alternate; }

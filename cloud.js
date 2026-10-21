@@ -358,6 +358,8 @@
       try { if (session) await valid(); } catch (e) { /* an expired sign-in still counts, as a guest */ }
       try { await send(!!session); } catch (e) { if (session && e.status === 401) try { await send(false); } catch (e2) { /* offline */ } }
     },
+    // a database function anyone may call, also a guest (ffh_beginner_days): with the session when there is one
+    async pub(name, body) { if (!enabled) throw new Error('offline'); try { if (session) await valid(); } catch (e) { /* as a guest */ } return req('/rest/v1/rpc/' + name, { method: 'POST', body: body || {}, auth: !!session }); },
     // calls a database function (leaderboard, claim_arena_rewards)
     async rpc(name, body) { if (!(await valid())) throw new Error('Please sign in first.'); return req('/rest/v1/rpc/' + name, { method: 'POST', body: body || {} }); },
     // called on every local save; uploads a few seconds later

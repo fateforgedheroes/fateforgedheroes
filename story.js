@@ -1,6 +1,7 @@
 // The campaign story (app.js storyScene / playScene): a scene at the START of every chapter (before its first battle)
 // and one at its BOSS (when the boss walks onto the field), shown the first time on Easy and readable again from the
-// chapter's Story button. Edit the text below freely: a heading "## CHAPTER n — START" or "## CHAPTER n — BOSS"
+// chapter's Story button. The PROLOGUE (START before the prologue battle against the Void Titan, END after it) plays
+// once for a new player, before they make their own hero. Edit the text below freely: a heading "## CHAPTER n — START" or "## CHAPTER n — BOSS"
 // starts a scene ("(filled in)" after it is ignored), every line "Speaker: text" is one line of it. "Narrator" is a
 // line without a portrait, "Hero" is the player's own hero ({name} becomes the name they chose), any other speaker is a
 // hero or boss of the game by its name (their portrait is shown: heroes on the left, bosses on the right).
@@ -9,6 +10,30 @@
 // are collecting power to save the world, but every shard they gather brings the prison closer to breaking. The
 // Fateborn is the one person who can unite the essences without being consumed by them.
 var STORY_TEXT = `
+## PROLOGUE — START
+
+Narrator: An age ago, before the kingdoms had names, the Void Titan rose from the dark between the stars and swallowed the light of seven essences.
+
+Void Titan: Kneel, little sparks. Every world goes dark in the end. Yours is merely first.
+
+Aurelion: Not while the Radiant still burns. Shields up! We hold the line here, or nowhere.
+
+Liora: Seven essences, one will. Lend me your strength and I will keep you standing.
+
+Celesthyr: Then let us remind this beast what light can do.
+
+## PROLOGUE — END
+
+Void Titan: You cannot end me. I am the silence after every song!
+
+Liora: Then we will not end you. We will bind you. Celesthyr, Velmira, now!
+
+Narrator: The heroes of old poured every essence into one seal, and the Titan was locked away in a prison of light.
+
+Narrator: But no prison lasts forever. When its last guardian fell, it shattered into countless Fate Shards that rained across the land.
+
+Narrator: Ages passed. The heroes became legends, the shards became treasure, and the Titan dreamed in the dark. Now a new hero is about to awaken: one the shards answer to. The Fateborn.
+
 ## CHAPTER 1 — START (filled in)
 
 Narrator: The Fallen Kingdom burns beneath a sky without stars. Monsters roam its streets, and the royal banners lie buried in ash.
