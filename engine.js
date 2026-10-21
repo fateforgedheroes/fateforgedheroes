@@ -2298,32 +2298,57 @@ const K = (function () {
     { silver: 5000, fs: {} },
   ];
   const ARENA_TOKENS = 10, ARENA_TOKEN_MIN = 60; // max tokens, minutes per new token
-  // Arena bots fill the opponent list while there are few players: a team near the attacker's level, stronger at a higher rating.
-  const BOT_NAMES = ['Arena Warden', 'Iron Sentinel', 'Ashen Duelist', 'Gravecourt Knight', 'Stormblade Champion', 'Frostbound Guard', 'Umbral Gladiator', 'Radiant Vanguard'];
-  function arenaBot(rating, refLvl, seed) {
+  // Arena bots fill the opponent list while there are few players, and look like players: a fixed cast (BOT_NAMES), each
+  // with its own Fateborn (class and gender), avatar, favourite heroes, player level, a rating that drifts a little every
+  // week and a weekly record (arenaPersona). The server offers the one whose rating this week is closest to what it looks
+  // for; the leaderboard (app.js boardBots) lists the same cast with the same ratings. Their team: the Fateborn first and
+  // three heroes, near the attacker's level and stronger at a higher rating (arenaBot).
+  const BOT_NAMES = ['Kaelthorn', 'Mira', 'Duskrider', 'Thalia77', 'Rowan', 'IronVex', 'Sarafyn', 'noctis', 'Bram', 'Lyra Vale',
+    'Ashwalker', 'Korvin', 'Elowen', 'Grimwald', 'Nyx', 'Tavian', 'Frostbyte', 'Isolde', 'Varek', 'Selene', 'Orrin', 'Sablewing',
+    'Jory', 'Embermaw', 'Astrid', 'Dain', 'Wren', 'Caelum', 'Brynn', 'Halric', 'Zephyrine', 'Torvald', 'Lunara', 'Kestrel',
+    'Morrow', 'Ysolde', 'Davor', 'Fenna', 'Aldric', 'Rook_92'];
+  const hashN = (...a) => { let x = 2166136261; for (const v of a) { x = Math.imul(x ^ (v | 0), 16777619); x ^= x >>> 13; } x = Math.imul(x, 2246822507) >>> 0; x ^= x >>> 16; return (x >>> 0) / 4294967296; };
+  const arenaWeek = (t = Date.now()) => Math.floor((t / 864e5 + 3) / 7); // weeks start on Monday (UTC), as app.js evWeek
+  function arenaPersona(i, wk = arenaWeek()) {
+    const h = s => hashN(i, s), hw = s => hashN(i, s, wk);
+    const pc = PC_IDS[Math.floor(h(1) * PC_IDS.length)], fav = CHAMP_ORDER.filter(id => CHAMPS[id].rar >= 3);
+    const rating = Math.round(880 + h(2) * 760 + (hw(3) - 0.5) * 120);
+    const lvl = Math.max(10, Math.min(100, Math.round(12 + (rating - 880) / 9 + (h(4) - 0.5) * 10)));
+    const n = 6 + Math.floor(hw(5) * 45), wins = Math.round(n * Math.max(0.2, Math.min(0.85, 0.35 + (rating - 900) / 1500 + (hw(6) - 0.5) * 0.2)));
+    return { i, name: BOT_NAMES[i], pc, avatar: h(7) < 0.7 ? pc : fav[Math.floor(h(8) * fav.length)], rating, lvl, wins, losses: n - wins };
+  }
+  function arenaBot(rating, refLvl, seed, who) {
+    const p = arenaPersona(who ?? seed % BOT_NAMES.length);
     setRng(seeded(seed));
     try {
       const tier = Math.max(0, Math.min(4, Math.floor((rating - 900) / 200)));
       const rarW = [[60, 40, 0, 0], [30, 55, 15, 0], [10, 50, 35, 5], [0, 35, 50, 15], [0, 15, 55, 30]][tier];
-      const pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar >= 1), team = [];
-      while (team.length < 4) {
-        let r = rnd() * 100, rar = 1;
-        for (let i = 0; i < 4; i++) { r -= rarW[i]; if (r < 0) { rar = i + 1; break; } }
-        const cand = pool.filter(id => CHAMPS[id].rar === rar && !team.some(h => h.id === id));
-        if (!cand.length) continue;
-        const id = pick(cand), stars = Math.min(maxStars(id), baseStars(id) + rint(0, 2));
-        const lvl = Math.max(1, Math.min(maxLvl(stars, id), Math.round(refLvl + (rating - 1000) / 50 + rint(-2, 2))));
-        const rars = [[1, 2], [2, 3], [2, 3], [3, 4], [4]][tier];
-        const items = SLOTS.map(slot => { const it = genGear({ il: Math.max(1, lvl), slot, rars, up: 0.3, sets: pick([BASIC_SETS, ['scherpte', 'woede'], ['wilgenbast', 'levensbron']]) }, 0); for (let n = rint(0, 3 + tier * 2); n > 0 && it.lvl < MAX_GEAR_LVL; n--) { it.lvl++; upgradeMilestone(it); } return snapItem(it); });
-        team.push({ id, lvl, stars, sk: CHAMPS[id].skills.map(() => rint(0, tier)), items });
+      const pool = CHAMP_ORDER.filter(id => CHAMPS[id].rar >= 1), ids = [];
+      // the persona always picks the same heroes for a rating tier (hashed), so it keeps its team like a player does
+      for (let k = 0, t = 0; ids.length < 3 && t < 60; t++) {
+        let r = hashN(p.i, 20 + k, t) * 100, rar = 1;
+        for (let j = 0; j < 4; j++) { r -= rarW[j]; if (r < 0) { rar = j + 1; break; } }
+        const cand = pool.filter(id => CHAMPS[id].rar === rar && !ids.includes(id));
+        if (cand.length) { ids.push(cand[Math.floor(hashN(p.i, 10 + k, t) * cand.length)]); k++; }
       }
-      return { name: BOT_NAMES[seed % BOT_NAMES.length], team };
+      const rars = [[1, 2], [2, 3], [2, 3], [3, 4], [4]][tier], base = refLvl + (rating - 1000) / 50;
+      const gear = lvl => SLOTS.map(slot => { const it = genGear({ il: Math.max(1, lvl), slot, rars, up: 0.3, sets: pick([BASIC_SETS, ['scherpte', 'woede'], ['wilgenbast', 'levensbron']]) }, 0); for (let n = rint(0, 3 + tier * 2); n > 0 && it.lvl < MAX_GEAR_LVL; n--) { it.lvl++; upgradeMilestone(it); } return snapItem(it); });
+      const pl = Math.max(1, Math.min(60, Math.round(base + rint(-2, 2))));
+      const team = [{ id: p.pc, lvl: pl, stars: pcStars(pl), sk: pcSkills(p.pc, pl), items: gear(pl) }];
+      for (const id of ids) {
+        // stars enough for its level, as a player ascends the heroes they level (a bot used to field 2★ heroes at level 20 next to a level 46 Fateborn)
+        const want = Math.max(1, Math.round(base + rint(-2, 2)));
+        const stars = Math.min(maxStars(id), Math.max(baseStars(id) + rint(0, 2), Math.ceil(want / 10)));
+        const lvl = Math.min(maxLvl(stars, id), want);
+        team.push({ id, lvl, stars, sk: CHAMPS[id].skills.map(() => rint(0, tier)), items: gear(lvl) });
+      }
+      return { name: p.name, avatar: p.avatar, team };
     } finally { setRng(null); }
   }
 
   return {
     GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
-    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, setRng, seeded,
+    power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, arenaPersona, arenaWeek, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, ARENA_FURY, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,
     SLOTS, SLOT_NAMES, SETS, SET_FAMILY, setTiers, MAX_ASC, ASC_STARS, ASC_COST, ascCost, genGear, gearStats, upgradeCost, upgradeChance, upgradeMilestone, MAX_GEAR_LVL, fmtStat, sellValue, setCounts, activeSets,

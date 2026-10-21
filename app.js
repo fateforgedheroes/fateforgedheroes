@@ -1670,23 +1670,22 @@
     for (let i = dcl.length - 1; i >= 1; i--) if (dcl[i] >= 0 && K.DIFFS[i] && K.STAGES[dcl[i]]) return `${K.DIFFS[i].name} · ${stageName(dcl[i])}`;
     return K.STAGES[d.cleared] ? `Easy · ${stageName(d.cleared)}` : `${r.score} stages`;
   }
-  // the arena bots on the leaderboard (marked, without a rank, so the players' ranks stay those the weekly rewards use):
-  // the same names as the server's bots, a rating, record and hero picked per UTC week, so the list changes now and then
-  function boardBots() {
-    const wk = Math.floor(Date.now() / 6048e5), pool = K.CHAMP_ORDER.filter(id => C[id] && C[id].rar >= 2);
-    const h = (i, s) => { let x = (Math.imul(wk + 1, 2654435761) ^ Math.imul(i + 1, 40503) ^ Math.imul(s + 1, 2246822507)) >>> 0; x ^= x >>> 15; x = Math.imul(x, 2246822507) >>> 0; x ^= x >>> 13; return (x >>> 0) / 4294967296; };
-    return K.BOT_NAMES.map((name, i) => {
-      const score = Math.round(950 + h(i, 1) * 450), n = 8 + Math.floor(h(i, 2) * 40), wins = Math.round(n * Math.min(0.8, 0.3 + (score - 950) / 900));
-      return { bot: true, name, avatar: pool[Math.floor(h(i, 3) * pool.length)], score, detail: { wins, losses: n - wins } };
-    });
+  // the arena bots on the leaderboard, shown like players: the server's cast (K.arenaPersona) with this week's rating,
+  // record, player level and avatar, the same the arena offers them with. Ranked among the players by rating (a player's
+  // place is the server's rank plus the bots above it), so nothing tells them apart; the weekly top 5 rewards still go by
+  // the rank among players who fought (server).
+  const boardBots = () => K.BOT_NAMES.map((_, i) => { const p = K.arenaPersona(i); return { bot: true, name: p.name, avatar: p.avatar, lvl: p.lvl, score: p.rating, detail: { wins: p.wins, losses: p.losses } }; });
+  function withBots(rows) {
+    const bots = boardBots(), above = (l, s) => l.filter(x => x.score > s).length;
+    return rows.concat(bots).sort((a, b) => b.score - a.score).map(r => ({ ...r, rank: r.bot ? 1 + above(rows, r.score) + above(bots, r.score) : r.rank + above(bots, r.score) }));
   }
   function boardHtml() {
     const kinds = [['arena', 'Arena'], ['campaign', 'Campaign'], ['bosses', 'Boss Hall']];
     const seg = `<div class="seg" role="group" aria-label="Leaderboard">${kinds.map(([k, l]) => `<button type="button" data-act="arlb" data-kind="${k}" aria-pressed="${AR.lb === k}">${l}</button>`).join('')}</div>`;
     const fmt = r => AR.lb === 'arena' ? `${r.score} rating · ${r.detail.wins} W / ${r.detail.losses} L` : AR.lb === 'campaign' ? campaignText(r) : `${r.score} boss levels${r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}`;
-    const list = AR.board && AR.lb === 'arena' ? AR.board.concat(boardBots()).sort((a, b) => b.score - a.score) : AR.board;
-    const rows = list ? list.map(r => `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
-    const note = AR.lb === 'arena' ? 'Ratings from fights the server played. Arena bots are the opponents the arena fills in: they have no rank and win no rewards.' : 'From cloud saves of signed-in players.';
+    const list = AR.board && AR.lb === 'arena' ? withBots(AR.board) : AR.board;
+    const rows = list ? list.map(r => `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = AR.lb === 'arena' ? 'Ratings from fights the server played.' : 'From cloud saves of signed-in players.';
     return `<section class="ar-board"><div class="section-head"><h3>Leaderboard</h3>${seg}</div><p class="empty-note">${note}</p>
       ${AR.boardErr ? `<p class="ar-err">${esc(AR.boardErr)}</p>` : !AR.board ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
@@ -1709,7 +1708,7 @@
         ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
     const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')} · levels, skills and gear stay up to date by themselves</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
         <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>${AR.st && AR.st.defense ? 'Change defense team' : 'Set a defense team'}</button></div></div>`;
-    const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b>${o.kind === 'bot' ? ' <span class="tag">Bot</span>' : ''}<small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
+    const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b><small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
     const opps = `<section class="ar-opps"><div class="section-head"><h3>Opponents</h3><button class="btn small" data-act="arrefresh" ${AR.busy ? 'disabled' : ''}>New opponents</button></div>
       <p class="empty-note">Fight opens your arena team, to change it before the fight. A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
     // on a phone on its side the arena is four tabs (AR.tab, shell.html .ar-wrap[data-t]): Battle (rating and opponents),
@@ -2732,9 +2731,9 @@
       : main === 'bosses' ? `${r.score} boss levels${r.detail && r.detail.maxed ? ` · ${r.detail.maxed} maxed` : ''}` : main === 'boss' ? `Level ${r.score} / ${K.BOSS_LEVELS}`
       : main === 'siege' ? `Wave ${r.score} / ${K.SIEGE.waves}${r.detail && r.detail.kills ? ` · ${Number(r.detail.kills).toLocaleString('en-US')} enemies defeated` : ''}`
       : sub ? `Floor ${r.score} / ${K.TOWER.floors}` : `${r.score.toLocaleString('en-US')} floors${r.detail && r.detail.best ? ` · best ${r.detail.best}` : ''}`;
-    const list = LB.rows && main === 'arena' ? LB.rows.concat(boardBots()).sort((a, b) => b.score - a.score) : LB.rows;
-    const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''}${r.bot ? ' bot' : ''}"><span class="lb-rank">${r.bot ? '–' : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.bot ? '<small class="empty-note">Arena bot</small>' : r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
-    const note = main === 'guilds' ? 'Every guild ranked by its guild boss fights (counted by the server), plus your own guild. A fight counts for the guild its player was in at the time.' : main === 'arena' ? 'Ratings from fights the server played; arena bots have no rank.' : 'Top 100 of every player with an account, plus your own place.';
+    const list = LB.rows && main === 'arena' ? withBots(LB.rows) : LB.rows;
+    const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
+    const note = main === 'guilds' ? 'Every guild ranked by its guild boss fights (counted by the server), plus your own guild. A fight counts for the guild its player was in at the time.' : main === 'arena' ? 'Ratings from fights the server played.' : 'Top 100 of every player with an account, plus your own place.';
     return `<section class="th-sec lbg"><div class="th-head"><h3>Leaderboards</h3>${seg}</div>${pick}<p class="empty-note">${note}</p>
       ${LB.err ? `<p class="ar-err">${esc(LB.err)}</p>` : !LB.rows ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
@@ -5260,7 +5259,7 @@
       const lv = Object.fromEntries(o.team.map(h => [h.id, h.lvl]));
       ph = [o.team.map(h => h.id).filter(id => C[id])]; foeLvl = f => lv[f]; lvlL = 'Their power'; costL = 'Tokens';
       energy = `${AR.st.tokens} / ${K.ARENA_TOKENS}`; drops = `<span><small>Rating</small><b>${o.rating}</b></span>`;
-      back = 'Arena'; title = `vs ${esc(o.name)}`; sub = `Arena${o.kind === 'bot' ? ' · Bot' : ''} · power ${o.power.toLocaleString('en-US')}`; teamSel = '<span class="pp-tn">Arena team</span>';
+      back = 'Arena'; title = `vs ${esc(o.name)}`; sub = `Arena · power ${o.power.toLocaleString('en-US')}`; teamSel = '<span class="pp-tn">Arena team</span>';
       goTxt = 'Fight · 1 token'; if (AR.st.tokens < 1) goOff = 'No tokens left'; if (AR.busy) goOff = 'Please wait';
       lvl = o.power.toLocaleString('en-US');
     } else if (mode === 'defense') {

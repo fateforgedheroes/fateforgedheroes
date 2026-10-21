@@ -21,16 +21,22 @@ function tokensNow(K, p, now) {
 }
 const avgLvl = team => (team && team.length ? Math.round(team.reduce((t, h) => t + h.lvl, 0) / team.length) : 10);
 
-// three opponents: real players near your rating first, bots for the rest
+// three opponents: real players near your rating first, bots for the rest. A bot looks like a player (K.arenaPersona):
+// one of a fixed cast, the one whose rating this week is near what is looked for (one of the four nearest, none twice and
+// no name a real offer has), with that rating, so the leaderboard shows it the same. Only the server knows which is which.
 async function makeOffers(K, db, me, refLvl) {
   const players = (await db.opponents(me.user_id, me.rating)).filter(p => p.defense);
   players.sort(() => Math.random() - 0.5);
   const offers = players.slice(0, 3).map(p => ({ kind: 'player', user_id: p.user_id, name: p.name, avatar: p.avatar, rating: p.rating, power: p.defense_power, team: preview(p.defense) }));
-  const spread = [-60, 10, 90];
+  const spread = [-60, 10, 90], wk = K.arenaWeek(), used = new Set(offers.map(o => o.name));
+  const cast = K.BOT_NAMES.map((_, i) => K.arenaPersona(i, wk));
   for (let i = offers.length; i < 3; i++) {
-    const seed = randSeed(), rating = Math.max(0, me.rating + spread[i] + Math.round((Math.random() - 0.5) * 40));
-    const bot = K.arenaBot(rating, refLvl, seed);
-    offers.push({ kind: 'bot', name: bot.name, avatar: bot.team[0].id, rating, power: K.teamPower(bot.team), team: bot.team });
+    const want = me.rating + spread[i] + Math.round((Math.random() - 0.5) * 40);
+    const near = cast.filter(p => !used.has(p.name)).sort((a, b) => Math.abs(a.rating - want) - Math.abs(b.rating - want)).slice(0, 4);
+    const p = near[Math.floor(Math.random() * near.length)];
+    used.add(p.name);
+    const bot = K.arenaBot(p.rating, refLvl, randSeed(), p.i);
+    offers.push({ kind: 'bot', name: p.name, avatar: p.avatar, rating: p.rating, power: K.teamPower(bot.team), team: bot.team });
   }
   return offers.sort((a, b) => a.rating - b.rating);
 }
@@ -41,7 +47,7 @@ async function state(K, db, me) {
     rating: me.rating, wins: me.wins, losses: me.losses, defWins: me.def_wins, defLosses: me.def_losses,
     tokens: tk.tokens, nextToken: tk.next, weekFights: me.week_fights, unfinished: !!me.pending,
     defense: me.defense ? preview(me.defense) : null, defensePower: me.defense_power,
-    offers: (me.offers || []).map(o => ({ kind: o.kind, name: o.name, avatar: o.avatar, rating: o.rating, power: o.power, team: preview(o.team) })),
+    offers: (me.offers || []).map(o => ({ name: o.name, avatar: o.avatar, rating: o.rating, power: o.power, team: preview(o.team) })),
     rewards: await db.unclaimed(me.user_id),
   };
 }
@@ -64,7 +70,8 @@ export async function handle(K, db, user, body) {
   const bad = body.team === undefined ? null : K.checkTeam(body.team) || (devHeroBad(body.team, user) ? 'developer hero' : null), team = body.team && !bad ? tidy(body.team) : null;
 
   if (body.action === 'state') {
-    if (!me.offers) me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
+    // offers kept from before the bots looked like players (an old bot name) are made again
+    if (!me.offers || me.offers.some(o => o.kind === 'bot' && !K.BOT_NAMES.includes(o.name))) me = await db.updatePlayer(user.id, { offers: await makeOffers(K, db, me, avgLvl(team)) });
     return { state: await state(K, db, me) };
   }
   if (body.action === 'refresh') {
@@ -101,7 +108,7 @@ export async function handle(K, db, user, body) {
     const patch = { pending, offers: await makeOffers(K, db, me, avgLvl(team)) };
     if (!me.defense) { patch.defense = team; patch.defense_power = K.teamPower(team); }
     me = await db.updatePlayer(user.id, patch);
-    return { fight: { seed, att: team, def: defTeam, manual: true, before: pending.before, opponent: { name: o.name, rating: defRating, kind: o.kind } }, state: await state(K, db, me) };
+    return { fight: { seed, att: team, def: defTeam, manual: true, before: pending.before, opponent: { name: o.name, rating: defRating } }, state: await state(K, db, me) };
   }
   if (body.action === 'finish') {
     const p = me.pending;
@@ -110,7 +117,7 @@ export async function handle(K, db, user, body) {
     me = await db.updatePlayer(user.id, { pending: null }); // cleared first: the same fight can never count twice
     const { r, elo, res } = await settle(K, db, user, me, p, body.moves);
     me = await db.getPlayer(user.id);
-    return { fight: { seed: p.seed, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: p.before, opponent: { name: p.name, rating: p.defRating, kind: p.kind } }, state: await state(K, db, me) };
+    return { fight: { seed: p.seed, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: p.before, opponent: { name: p.name, rating: p.defRating } }, state: await state(K, db, me) };
   }
   // the old auto fight (game versions before manual arena play)
   if (body.action === 'fight') {
@@ -138,7 +145,7 @@ export async function handle(K, db, user, body) {
     if (!me.defense) { patch.defense = team; patch.defense_power = K.teamPower(team); }
     me = await db.updatePlayer(user.id, patch);
     return {
-      fight: { seed, att: team, def: defTeam, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: me0.rating, opponent: { name: o.name, rating: defRating, kind: o.kind } },
+      fight: { seed, att: team, def: defTeam, win: r.win, turns: r.turns, delta: elo.att, rating: res.att_rating, before: me0.rating, opponent: { name: o.name, rating: defRating } },
       state: await state(K, db, me),
     };
   }
