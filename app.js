@@ -757,7 +757,7 @@
     if (go === 'forge') { const spare = S.inv.filter(x => !x.owner).length; return `${S.inv.length} pieces of gear · ${spare} spare`; }
     if (go === 'altaar') { const n = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0); return n ? `${n} Fate ${n === 1 ? 'Shard' : 'Shards'} to summon with` : 'No Fate Shards yet'; }
     if (go === 'arena') return signedIn() ? 'Attack and climb the ranking' : 'Needs a free account';
-    if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : 'Friends, guild and mail'; }
+    if (go === 'social') { const n = signedIn() ? mailCount() : 0; return n ? `${n} new in Mail` : gqClaimN() ? 'Guild quest reward ready' : 'Friends, guild and mail'; }
     if (go === 'profiel') { const n = thClaimN(); return n ? `${n} ${n === 1 ? 'reward' : 'rewards'} to claim` : `Player level ${S.p.lvl}`; }
     if (go === 'market') return `${gemsAll().toLocaleString('en-US')} Crystals`;
     return '';
@@ -766,7 +766,7 @@
     const tut = firstSteps(), tour = tourOn() ? TOUR[tourStep] : null, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const btn = z => {
       const locked = !unlocked(z.go), main = z.go === 'campagne', start = tut && main;
-      const dot = !locked && !tut && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
+      const dot = !locked && !tut && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()) || (z.go === 'social' && gqClaimN()));
       const act = tut && !main ? 'data-act="tutlock"' : `data-act="go" data-go="${z.go}"`;
       const st = start ? 'Start here: your adventure begins in the Campaign' : tut ? 'Opens after your first battle' : locked ? `${LOCK_SVG} Opens after ${needTxt(z.go)}` : homeStatus(z.go);
       return `<button type="button" class="hb ${locked || (tut && !main) ? 'locked' : ''} ${start ? 'start' : ''} ${tour && tour.go === z.go ? 'tour-on' : ''}" ${act} data-zone="${z.go}">
@@ -780,7 +780,7 @@
   function sideNav() {
     const cur = tab === 'prep' ? prepNav() : tab === 'tourney' ? (tnKind() === 'arena' ? 'arena' : 'social') : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
-      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
+      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()) || (z.go === 'social' && gqClaimN()));
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
         <span class="sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><small>${esc(z.label)}</small>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</nav>`;
@@ -1816,6 +1816,7 @@
     if (!GD.mine) return err + guildBrowseHtml();
     if (GD.view === 'boss') return err + gbossHtml();
     if (GD.view === 'chest') return err + gchestHtml();
+    if (GD.view === 'quests') return err + gquestHtml();
     return err + guildHomeHtml();
   }
   function guildBrowseHtml() {
@@ -1854,6 +1855,8 @@
         ${acts.length ? `<span class="fr-acts gm-acts">${acts.join('')}</span>` : ''}</li>`;
     };
     const keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
+    if (!GQ.st || Date.now() - GQ.at > 60000) setTimeout(gqLoad, 0);
+    const gqN = GQ.st && GQ.st.guild ? GQ.st.quests.filter(gqDone).length : null;
     // the guild home: on a phone on its side the guild, its tiles and invites on the left and the members beside them
     // (.g-home); elsewhere everything under each other with Leave guild last
     return `<div class="g-home"><div class="g-left"><section class="g-card">${emblem(g)}<div class="g-head"><h3>${esc(g.name)} <span class="tag">[${esc(g.tag)}]</span></h3>
@@ -1861,6 +1864,7 @@
         ${info}</div></section>
       <div class="g-tiles">
         <button type="button" class="g-tile" data-act="gview" data-v="boss"><img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt=""><b>Guild Boss</b><small>${keysLeft} / ${K.GBOSS.keys} keys left today</small><small>${keyReset()}</small></button>
+        <button type="button" class="g-tile" data-act="gview" data-v="quests"><span class="g-chest-ic">${svgIcon('scroll')}</span><b>Guild Quests</b><small>${gqN === null ? 'Shared goals every week' : `${gqN} / 4 reached this week`}</small>${gqClaimN() ? '<span class="dot" aria-label="Reward to claim"></span>' : ''}</button>
         <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
         <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
       </div>
@@ -1926,6 +1930,69 @@
         ${next ? `<div class="xpbar"><i style="width:${Math.round((pts - prevMin) / (next.min - prevMin) * 100)}%"></i></div>` : ''}
         <small class="empty-note">Points = damage × the difficulty's multiplier. Every Monday (UTC) your chest arrives in your Mail.</small></div></section>
       <div class="tbl-wrap"><table class="g-tiers"><tr><th>Chest</th><th>Points</th><th>Reward</th></tr>${rows}</table></div>`;
+  }
+  // ---------- Guild Quests (0027_guild_quests.sql): four goals a week for the whole guild, counted only from what the
+  // server keeps (guild boss points and fights, arena wins, minutes played), each a number per member; a goal reached
+  // pays every member who helped once (gquest_claim, added with grantGift), all four a bonus chest for those who helped
+  // with two or more. GQ.st is the server's state (gquest_state: fetched with the social refresh every 2 minutes and when
+  // the guild opens); a dot on Social, the Guild tab and the tile while a reward waits. ----------
+  const GQ = { st: null, at: 0, who: '', busy: false };
+  const GQ_INFO = { // what counts, its icon, what a member must do to claim
+    boss: ["Guild boss points from every member's fights.", 'boss', 'one guild boss fight'],
+    keys: ['Guild boss fights: every key a member uses.', 'key', 'one guild boss fight'],
+    arena: ['Arena attacks won by members.', 'swords', 'one arena win'],
+    play: ['Minutes played by members, as the playtime chests count them.', 'hourglass', '15 minutes of play'],
+  };
+  const gqDone = q => Number(q.total) >= Number(q.target);
+  const gqCan = q => gqDone(q) && Number(q.mine) >= Number(q.min) && !q.claimed;
+  function gqClaimN() {
+    const s = GQ.st; if (!s || !s.guild || !signedIn()) return 0;
+    return s.quests.filter(gqCan).length + (s.bonus.done && s.bonus.ok && !s.bonus.claimed ? 1 : 0);
+  }
+  const gqVal = (k, v) => (v = Number(v), k === 'play' ? (v >= 60 ? `${Math.floor(v / 60)}h${v % 60 ? ` ${v % 60}m` : ''}` : `${v} min`) : v.toLocaleString('en-US'));
+  async function gqLoad() {
+    const cl = cloud(); if (!cl || !cl.signedIn() || GQ.busy || !unlocked('guild')) return;
+    GQ.busy = true; const was = gqClaimN();
+    try { const who = cl.info().email; if (GQ.who !== who) Object.assign(GQ, { who, st: null }); GQ.st = await cl.rpc('gquest_state'); GQ.at = Date.now(); } catch (e) { /* a database without 0027: no quests yet */ }
+    GQ.busy = false;
+    if (B) return;
+    if (tab === 'social' && SO.tab === 'guild' && GD.view === 'quests') render();
+    else if (gqClaimN() !== was && (tab === 'home' || tab === 'social')) render(); // a dot to add or take away
+  }
+  async function gqClaim(k) {
+    if (GQ.busy) return; GQ.busy = true;
+    let res = null; try { res = await cloud().rpc('gquest_claim', { q: k }); } catch (e) { toast('No connection to the server. Try again in a moment.', true); }
+    GQ.busy = false; if (!res) return;
+    if (res.rewards) {
+      grantGift(res.rewards); save(); hud(); SFX.up();
+      const q = GQ.st && GQ.st.quests.find(x => x.k === k);
+      mailPop(res.rewards, k === 'all' ? 'Guild quests · bonus chest' : `Guild quest · ${q ? q.name : ''}`);
+    } else toast('Not reached yet, already claimed, or you did not help with it.');
+    await gqLoad(); render();
+  }
+  function gquestHtml() {
+    if (!GQ.st || Date.now() - GQ.at > 30000) setTimeout(gqLoad, 0);
+    const head = `<div class="section-head" style="margin:0">${guildBack}<span class="tag">New quests in ${untilUtc(nextMonday())}</span></div>`;
+    const st = GQ.st;
+    if (!st) return head + '<p class="empty-note">Loading the guild quests…</p>';
+    if (!st.guild) return head + '<p class="empty-note">Join a guild to take part.</p>';
+    const rws = r => `<span class="tn-rws">${begParts(r).map(x => `<span class="tn-rw">${x[0]}<b>${x[1]}</b></span>`).join('')}</span>`;
+    const card = q => {
+      const [d, icn, how] = GQ_INFO[q.k] || ['', 'banner', ''], done = gqDone(q), pct = Math.min(100, Math.round(Number(q.total) / Math.max(1, Number(q.target)) * 100));
+      const helped = Number(q.mine) >= Number(q.min);
+      const act = q.claimed ? '<span class="tn-ok">✓ Claimed</span>' : gqCan(q) ? `<button type="button" class="btn primary small" data-act="gqclaim" data-k="${q.k}">Claim</button>` : `<span class="gq-st">${done ? `Help with ${how} to claim` : `${pct}%`}</span>`;
+      const ic = icn === 'boss' ? `<img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt="">` : svgIcon(icn);
+      return `<li class="gq-card ${done ? 'done' : ''} ${gqCan(q) ? 'ready' : ''}"><span class="gq-ic">${ic}</span><div class="gq-main"><b>${esc(q.name)}</b><small>${d}</small>
+        <div class="gq-bar"><i style="width:${pct}%"></i><span>${gqVal(q.k, q.total)} / ${gqVal(q.k, q.target)}</span></div>
+        <div class="gq-sub"><small class="gq-me">You: <b>${gqVal(q.k, q.mine)}</b>${helped ? '' : ` · ${how} to claim`}</small>${rws(q.r)}</div></div><span class="gq-act">${act}</span></li>`;
+    };
+    const b = st.bonus, n = st.quests.filter(gqDone).length;
+    const bAct = b.claimed ? '<span class="tn-ok">✓ Claimed</span>' : b.done && b.ok ? '<button type="button" class="btn primary small" data-act="gqclaim" data-k="all">Claim</button>' : `<span class="gq-st">${b.done ? 'Help with two quests to claim' : `${n} / 4`}</span>`;
+    const bonus = `<li class="gq-card bonus ${b.done ? 'done' : ''} ${b.done && b.ok && !b.claimed ? 'ready' : ''}"><span class="gq-ic">${svgIcon('gift')}</span><div class="gq-main"><b>Bonus chest</b><small>All four reached: a chest for everyone who helped with two or more.</small>
+      <div class="gq-bar"><i style="width:${n * 25}%"></i><span>${n} / 4 quests</span></div><div class="gq-sub">${rws(b.r)}</div></div><span class="gq-act">${bAct}</span></li>`;
+    const by = st.by.map(m => `<tr class="${m.me ? 'me' : ''}"><td>${m.avatar && C[m.avatar] ? por(m.avatar) : ''}<b>${esc(m.name)}</b></td><td class="num">${gqVal('boss', m.boss)}</td><td class="num">${m.keys}</td><td class="num">${m.arena}</td><td class="num">${gqVal('play', m.play)}</td></tr>`).join('');
+    return head + `<div class="gq-wrap lfit"><section class="gq-quests"><p class="empty-note gq-lede">Four goals for the whole guild this week. Reach one together and everyone who helped claims its reward.</p><ul class="gq-list">${st.quests.map(card).join('')}${bonus}</ul></section>
+      <section class="fr-sec gq-mem"><h3>Who helped</h3><div class="tbl-wrap"><table class="gq-tbl"><tr><th>Member</th><th>Boss points</th><th>Keys</th><th>Arena wins</th><th>Played</th></tr>${by}</table></div></section></div>`;
   }
   async function gbossFight() {
     if (GD.busy) return;
@@ -3034,7 +3101,7 @@
   async function socialLoad() {
     if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
-    paidLoad(); admCheck(); begLoad();
+    paidLoad(); admCheck(); begLoad(); gqLoad();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -3057,7 +3124,7 @@
     const cur = tab === 'prep' ? prepNav() : tab === 'tourney' ? (tnKind() === 'arena' ? 'arena' : 'social') : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const home = `<button type="button" class="nd-it" data-act="tab" data-tab="home"><span class="nd-ic nd-home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg></span><span class="nd-t"><b>Home</b><small>Your homebase</small></span></button>`;
     return `<div class="nd-box" role="menu" aria-label="Buildings">${home}${HOME_LIST.map(z => {
-      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
+      const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()) || (z.go === 'social' && gqClaimN()));
       return `<button type="button" class="nd-it ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" ${z.go === cur ? 'aria-current="page"' : ''}><span class="nd-ic sn-ic ${z.go}" style="background-image:url(${MENU_ART[z.go]})"></span><span class="nd-t"><b>${esc(z.label)}</b><small>${locked ? `${LOCK_SVG} Opens after ${esc(needTxt(z.go))}` : esc(homeStatus(z.go) || '')}</small></span>${dot ? '<i class="sn-dot" aria-hidden="true"></i>' : ''}</button>`;
     }).join('')}</div>`;
   }
@@ -3150,7 +3217,7 @@
   }
   function socialHtml() {
     const incoming = (SO.friends || []).filter(f => f.kind === 'incoming');
-    const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">Guild</button></div>`;
+    const tabs = `<div class="dtabs soc-tabs" role="tablist" aria-label="Social"><button type="button" role="tab" data-act="soctab" data-t="friends" aria-selected="${SO.tab === 'friends'}">Friends${incoming.length ? '<span class="dot"></span>' : ''}</button><button type="button" role="tab" data-act="soctab" data-t="guild" aria-selected="${SO.tab === 'guild'}">Guild${gqClaimN() ? '<span class="dot"></span>' : ''}</button></div>`;
     // the Discord invite, big, between the title and the Friends / Guild tabs (also when not signed in)
     const dc = `<a class="dc-banner" href="${DISCORD_URL}" target="_blank" rel="noopener">${DISCORD_SVG}<span class="dc-bt"><b>Join our Discord</b><small>Chat with other heroes, find a guild, share your pulls, report bugs and hear about updates first.</small></span><span class="btn dc-btn">Join</span></a>`;
     const head = `<div class="section-head"><div><h2>Social</h2><p class="lede">Add friends with their friend code and see how far they are.</p></div></div>${dc}${tabs}`;
@@ -3363,6 +3430,9 @@
     swords: '<path d="M2 2l7 7M2 2h2.5L11 8.5 8.5 11 2 4.5zM14 2l-7 7M14 2h-2.5L5 8.5 7.5 11 14 4.5zM4 12l2-2M12 12l-2-2"/>',
     banner: '<path d="M3 1.5h10V13l-5-3-5 3z"/>',
     gear: '<circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/><circle cx="8" cy="8" r="4.6"/>',
+    scroll: '<path d="M4 2h8.5a1.5 1.5 0 0 1 0 3H12v8.5a1.5 1.5 0 0 1-1.5 1.5H3a1.5 1.5 0 0 1 0-3h1zM4 2a1.5 1.5 0 0 0 0 3M4 13h6.5M6 6h4M6 8.5h4M6 11h2.5"/>',
+    key: '<circle cx="5" cy="8" r="3"/><path d="M8 8h6.5M12 8v2.5M14 8v2"/>',
+    hourglass: '<path d="M3.5 1.5h9M3.5 14.5h9M4.5 1.5c0 4 3.5 4.5 3.5 6.5s-3.5 2.5-3.5 6.5M11.5 1.5c0 4-3.5 4.5-3.5 6.5s3.5 2.5 3.5 6.5"/>',
   };
   const svgIcon = k => `<svg viewBox="0 0 16 16" aria-hidden="true">${SVG_IC[k]}</svg>`;
   async function friendAct(fn, body, okMsg) {
@@ -3603,6 +3673,7 @@
     }
     else if (act === 'gkick') confirmBox('Remove member?', `Remove <b>${esc(a.dataset.name)}</b> from the guild?`, 'Remove', () => guildAct('guild_kick', { other: id }, { ok: 'Member removed.', not_allowed: 'You cannot remove this member.' }));
     else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
+    else if (act === 'gqclaim') gqClaim(a.dataset.k);
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') openGuildPrep();
     else if (act === 'ptopen') ptPop(); // the playtime chests
