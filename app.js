@@ -802,7 +802,7 @@
   // a screen that fails to draw shows what went wrong and a way home, instead of leaving the old screen frozen
   function render() {
     document.body.dataset.tab = tab; paintVersion(); chatPaintBtn();
-    try { renderScreen(); if (needName() && !B && tab !== 'home') setTimeout(showNameBox, 300); }
+    try { renderScreen(); if (needName() && !B && tab !== 'home') setTimeout(showNameBox, 300); if (HO.ann && !B) setTimeout(hoardAnnounce, 400); }
     catch (e) {
       console.error(e);
       $('#screen').innerHTML = `<div class="lockbox"><div><h3>Something went wrong on this screen</h3><p class="empty-note">Please send this message to the developer: <code>${esc(tab)}: ${esc(e && e.message || e)}</code></p><button class="btn primary" data-act="tab" data-tab="home">Back to Home</button></div></div>`;
@@ -810,7 +810,7 @@
     }
   }
   function renderScreen() {
-    if (!B) MUSIC.play(tab === 'kerkers' || (tab === 'prep' && PREP.boss) ? 'boss' : 'home'); // the Boss Hall keeps the boss track from its screen through every fight
+    if (!B) MUSIC.play(tab === 'kerkers' || (tab === 'prep' && (PREP.boss || PREP.mode === 'hoard')) ? 'boss' : 'home'); // the Boss Hall keeps the boss track from its screen through every fight
     hud();
     const el = $('#screen');
     if (noHero() && prologueDue()) { el.innerHTML = ''; if (!B) setTimeout(() => { if (!B && prologueDue()) startPrologue(); }); return; } // a new player: the prologue first
@@ -999,7 +999,101 @@
   const bhArt = ci => chapterArt(Math.min(9, Math.floor(ci * 10 / K.BOSS_ORDER.length)));
   const bhLockTxt = ci => ci === 0 ? `Clear Chapter ${ROMAN[UNLOCKS.kerkers.ch - 1]} of the campaign first` : `Defeat ${K.BOSSES[K.BOSS_ORDER[ci - 1]].name} on level 1 first`;
   const bhDrops = n => K.bossLoot(n).rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE.random[Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear, a random slot">`).join('');
+  // ---------- The Goblin Hoard (0029_goblin_hoard.sql, engine HOARD): a secret level behind a rare golden portal, like
+  // Diablo's Cow Level. After every battle won the game asks the server to roll for a portal (hoardRoll; the server
+  // decides: at most one roll a minute, never within 4 days of the last portal, about one a week for an active player).
+  // A portal stays open 24 hours for one run; while it is open the Boss Hall shows the Hoard at the top of its list and
+  // nowhere else does. The run is the server's (Edge Function action 'hoard'); the game replays it (runBattle type
+  // 'hoard': loot goblins spill coins when slain and run off with their sacks when they reach their turn, the Goblin King
+  // drops the jackpot) and adds the Sigils the server counted. HO.portal = the open portal, HO.last = the last run. ----------
+  const HO = { portal: null, last: null, at: 0, busy: false, ann: false };
+  const hoardOpen = () => !!(HO.portal && new Date(HO.portal.expires_at) > Date.now());
+  const hoardLvlMe = () => K.hoardLvl(S.cleared, S.dcl);
+  async function hoardLoad() {
+    const cl = cloud(); if (!cl || !cl.signedIn() || !unlocked('kerkers')) return;
+    const was = hoardOpen();
+    try { const r = await cl.rpc('hoard_state'); HO.portal = (r && r.portal) || null; HO.last = (r && r.last) || null; HO.at = Date.now(); } catch (e) { /* a database without 0029: no portals yet */ }
+    if (!B && hoardOpen() !== was && tab === 'kerkers') render();
+  }
+  async function hoardRoll() {
+    const cl = cloud(); if (!cl || !cl.signedIn() || !unlocked('kerkers') || hoardOpen()) return;
+    try {
+      const r = await cl.rpc('hoard_roll');
+      if (r && r.portal) { HO.portal = r.portal; if (r.new) { HO.ann = true; if (!B) hoardAnnounce(); } }
+    } catch (e) { /* a database without 0029: no portals yet */ }
+  }
+  // a portal opened: a golden popup once, when no battle is on screen (after the result is closed)
+  function hoardAnnounce() {
+    if (!HO.ann || B || !hoardOpen() || document.querySelector('.hoard-pop')) return;
+    HO.ann = false;
+    const el = document.createElement('div');
+    el.className = 'unlock-pop hoard-pop'; el.setAttribute('role', 'alertdialog'); el.setAttribute('aria-label', 'The Goblin Hoard');
+    el.innerHTML = `<div class="unlock-card hoard-card"><div class="hoard-portal" aria-hidden="true"><span class="hp-por">${por(K.HOARD.art.goblin)}</span></div><span class="tag">A secret portal</span><h2>The Goblin Hoard</h2>
+      <p>A shimmering golden portal tears open… On the other side, loot goblins and their King sit counting their Sigils. Slay them before they run off with their sacks!</p>
+      <p class="empty-note">The portal stays open for 24 hours, for one run. You also find it at the top of the Boss Hall.</p>
+      <div class="hoard-acts"><button class="btn primary" type="button" data-hg="go">Enter the portal</button><button class="btn" type="button" data-hg="later">Later</button></div></div>`;
+    document.body.appendChild(el); SFX.up();
+    el.querySelector('[data-hg="go"]').focus();
+    el.addEventListener('click', e => { const b = e.target.closest('[data-hg]'); if (!b) return; el.remove(); SFX.click(); if (b.dataset.hg === 'go') openHoardPrep(); });
+  }
+  function openHoardPrep() {
+    if (!hoardOpen()) { toast('The portal has closed.', true); BV.view = 'bosses'; setTab('kerkers'); return; }
+    preBg(3); useTeam('boss'); prepOpen({ mode: 'hoard' });
+  }
+  // the Hoard's row at the top of the Boss Hall list, only while a portal is open
+  function hoardRow() {
+    if (!hoardOpen()) return '';
+    const max = K.hoardSigils(hoardLvlMe(), K.HOARD.flee.length, true);
+    return `<button type="button" class="cl-ch bl-ch hoard" data-act="hoardgo" style="--art:url(${bhArt(9)});--c:#f3c64a">
+      <span class="cl-num bl-por">${por(K.HOARD.art.goblin)}</span>
+      <span class="cl-t"><small>A secret portal · closes in ${untilUtc(new Date(HO.portal.expires_at).getTime())}</small><b class="cl-name">The Goblin Hoard</b>
+        <span class="cl-prog">${K.HOARD.flee.length} loot goblins and their King · one run</span></span>
+      <span class="cl-gear hoard-loot">${ic('coin')}<b>up to ${max.toLocaleString('en-US')}</b><small>Sigils</small></span></button>`;
+  }
+  async function hoardFight() {
+    if (HO.busy) return;
+    HO.busy = true; render();
+    let r;
+    try { r = await cloud().fn('arena', { action: 'hoard', team: snapTeam(teamIds('boss')) }); }
+    catch (e) { r = { error: 'No connection to the server. Check your internet and try again.' }; }
+    HO.busy = false;
+    if (r.error || !r.hoard) { toast(r.error || 'The portal would not open.', true); hoardLoad(); render(); return; }
+    const f = r.hoard; HO.portal = null;
+    if (f.sigils > 0) { grantGift({ silver: f.sigils }); save(); }
+    runBattle({ type: 'hoard', team: f.team, lvl: f.lvl, seed: f.seed, fight: f, area: 4, bg: chapterBg(3), title: 'The Goblin Hoard' });
+  }
+  // a goblin slain: silver Sigils burst from it with what it carried; the King: the jackpot
+  function hoardCoins(t) {
+    const rs = t._rs, lvl = B.cfg.lvl, n = t.isBoss ? K.hoardSigils(lvl, 0, true) : K.hoardSigils(lvl, 1, false);
+    burst(rs.x, rs.y - rs.m.top / 2, ['#eef2f6', '#b8c2cc', '#7f8a96'], t.isBoss ? 60 : 26, t.isBoss ? 2.6 : 1.9, 2, 0.06); // silver Sigils
+    popup(t, `+${n.toLocaleString('en-US')}`, t.isBoss ? 'sigil big' : 'sigil');
+    SFX.coin && SFX.coin();
+  }
+  // a goblin escapes: it runs off to the right with its sack and is gone
+  async function hoardFlee(t) {
+    const rs = t._rs; if (!rs) return;
+    rs.walking = true; popup(t, 'Escaped!', 'debuff');
+    await tween(650, k => { rs.ox = k * k * 240; updateOverlay(); });
+    rs.gone = true; rs.walking = false; if (rs.el) rs.el.hidden = true;
+    updateOverlay();
+  }
+  function finishHoard(cfg, b) {
+    const f = cfg.fight, m = $('#modal'), n = K.HOARD.flee.length, sil = Number(f.sigils) || 0;
+    hud();
+    // the server's run counts (its Sigils were added when it came in); the replay should always agree
+    const rr = K.hoardResult(b.enemies, cfg.lvl); if (rr.kills !== f.kills || rr.king !== f.king) console.warn('Hoard replay differs from the server result', cfg.seed);
+    if (f.king || f.kills >= n / 2) SFX.win(); else SFX.lose();
+    m.innerHTML = `<div class="modal-box result hoard-res" role="dialog" aria-modal="true" aria-label="The Goblin Hoard"><h2>${f.kills === n && f.king ? 'The Hoard is yours!' : 'The portal closes'}</h2><p class="tag">The Goblin Hoard · enemy level ${f.lvl}</p>
+      <ul class="rewards"><li><span class="aff" style="--c:var(--gold)">G</span><span>Loot goblins slain: <b>${f.kills} / ${n}</b>${f.fled ? ` · ${f.fled} ran off with their sacks` : ''}</span></li>
+        <li><span class="aff" style="--c:var(--ember)">K</span><span>${f.king ? '<b>The Goblin King fell</b> and dropped his jackpot' : 'The Goblin King kept his jackpot'}</span></li>
+        <li class="loot hoard-sum">${ic('coin')}<span><b>+${sil.toLocaleString('en-US')} Sigils</b></span></li></ul>
+      ${meterHtml(b)}
+      <div class="modal-actions"><button class="btn primary" data-act="modal" data-go="hoard">Back to the Boss Hall</button></div></div>`;
+    m.hidden = false; m.querySelector('.btn').focus();
+    HO.last = { ...f, at: new Date().toISOString() };
+  }
   function bossListHtml() {
+    if (Date.now() - HO.at > 60000) setTimeout(hoardLoad, 0);
     const rows = K.BOSS_ORDER.map((id, i) => {
       const bo = K.BOSSES[id], open = bossOpen(i), best = S.bh[id] || 0, SS = K.SETS[K.bossSets(i)[0]], nx = Math.min(K.BOSS_LEVELS, best + 1);
       const cur = open && best < K.BOSS_LEVELS && (i === K.BOSS_ORDER.length - 1 || !bossOpen(i + 1));
@@ -1012,7 +1106,7 @@
     }).join('');
     return `<div class="campaign cv cl bhl">${bhHead('')}${evHint(evNow('hunt'))}
       <p class="cl-hint">Twenty-five bosses, ten levels each. Beat a boss on level 1 to open the next. Every boss drops its own six-piece set; every two levels are one campaign difficulty.</p>
-      <div class="cl-list">${rows}</div></div>`;
+      <div class="cl-list">${hoardRow()}${rows}</div></div>`;
   }
   const bhHead = back => `<div class="cv-head">${back}<span class="cv-emb" style="background-image:url(${MENU_ART.kerkers})" aria-hidden="true"></span><div class="cv-ht"><h2>Boss Hall</h2><p>Twenty-five bosses, each with phases, a passive and a Break Meter.</p></div></div>`;
   function dungeonsHtml() {
@@ -3155,7 +3249,7 @@
   async function socialLoad() {
     if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
-    paidLoad(); admCheck(); begLoad(); gqLoad(); gsLoad();
+    paidLoad(); admCheck(); begLoad(); gqLoad(); gsLoad(); hoardLoad();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -3728,6 +3822,7 @@
     else if (act === 'gkick') confirmBox('Remove member?', `Remove <b>${esc(a.dataset.name)}</b> from the guild?`, 'Remove', () => guildAct('guild_kick', { other: id }, { ok: 'Member removed.', not_allowed: 'You cannot remove this member.' }));
     else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'gqclaim') gqClaim(a.dataset.k);
+    else if (act === 'hoardgo') openHoardPrep();
     else if (act === 'gsbuy') gsBuy(a.dataset.id);
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') openGuildPrep();
@@ -3766,6 +3861,7 @@
       else if (m === 'arena') { useTeam('arena'); arenaCall('start', { offer: PREP.offer }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } else { toast(r.error || 'The fight could not start.', true); setTab('arena'); } }); }
       else if (m === 'defense') arenaCall('defense', { team: snapTeam(teamIds('defense')) }).then(r => { if (r.state) { toast('This team now defends you in the arena.'); setTab('arena'); } else toast(r.error || 'The defense could not be saved.', true); });
       else if (m === 'guild') { useTeam('guild'); gbossFight(); }
+      else if (m === 'hoard') { useTeam('boss'); hoardFight(); }
       else startCampaign(PREP.stage);
     }
     else if (act === 'ppback') {
@@ -3773,6 +3869,7 @@
       if (m === 'tower') { TV.view = 'floors'; setTab('tower'); } else if (m === 'boss') { BV.view = 'levels'; setTab('kerkers'); }
       else if (m === 'siege') setTab('siege'); else if (m === 'arena' || m === 'defense') setTab('arena');
       else if (m === 'guild') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
+      else if (m === 'hoard') { BV.view = 'bosses'; setTab('kerkers'); }
       else { CV.view = 'stages'; setTab('campagne'); }
       window.scrollTo({ top: 0 });
     }
@@ -4122,7 +4219,7 @@
   const SPEED_UNLOCK = [[2, 3], [3, 14], [5, 7]];
   let spd = 1, speeds = [1];
   // arena fights are replays of a fight already decided, so every unlocked speed (also 5×) may be used
-  const beatenBefore = cfg => cfg.type === 'arena' || cfg.type === 'gboss' || cfg.type === 'siege' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
+  const beatenBefore = cfg => cfg.type === 'arena' || cfg.type === 'gboss' || cfg.type === 'hoard' || cfg.type === 'siege' || (cfg.type === 'stage' ? cfg.i <= clearedOn(cfg.diff) : cfg.n <= (S.bh[cfg.id] || 0));
   function speedsFor(cfg) {
     const reached = S.cleared + 1, replay = beatenBefore(cfg);
     return [1, ...SPEED_UNLOCK.filter(([sp, at]) => reached >= at && (sp < 5 || replay)).map(([sp]) => sp)].sort((a, b) => a - b);
@@ -4208,11 +4305,11 @@
     pestbrenger: 81, skeletridder: 80, doodsmagier: 78, banshee: 76, vampier: 78, bloedpriesteres: 78, gevallenridder: 76, hellehond: 70,
     helsebruut: 81, succubus: 76, afgrondsduivel: 81, hagedisstrijder: 78, hagedissjamaan: 78, hagedisbruut: 79, moerasheks: 76, krokodilbeest: 70,
     cultist: 78, cultgruwel: 80, wouddruide: 78, steengolem: 81, ijselementaal: 81, gravestalker: 78, cryptguard: 78, soulreaver: 78, dreadarcher: 78,
-    gravewarden: 79, ashgoblin: 72, flameberserker: 76, cinderhound: 70, magmabrute: 80, hellfireshaman: 76, mosscrawler: 70, thornbeast: 70,
+    gravewarden: 79, ashgoblin: 72, lootgoblin: 72, flameberserker: 76, cinderhound: 70, magmabrute: 80, hellfireshaman: 76, mosscrawler: 70, thornbeast: 70,
     rotvineshambler: 80, bogreaper: 78, woodwraith: 79, frostfangwolf: 70, iceboundknight: 79, glacierbrute: 81, frostbornwitch: 76, frozenhorror: 80,
     stormimp: 72, thunderraider: 78, tempestharpy: 76, stormcaller: 78, thundergolem: 80, brimstone: 90, voidtitan: 90, frostcolossus: 90,
     plaguelord: 90, bloodempress: 90, stormbehemoth: 90, ashenphoenix: 90, shadowlich: 90, ironjuggernaut: 90, sealeviathan: 90, celestial: 90,
-    overlord: 90, boneking: 90, treant: 90, dunewyrm: 90, netherqueen: 90, grakk: 90, frostwitch: 90, serpentpriest: 90, doomharvester: 90,
+    overlord: 90, boneking: 90, treant: 90, dunewyrm: 90, netherqueen: 90, grakk: 90, goblinking: 90, frostwitch: 90, serpentpriest: 90, doomharvester: 90,
     crystaltitan: 90, vampirelord: 90, lizardking: 90, chaosabom: 90, stonedragon: 90, zaroth: 100, frostborn: 100, seraphimfallen: 100,
     blightedtitan: 100, endlessoracle: 100
   };
@@ -4230,7 +4327,7 @@
   // smaller than the rest
   const CROWN = {
     arkanis: 0.24, astraea: 0.12, bloodsnarl: 0.11, celesthyr: 0.21, dio: 0.17, draelyn: 0.19, drakulen: 0.13, elyndra: 0.155, faedrin: 0.17,
-    grimtar: 0.14, ignara: 0.14, ithyra: 0.09, kaelira: 0.17, krogash: 0.23, liora: 0.19, malreth: 0.16, mirella: 0.08, morgrim: 0.12, morveth: 0.23,
+    grimtar: 0.14, ignara: 0.14, ithyra: 0.09, kaelira: 0.17, krogash: 0.23, liora: 0.19, lootgoblin: 0.1, malreth: 0.16, mirella: 0.08, morgrim: 0.12, morveth: 0.23,
     nithara: 0.12, nyressa: 0.09, oraneth: 0.15, selenia: 0.17, seraphine: 0.13, sylvara: 0.13, thalessa: 0.18, theryn: 0.22, vaessa: 0.13,
     vorlund: 0.27, zulgroth: 0.2
   };
@@ -4278,7 +4375,7 @@
   }
   function layout(heroes, enemies) {
     const pos = formation(heroes);
-    const siege = B && B.cfg.type === 'siege';
+    const siege = B && (B.cfg.type === 'siege' || B.cfg.type === 'hoard');
     heroes.forEach(u => place(u, (siege ? SIEGE_HERO : HERO_POS)[pos.get(u)], -220));
     if (siege) { siegeLayout(enemies); return; }
     const boss = enemies.find(u => u.big || u.id === 'morwenna');
@@ -4343,7 +4440,7 @@
         bk.classList.toggle('broken', broken);
         bk.querySelector('i').style.width = (broken ? 100 : u.brk / u.breakMax * 100) + '%';
         bk.querySelector('span').textContent = broken ? 'BROKEN' : `${Math.ceil(u.brk)}/${u.breakMax}`;
-        rs.el.querySelector('.ph').textContent = `Phase ${u.phase + 1}/${u.nPhases}`;
+        rs.el.querySelector('.ph').textContent = u.loot ? u.name : `Phase ${u.phase + 1}/${u.nPhases}`; // the Goblin King: his name
         if (u.immortal && B) { const m = B.b.meter[u.uid]; rs.el.querySelector('.ph').textContent = `${Math.round(m ? m.taken : 0).toLocaleString('en-US')} damage`; }
       }
       rs.el.querySelector('.fxrow').innerHTML = chips.join('');
@@ -5139,7 +5236,8 @@
     },
     healed: (t, amt) => { popup(t, '+' + amt, 'heal'); rise(t._rs.x, t._rs.y - 10, ['#9be070', '#d8ffb0'], 6, 18); updateOverlay(); },
     float: (t, txt, kind) => popup(t, txt, kind),
-    death: t => { t._rs.deadAt = performance.now(); SFX.death(); burst(t._rs.x, t._rs.y - t._rs.m.top / 2, ['#6a5a58', '#3a3036', '#8a7a78'], 18, 1.6, 2, 0.08); updateOverlay(); },
+    death: t => { t._rs.deadAt = performance.now(); SFX.death(); burst(t._rs.x, t._rs.y - t._rs.m.top / 2, ['#6a5a58', '#3a3036', '#8a7a78'], 18, 1.6, 2, 0.08); if (t.loot && B && B.cfg.type === 'hoard') hoardCoins(t); updateOverlay(); },
+    flee: t => hoardFlee(t),
     revive: t => { t._rs.deadAt = 0; popup(t, 'Revived!', 'heal'); rise(t._rs.x, t._rs.y - 8, ['#ffe8a0', '#aef08a'], 18, 22); updateOverlay(); },
     spawn: (u, respawn) => {
       if (!respawn) {
@@ -5344,7 +5442,7 @@
   // battle skips it. PREP = { mode, stage, ph, boss, n, tower, from (Siege start wave), offer (arena opponent) }
   const PREP = { mode: 'stage', stage: 0, ph: 0, boss: null, n: 1, tower: null, from: 1, offer: 0 };
   // the building lit in the side bar and the menu while the team screen is open: the mode's own
-  function prepNav() { return { tower: 'tower', boss: 'kerkers', siege: 'siege', arena: 'arena', defense: 'arena', guild: 'social' }[PREP.mode] || 'campagne'; }
+  function prepNav() { return { tower: 'tower', boss: 'kerkers', hoard: 'kerkers', siege: 'siege', arena: 'arena', defense: 'arena', guild: 'social' }[PREP.mode] || 'campagne'; }
   const prepOpen = o => { Object.assign(PREP, { ph: 0, boss: null, tower: null }, o); setTab('prep'); window.scrollTo({ top: 0 }); };
   function openPrep(i) { preBg(K.STAGES[i].chapter); useTeam('campaign'); prepOpen({ mode: 'stage', stage: i }); }
   function openBossPrep(id, n) { preBg(Math.floor(K.BOSS_ORDER.indexOf(id) * K.CHAPTERS.length / K.BOSS_ORDER.length)); S.bhCur = id; useTeam('boss'); prepOpen({ mode: 'boss', boss: id, n }); }
@@ -5371,7 +5469,7 @@
     const mode = PREP.mode || 'stage', tower = mode === 'tower' && K.TOWERS.includes(PREP.tower) ? PREP.tower : null, boss = mode === 'boss' && K.BOSSES[PREP.boss] ? PREP.boss : null;
     let ph, lvl, rars = [], tile, energy, back, title, sub, teamSel, auto = '', act = 'toggle', fits = () => true, drops = '', warn = '';
     // what the middle and the button say: the cost (energy, a ticket, a token, a key), the enemy level, Fight
-    let costL = 'Energy', lvlL = 'Enemy level', goTxt = 'Fight', goOff = '', foeLvl = () => lvl, foeNote = '';
+    let costL = 'Energy', lvlL = 'Enemy level', goTxt = 'Fight', goOff = '', foeLvl = () => lvl, foeNote = '', foeHead = '';
     if (mode === 'siege') {
       const w = PREP.from, W = K.siegeWave(w), cp = Math.ceil(w / K.SIEGE.cp) * K.SIEGE.cp; sgTick(); useTeam('siege');
       ph = [K.siegeFoes(w)]; lvl = W.lvl; energy = `${S.sgT} / ${K.SIEGE.tickets}`; costL = 'Tickets';
@@ -5401,6 +5499,17 @@
       drops = `<span><small>Points</small><b>×${K.GBOSS.mult[GD.d]}</b></span>`;
       back = 'Guild boss'; title = esc(K.BOSSES[art].name); sub = `Guild boss · ${ess}`; teamSel = '<span class="pp-tn">Guild Boss team</span>';
       goTxt = 'Attack · 1 key'; if (!keysLeft) goOff = 'No keys left today'; if (GD.busy) goOff = 'Fighting…';
+    } else if (mode === 'hoard') {
+      // the Goblin Hoard: the Boss Hall team against the loot goblins and their King (all Aether: no essence edge)
+      if (!hoardOpen()) { setTimeout(() => { BV.view = 'bosses'; setTab('kerkers'); }); return ''; }
+      useTeam('boss'); lvl = hoardLvlMe(); ph = [[]]; costL = 'Portal open'; energy = untilUtc(new Date(HO.portal.expires_at).getTime());
+      foeHead = `<span class="pp-tn">${K.HOARD.flee.length + 1} foes</span>`;
+      drops = `<span><small>Sigils (max)</small><b class="hoard-max">${K.hoardSigils(lvl, K.HOARD.flee.length, true).toLocaleString('en-US')}</b></span>`;
+      back = 'Boss Hall'; title = 'The Goblin Hoard'; sub = 'A secret level · one run'; teamSel = '<span class="pp-tn">Boss Hall team</span>';
+      goTxt = 'Enter the Hoard'; if (HO.busy) goOff = 'The portal opens…';
+      const fc = (id, label, cls) => `<span class="pp-c foe ${cls}" style="--ec:${AFF_COL.Aether}" title="${label}">${por(id)}${essBadge('Aether')}</span>`;
+      foeNote = `<div class="pp-slots foes">${fc(K.HOARD.art.goblin, `Loot Goblin ×${K.HOARD.flee.length}`, '')}${fc(K.HOARD.art.king, 'Goblin King', 'boss')}</div>
+        <p class="empty-note pp-note">${K.HOARD.flee.length} loot goblins and the Goblin King. Every goblin slain spills ${K.hoardSigils(lvl, 1, false).toLocaleString('en-US')} Sigils, but they run off with their sacks after a few turns: hit fast and hit many. The King never runs and drops ${K.hoardSigils(lvl, 0, true).toLocaleString('en-US')} when he falls.</p>`;
     } else if (tower) {
       // a tower floor: its own team (heroes of its essence and your own hero, tapped in and out with twpick), one fight, no energy
       const f = Math.min(K.TOWER.floors, twProg(tower) + 1), F = K.towerFloor(f), n = twTeam(tower).length;
@@ -5443,7 +5552,7 @@
         <section class="pp-vs"><b class="pp-vsb">VS</b>
           <div class="pp-info"><span><small>${lvlL}</small><b>${lvl}</b></span>${drops || `<span><small>Drops</small><span class="st-dic">${rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[tile][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear">`).join('')}</span></span>`}<span><small>${costL}</small><b>${energy}</b></span></div>
           <p class="pp-edge">${strong ? `<span class="good">${strong} ${strong === 1 ? 'hero hits' : 'heroes hit'} Strong</span>` : ''}${strong && weak ? ' · ' : ''}${weak ? `<span class="bad">${weak} ${weak === 1 ? 'hero hits' : 'heroes hit'} Weak</span>` : ''}${!strong && !weak ? 'No essence edge either way' : ''}</p></section>
-        <section class="pp-side foe"><div class="pp-h">${ph.length > 1 ? `<div class="seg pp-ph" role="group" aria-label="Phase">${ph.map((p, k) => `<button type="button" class="${k === PREP.ph ? 'on' : ''}" data-act="ppph" data-n="${k}" aria-pressed="${k === PREP.ph}">Phase ${k + 1}${p.some(f => K.BOSSES[f]) ? ' · Boss' : ''}</button>`).join('')}</div>` : `<span class="pp-tn">${foes.length} ${foes.length === 1 ? 'foe' : 'foes'}</span>`}</div>
+        <section class="pp-side foe"><div class="pp-h">${ph.length > 1 ? `<div class="seg pp-ph" role="group" aria-label="Phase">${ph.map((p, k) => `<button type="button" class="${k === PREP.ph ? 'on' : ''}" data-act="ppph" data-n="${k}" aria-pressed="${k === PREP.ph}">Phase ${k + 1}${p.some(f => K.BOSSES[f]) ? ' · Boss' : ''}</button>`).join('')}</div>` : foeHead || `<span class="pp-tn">${foes.length} ${foes.length === 1 ? 'foe' : 'foes'}</span>`}</div>
           ${foeNote || `<div class="pp-slots foes">${foes.map(foeCard).join('')}</div>`}
           <p class="pp-ess">${[...new Set(foes.map(f => U(f).aff))].map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</p></section>
       </div>
@@ -5524,13 +5633,14 @@
     endBattleView(); B = null; render(); window.scrollTo({ top: 0 });
   }
   async function runBattle(cfg) {
-    SFX.unlock(); MUSIC.play(cfg.type === 'gboss' || cfg.type === 'boss' || cfg.type === 'prologue' || (cfg.stage && cfg.stage.boss) ? 'boss' : 'battle');
+    SFX.unlock(); MUSIC.play(cfg.type === 'gboss' || cfg.type === 'hoard' || cfg.type === 'boss' || cfg.type === 'prologue' || (cfg.stage && cfg.stage.boss) ? 'boss' : 'battle');
     // Arena: both teams come from the server's snapshots and the dice from its seed (K.arenaSetup). A manual fight
     // (cfg.fight.manual) is played here by hand and its moves go to the server, which replays it (K.arenaReplay) and decides.
     // Guild boss: also a replay of the server's fight (K.gbossSetup), on auto, until the boss's turn cap.
-    const gb = cfg.type === 'gboss', arena = cfg.type === 'arena' || gb, nPh = arena ? 1 : cfg.nPh || K.PHASES;
+    const gb = cfg.type === 'gboss', hd = cfg.type === 'hoard', arena = cfg.type === 'arena' || gb || hd, nPh = arena ? 1 : cfg.nPh || K.PHASES;
     let heroes, enemies;
     if (gb) ({ heroes, enemies } = K.gbossSetup(cfg.team, cfg.d, cfg.ess, cfg.seed));
+    else if (hd) ({ heroes, enemies } = K.hoardSetup(cfg.team, cfg.lvl, cfg.seed));
     else if (arena) ({ heroes, enemies } = K.arenaSetup(cfg.att, cfg.def, cfg.seed));
     else if (cfg.type === 'prologue') ({ heroes, enemies } = prologueUnits());
     else { heroes = (cfg.ids || S.team).map(id => K.heroUnit(id, S.roster[id], itemsOf(id))); enemies = phaseUnits(cfg, 0); }
@@ -5539,10 +5649,10 @@
     $('#toast').hidden = true;
     const siege = cfg.type === 'siege';
     $('#b-title').textContent = cfg.title; $('#b-round').textContent = (siege ? `Wave ${cfg.from} · ` : nPh > 1 ? `Phase 1/${nPh} · ` : '') + 'Turn 1';
-    $('#battle').classList.toggle('siege', siege); setFig(siege ? SIEGE_FIG : 1);
+    $('#battle').classList.toggle('siege', siege || hd); setFig(siege || hd ? SIEGE_FIG : 1); // the Hoard: nine foes on the Siege's field
     $('#b-log').innerHTML = ''; $('#b-skills').innerHTML = ''; $('#b-hint').textContent = ' ';
     R.area = cfg.area; R.bg = cfg.bg;
-    const narrow = window.innerWidth < 640 && !siege; // the Siege always shows its whole courtyard (ten enemies on the right)
+    const narrow = window.innerWidth < 640 && !siege && !hd; // the Siege always shows its whole courtyard (ten enemies on the right)
     VIEW.x = narrow ? 60 : 0; VIEW.w = narrow ? 360 : 480;
     // the canvas is drawn at the screen's own resolution (RS device pixels per game pixel): pixel-art backgrounds stay
     // blocky (smoothing off), animated heroes are drawn smoothly from their finer frames
@@ -5559,7 +5669,7 @@
     let b = new K.Battle(heroes, enemies, hooks);
     // a manual arena fight starts by hand every time (auto can be switched on for that fight only); its moves go to the server
     const manualArena = cfg.type === 'arena' && cfg.fight && cfg.fight.manual;
-    $('#b-skip').hidden = !(gb || (cfg.type === 'arena' && !manualArena)); // a replay of the server's fight can be skipped
+    $('#b-skip').hidden = !(gb || hd || (cfg.type === 'arena' && !manualArena)); // a replay of the server's fight can be skipped
     b.auto = manualArena ? false : arena || !!cfg.rep || (S.auto && autoOk());
     if (gb) { b.capUnit = enemies[0]; b.cap = K.GBOSS.turns; }
     B = { b, cfg, ph: 0, nPh, moves: [] }; paintVersion();
@@ -5581,7 +5691,7 @@
     if (storyDue(cfg, 's')) await playScene(cfg.stage.chapter + 's'); // the story: the chapter begins
     if (cfg.type === 'prologue') { await playScene('ps'); await coach('<b>The heroes of old against the Void Titan.</b> Fight it as they did: tap a skill on the right, then the Titan. Their skills are at full power.', 'Fight!'); }
     bannerQ = Promise.resolve();
-    await showBanner(cfg.title, gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : cfg.type === 'prologue' ? 'Long ago · the heroes of old against the Void Titan' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
+    await showBanner(cfg.title, hd ? 'A secret level · slay them before they run off with their sacks' : gb ? `Guild boss · ${K.DIFFS[cfg.d].name} · deal as much damage as you can` : arena ? (manualArena ? 'Arena · you choose every move' : 'Arena · both teams fight on auto') : cfg.type === 'tower' ? `${twName(cfg.ess)} · one fight, ${enemies.length} enemies` : siege ? `Wave ${cfg.from} · hold the gate as long as you can` : cfg.type === 'prologue' ? 'Long ago · the heroes of old against the Void Titan' : `Phase 1 / ${K.PHASES} · The battle begins`, 'big', 800);
     // the very first battle: the coach explains the goal, phases and the turn order before the fight starts
     TUT.on = !arena && cfg.type === 'stage' && cfg.i === 0 && !cfg.diff && S.cleared < 0; TUT.turns = 0; coachHide();
     if (TUT.on) await coach(`<b>Your first battle!</b><ul><li><b>Goal:</b> defeat every enemy. A stage has <b>${K.PHASES} phases</b>: ${K.PHASES} fights in a row. Your heroes keep their HP between them and recover 15%.</li><li><b>Turn order:</b> the portraits at the top show who acts next. Faster units act more often.</li><li>Win to earn <b>gear, Sigils and XP</b> and to open the next stage.</li></ul>`, "Let's fight");
@@ -5621,6 +5731,7 @@
     b.stats = tot; b.turns = tot.turns; b.meterAll = meter;
     // arena: the server's result counts (the replay should always agree; warn if it ever does not)
     if (gb) { finishGboss(cfg, b); return; }
+    if (hd) { finishHoard(cfg, b); return; }
     if (siege) {
       const run = cfg.run, won = run.last >= K.SIEGE.waves;
       if (won) SFX.win(); else { SFX.lose(); R.dim = 0.4; }
@@ -6191,6 +6302,7 @@
     const run = cfg.run, best = run.last > run.best0, n0 = v => Math.round(v).toLocaleString('en-US');
     S.sg.runs = (S.sg.runs || 0) + 1; if (run.kills) track('siege');
     save(); sgTick();
+    if (run.last >= cfg.from) hoardRoll(); // a wave held counts as a battle won (the Goblin Hoard's portal)
     let dl = 0; const d = () => `style="animation-delay:${(dl++) * 0.12}s"`;
     const tile = (icon, amount, title, cls) => `<li class="rt ${cls || ''}" title="${esc(title)}" ${d()}><span class="rt-ic">${icon}</span>${amount !== '' ? `<b>${amount}</b>` : ''}</li>`;
     const tiles = [
@@ -6654,6 +6766,7 @@
       setTimeout(() => offer(0), 1400);
     }
     if (cfg.rep) repStep(cfg, win);
+    if (win) hoardRoll();
   }
   // damage meter: the engine's per-battle meter (uid -> dealt by source, healed by source, taken) added up over the phases
   function addMeter(into, m) {
@@ -6800,6 +6913,7 @@
     else if (go === 'prep' && cfg.type === 'tower') openTowerPrep(cfg.ess);
     else if (cfg.type === 'arena') setTab('arena');
     else if (cfg.type === 'gboss') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
+    else if (cfg.type === 'hoard') { BV.view = 'bosses'; setTab('kerkers'); }
     else setTab(cfg.type === 'stage' ? 'campagne' : cfg.type === 'tower' ? 'tower' : 'kerkers');
   }
 

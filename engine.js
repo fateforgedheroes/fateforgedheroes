@@ -1491,7 +1491,7 @@ const K = (function () {
   const wait = () => Promise.resolve();
   const NOHOOKS = {
     chooseAction: null, record: null, turnStart: wait, before: wait, after: wait, pause: wait, round() {}, hit() {}, healed() {},
-    float() {}, death() {}, revive() {}, log() {}, update() {}, spawn() {}, banner: wait, breakHit() {}, affinityBreak: wait, phase: wait,
+    float() {}, death() {}, revive() {}, log() {}, update() {}, spawn() {}, banner: wait, breakHit() {}, affinityBreak: wait, phase: wait, flee: wait,
   };
   const lowest = list => list.reduce((a, b) => (a.hp / a.maxHp <= b.hp / b.maxHp ? a : b));
 
@@ -1613,6 +1613,8 @@ const K = (function () {
       if (u.alive && u.passive === 'harmony') for (const a of this.living(this.allies(u))) if (a.hp < a.maxHp) { this.heal(a, a.maxHp * 0.04, u, 'Passive'); ticked = true; }
       if (ticked) await this.h.pause(360);
       if (!u.alive || this.check()) { this.endTurn(u, null); return; }
+      // a loot goblin (the Goblin Hoard): on its u.flee-th own turn it runs off with its sack instead of acting
+      if (u.flee && (u.stacks.flee = (u.stacks.flee || 0) + 1) >= u.flee) { await this.escape(u); this.check(); this.endTurn(u, null); return; }
       if (u.hall) this.rage(u);
       if (u.blight && u.alive && !SKIP.some(k => this.has(u, k))) { await this.aura(u); if (this.check()) { this.endTurn(u, null); return; } }
       let used = null;
@@ -1658,6 +1660,13 @@ const K = (function () {
       if (!amt) return;
       const m = this.meter[u.uid] || (this.meter[u.uid] = { dmg: {}, heal: {}, taken: 0 });
       if (kind === 'taken') m.taken += amt; else m[kind][label] = (m[kind][label] || 0) + amt;
+    }
+    // a unit that leaves the field alive (a loot goblin): it no longer fights or counts, and is not slain (u.fled)
+    async escape(u) {
+      u.alive = false; u.fled = true; u.effects = [];
+      this.h.float(u, 'Escaped!', 'debuff');
+      this.h.log(`${u.name} escapes with its sack!`, 'enemy');
+      await this.h.flee(u);
     }
     // a boss's own turns count towards its enrage (see ENRAGE); the stack count lives in the effect's v
     rage(u) {
@@ -2189,6 +2198,62 @@ const K = (function () {
   ];
   const gchestTier = pts => GCHEST.filter(c => pts >= c.min).pop() || null;
 
+  // ---------- The Goblin Hoard (shared by the game and the server): a secret level behind a rare portal ----------
+  // As Diablo's Cow Level: a horde of loot goblins and their Goblin King in one fight, at the player's own campaign
+  // level (hoardLvl). Every goblin slain spills Sigils (HOARD.kill stage rewards at that level); a goblin that reaches its
+  // own HOARD.flee-th turn runs off with its sack (u.flee, Battle.escape); the King never flees, enrages like a Boss
+  // Hall boss and drops the jackpot (HOARD.king) when it falls. The fight ends when every goblin is slain or gone, or the
+  // team falls; what was slain pays either way. The portal and the run are the server's (0029_goblin_hoard.sql, the
+  // Edge Function's action 'hoard'); the game replays the fight from the same seed (hoardSetup), like the guild boss.
+  const HOARD = {
+    flee: [2, 2, 3, 3, 3, 4, 4, 5], // one goblin per entry: its own turns before it escapes
+    kill: 4, king: 32,              // Sigils: × winSilver(level) per goblin slain, for the King
+    hp: 1, atk: 0.5, kingF: 3.3,    // goblins slippery rather than strong; the King tough (measured: at the player's level ~5 of 8 goblins
+                                    // slain and the King ~75% of runs, ~45 stage rewards; a full clear 64)
+    // the Loot Goblin and the Goblin King: their own pictures (manga.js, hi/), the Ash Goblin's and Warlord Grakk's stats
+    art: { goblin: 'lootgoblin', king: 'goblinking' }, base: { goblin: 'ashgoblin', king: 'grakk' },
+    goblinSk: [SK('Sigil Toss', 'enemy', 'ranged', 'arrow', 0, 'Throws a fistful of Sigils: 70% Attack.', [D(0.7)]),
+      SK('Scurry', 'self', 'buff', 'buff', 3, 'Speed Up for 2 turns.', [BF('spdUp', 2)])],
+    kingSk: [SK('Sigil Smash', 'enemy', 'melee', 'smash', 0, 'Strike of 110%.', [D(1.1)]),
+      SK('Treasure Rain', 'enemies', 'magic', 'quake', 3, 'Attack of 60% on all enemies. 40% chance of Speed Down for 2 turns.', [D(0.6), DB('spdDown', 2, 0.4)], { startCd: 1 }),
+      SK('Royal Decree', 'allies', 'buff', 'buff', 4, 'Defense Up for all goblins for 2 turns.', [BF('defUp', 2)], { startCd: 2 })],
+  };
+  // registered in ALL_UNITS only (not ENEMIES or BOSSES), so no chapter, capture, bestiary or Boss Hall knows them
+  ALL_UNITS[HOARD.art.goblin] = { ...ENEMIES[HOARD.base.goblin], name: 'Loot Goblin', aff: 'Aether', skills: HOARD.goblinSk };
+  ALL_UNITS[HOARD.art.king] = { ...BOSSES[HOARD.base.king], name: 'Goblin King', aff: 'Aether', phases: [HOARD.kingSk], nPhases: 1, passive: null, passiveName: 'Hoard Keeper', passiveDesc: 'Never runs from his hoard; enrages like a Boss Hall boss.' };
+  // the player's level for the Hoard: the enemy level of their place in the campaign on the hardest difficulty they play
+  function hoardLvl(cleared, dcl) {
+    let d = 0, i = Math.max(0, cleared | 0);
+    for (let k = DIFFS.length - 1; k >= 1; k--) if (dcl && Number(dcl[k] ?? -1) >= 0) { d = k; i = Number(dcl[k]); break; }
+    return diffLvl(STAGES[Math.min(i, STAGES.length - 1)], d);
+  }
+  function hoardUnits(lvl) {
+    const gob = HOARD.flee.map(f => {
+      const u = enemyUnit(HOARD.art.goblin, lvl);
+      u.maxHp = u.hp = Math.round(u.maxHp * HOARD.hp); u.atk = Math.round(u.atk * HOARD.atk);
+      return Object.assign(u, { name: 'Loot Goblin', aff: 'Aether', flee: f, loot: true, skills: mkSkills(HOARD.goblinSk), passive: null });
+    });
+    const k = toughen(enemyUnit(HOARD.art.king, lvl), HOARD.kingF);
+    Object.assign(k, { name: 'Goblin King', aff: 'Aether', hall: true, loot: true, nPhases: 1, thresholds: [], skills: mkSkills(HOARD.kingSk), passive: null });
+    return [...gob, k];
+  }
+  // sets the seeded dice and builds the fight; the caller runs it with b.auto and then calls setRng(null)
+  function hoardSetup(team, lvl, seed) { setRng(seeded(seed)); return { heroes: arenaUnits(team, 'hero'), enemies: hoardUnits(lvl) }; }
+  const hoardSigils = (lvl, kills, king) => Math.round(winSilver(lvl) * (kills * HOARD.kill + (king ? HOARD.king : 0)));
+  // what a finished Hoard fight paid: goblins slain (not fled), the King slain, the Sigils
+  function hoardResult(enemies, lvl) {
+    const kills = enemies.filter(u => !u.isBoss && !u.alive && !u.fled).length, king = enemies.some(u => u.isBoss && !u.alive);
+    return { kills, fled: enemies.filter(u => u.fled).length, king, sigils: hoardSigils(lvl, kills, king) };
+  }
+  async function hoardFight(team, lvl, seed) {
+    try {
+      const { heroes, enemies } = hoardSetup(team, lvl, seed), b = new Battle(heroes, enemies);
+      b.auto = true;
+      const res = await b.run();
+      return { ...hoardResult(enemies, lvl), win: res === 'win', turns: b.turns };
+    } finally { setRng(null); }
+  }
+
   // ---------- Arena (shared by the game and the server, supabase/functions/arena) ----------
   // A team snapshot is what the server stores and fights with: [{ id, lvl, stars, sk: [..], items: [{ slot, rar, lvl, il, set, main, subs }] }].
   const power = st => Math.round(st.hp * 0.12 + st.atk * 1.8 + st.def * 1.3 + st.spd * 4 + st.crit * 5 + st.cdmg * 2 + (st.acc + st.res) * 0.8);
@@ -2347,7 +2412,7 @@ const K = (function () {
   }
 
   return {
-    GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier,
+    GBOSS, gbossEss, gbossUnit, gbossSetup, gbossFight, gbossPoints, GCHEST, gchestTier, HOARD, hoardLvl, hoardSetup, hoardFight, hoardResult, hoardSigils,
     power, snapItem, teamPower, MAX_IL, checkTeam, arenaUnits, arenaSetup, arenaFight, arenaReplay, arenaMove, arenaElo, ARENA_TIERS, arenaTier, ARENA_RANK_REWARDS, ARENA_TOKENS, ARENA_TOKEN_MIN, arenaBot, BOT_NAMES, arenaPersona, arenaWeek, setRng, seeded,
     ESSENCES, BEATS, HIT, hitType, affMult, RARITIES, RAR_CAP, ROLES, EFFECTS, STAT_NAMES, PCT_STATS, CHAMPS, CHAMP_ORDER, DEV_HEROES, ENEMIES, BOSSES, BOSS_ORDER, ALL_UNITS, STAGES, CHAPTERS, DIFFS, diffLvl, stageDiff, stageLoot, bossLoot, LOOT_UP, DIFF_PW, ROOM_PW, stagePhases, ELIXIR, elixirXp, elixirFits, CRIT_CAP, stageUnits,
     START_ROSTER, START_TEAM, STARTERS, STARTER_SUB, stageUnlock, TUNE, xpNeed, winXp, winSilver, SIEGE, siegeWave, siegeFoes, siegeUnits, siegeKill, siegeReward, siegeRest, BOSS_LEVELS, bossLvl, bossRoom, bossDiff, isWall, WALLS, ENRAGE, ARENA_FURY, BLIGHT, BTRAIT, bossTrait, TOWERS, TOWER, towerFloor, towerFoes, towerUnits, towerReward, EXP_HEROES, EXPEDITIONS, expReward, ENERGY, energyMax, stageEnergy, bossEnergy, bossUnits, bossSets, bossFoes, bossPhases, PHASES, phaseRest,

@@ -61,8 +61,25 @@ async function settle(K, db, user, me, p, moves) {
   return { r, elo, res };
 }
 
+// The Goblin Hoard (0029_goblin_hoard.sql): a run through an open portal. The server checks the portal, plays the fight
+// at the player's own campaign level (K.hoardLvl from the save's progress) and marks the portal used with the run, only
+// when it was still unused, so two calls at once cannot both pay; the game replays the fight from the seed and adds the
+// Sigils the server counted.
+async function hoard(K, db, user, body) {
+  const bad = K.checkTeam(body.team) || (devHeroBad(body.team, user) ? 'developer hero' : null);
+  if (bad) return { error: 'This team cannot be used (' + bad + ').', status: 400 };
+  const portal = await db.hoardPortal(user.id);
+  if (!portal) return { error: 'No portal is open for you.', status: 404 };
+  const team = tidy(body.team), pr = (await db.progress(user.id)) || {};
+  const lvl = K.hoardLvl(Number(pr.cleared ?? -1), Array.isArray(pr.dcl) ? pr.dcl : []), seed = randSeed();
+  const r = await K.hoardFight(team, lvl, seed), run = { seed, lvl, team, ...r };
+  if (!(await db.hoardUse(portal.id, run))) return { error: 'This portal was used already.', status: 409 };
+  return { hoard: run };
+}
+
 export async function handle(K, db, user, body) {
   body = body || {};
+  if (body.action === 'hoard') return hoard(K, db, user, body);
   let me = await db.getPlayer(user.id);
   const name = clean(body.name), avatar = avatarOk(K, body.avatar);
   if (!me) me = await db.createPlayer(user.id, { name, avatar });

@@ -54,6 +54,15 @@ const db = {
   async progress(id: string) { const r = await rest('saves?select=cleared:data->cleared,dcl:data->dcl&user_id=' + eq(id)); return r[0] || null; },
   async keysUsed(id: string) { return rest('rpc/gboss_keys_used', { method: 'POST', body: { uid: id } }); },
   async gbossHit(row: Record<string, unknown>) { await rest('guild_boss_hits', { method: 'POST', body: row }); },
+  // the Goblin Hoard (0029_goblin_hoard.sql): the open portal, and marking it used with its run (only while unused)
+  async hoardPortal(id: string) {
+    const now = encodeURIComponent(new Date().toISOString());
+    return (await rest('hoard_portals?select=id,expires_at&used_at=is.null&expires_at=gt.' + now + '&order=opened_at.desc&limit=1&user_id=' + eq(id)))[0] || null;
+  },
+  async hoardUse(pid: number, run: Record<string, unknown>) {
+    const rows = await rest('hoard_portals?used_at=is.null&id=' + eq(String(pid)), { method: 'PATCH', body: { used_at: new Date().toISOString(), run }, prefer: 'return=representation' });
+    return rows.length > 0;
+  },
 };
 
 Deno.serve(async (req: Request) => {

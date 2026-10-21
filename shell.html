@@ -3062,6 +3062,21 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .cl-ch:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.08); box-shadow: 0 8px 20px rgba(0, 0, 0, .5), 0 0 14px rgba(240, 190, 90, .25); }
 .cl-ch.cur { border: 2px solid var(--gold); box-shadow: 0 0 0 1px #000, 0 0 18px rgba(240, 190, 90, .45); }
 .cl-ch.done { border-color: rgba(140, 210, 110, .55); }
+/* the Goblin Hoard (app.js hoardRow): a golden, shimmering row at the top of the Boss Hall while a portal is open */
+.cl-ch.hoard { border: 2px solid #f3c64a; box-shadow: 0 0 0 1px #000, 0 0 22px rgba(243, 198, 74, .55); animation: hoardGlow 2.4s ease-in-out infinite; }
+.cl-ch.hoard .cl-num { border-color: #f3c64a; } .cl-ch.hoard .cl-name { color: #ffe08a; text-shadow: 0 0 10px rgba(255, 200, 80, .6); }
+.hoard-loot { --rc: #f3c64a; justify-items: center; } .hoard-loot b { font: 700 1.05rem var(--font-display); color: #ffe08a; } .hoard-loot img, .hoard-max img { width: 18px; height: 18px; vertical-align: -3px; }
+@keyframes hoardGlow { 50% { box-shadow: 0 0 0 1px #000, 0 0 34px rgba(243, 198, 74, .85); } }
+@keyframes hoardSpin { to { transform: rotate(1turn); } }
+.hoard-card { border-color: #f3c64a; background: radial-gradient(circle at 50% 0, #4a3610, var(--panel) 72%); }
+.hoard-portal { position: relative; width: 120px; height: 120px; margin: 4px auto 8px; border-radius: 50%; display: grid; place-items: center;
+  background: radial-gradient(circle, #fff6c8 0 18%, #ffd84a 34%, #c9862a 56%, rgba(120, 70, 10, 0) 72%); box-shadow: 0 0 30px rgba(255, 210, 90, .8); }
+.hoard-portal::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; background: conic-gradient(from 0deg, transparent, rgba(255, 230, 140, .85), transparent 30%, rgba(255, 200, 80, .7), transparent 60%, rgba(255, 240, 170, .8), transparent 85%); animation: hoardSpin 3.2s linear infinite; mask: radial-gradient(circle, transparent 54%, #000 58%); -webkit-mask: radial-gradient(circle, transparent 54%, #000 58%); }
+.hoard-portal .hp-por img { width: 64px; height: 64px; border-radius: 50%; filter: drop-shadow(0 0 8px rgba(255, 220, 120, .9)) sepia(.35) saturate(1.4); }
+.hoard-acts { display: flex; gap: 8px; justify-content: center; margin: 10px 0 6px; }
+.pop.sigil { color: #eef2f6; text-shadow: 1px 1px 0 #1c2026, -1px -1px 0 #1c2026, 0 0 8px rgba(200, 215, 230, .8); } /* Sigils from a slain loot goblin */
+.pop.sigil.big { font-size: clamp(16px, 2.6vw, 30px); }
+.hoard-res .hoard-sum b { font: 700 1.2rem var(--font-display); color: #ffe08a; }
 .cl-ch.locked { cursor: not-allowed; filter: grayscale(.75) brightness(.55); }
 .cl-num { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; font: 700 1.3rem var(--font-display); color: #f7dfa4; background: radial-gradient(circle, #3a2a14, #120c08 70%); border: 2px solid var(--gold); box-shadow: 0 0 10px rgba(217, 180, 90, .35); }
 .cl-ch.done .cl-num { border-color: #9fe08a; color: #d8f5c6; }
@@ -3761,6 +3776,8 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .g-tile { flex-direction: row; justify-content: flex-start; text-align: left; } .g-tile > img.spr, .g-tile > .g-chest-ic, .g-tile > .lock-ic { width: 28px !important; height: 28px !important; padding: 2px; } .g-tile { min-height: 0; padding: 3px 5px !important; } .g-tile > .lock-ic { padding: 6px !important; } .g-tile > b { font-size: .72rem; } .g-tile small { display: none; }
   .section-head:has(+ .dc-banner) { padding-block: 2px !important; margin-bottom: 3px; } .soc-tabs { margin-bottom: 3px !important; } .soc-tabs button { min-height: 28px !important; }
   .g-invite > h3 { display: none; }
+  /* the Goblin Hoard's portal popup: a smaller portal and text, so the buttons fit */
+  .hoard-portal { width: 62px; height: 62px; margin: 0 auto 2px; } .hoard-portal .hp-por img { width: 40px; height: 40px; } .hoard-card h2 { font-size: 1.1rem !important; margin: 2px 0; } .hoard-card p { font-size: .76rem; margin: 2px 0; } .hoard-card p.empty-note { display: none; } .hoard-acts { margin: 6px 0 2px; }
   .g-tiles { grid-template-columns: 1fr 1fr; } .g-tile > .g-medal { width: 28px; height: 28px; flex: none; } .g-tile > .g-medal .lock-ic { width: 14px; height: 14px; } .g-tile > .dot { top: 3px; right: 3px; width: 7px; height: 7px; }
   /* Guild Quests: the quests on the left, who helped on the right, each column scrolls on its own (.gq-wrap.lfit) */
   .gq-wrap { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 6px; margin-top: 4px; align-items: stretch; }
