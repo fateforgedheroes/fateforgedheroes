@@ -3270,6 +3270,17 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .rs-n { width: 100%; font: 700 .82rem var(--font-display); font-variant-numeric: tabular-nums; border-bottom: 2px solid; padding-bottom: 1px; }
 .rs-n.dmg { color: #ff8a7a; border-color: #c0392b; } .rs-n.tak { color: #8ab8ff; border-color: #3a78d8; } .rs-n.heal { color: #9fe08a; border-color: #3fa86b; }
 .rs2 > .lede, .rs2 > .coach-note { margin: 0 14px; text-align: left; } .rs2 > .meter { margin: 0 14px; text-align: left; }
+/* defeat tips (app.js lossCard): what would help most, each with a button that goes there */
+.rs2 > .lt { margin: 0 14px; padding: 8px 10px; text-align: left; border: 1px solid rgba(217, 180, 90, .4); border-left: 3px solid #e0a040; border-radius: 8px; background: linear-gradient(90deg, rgba(64, 32, 14, .75), rgba(20, 14, 12, .55)); }
+.lt-h { display: block; margin-bottom: 5px; font: 700 .86rem var(--font-display); color: #f7c77a; letter-spacing: .03em; }
+.lt ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.lt li { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: .86rem; line-height: 1.3; color: #efe3cf; }
+.lt li + li { padding-top: 6px; border-top: 1px solid rgba(217, 180, 90, .15); }
+.lt-ic { display: grid; place-items: center; width: 30px; height: 30px; } .lt-ic img { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; } .lt-ic .aff { width: 24px; height: 24px; border-radius: 50%; }
+.lt-g { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; font: 700 .95rem var(--font-display); background: #2a1e14; border: 1px solid #9c7c37; color: #f3d891; }
+.lt-g.warn { color: #ffb0a0; border-color: #c0392b; } .lt-g.heal { color: #9fe08a; border-color: #3fa86b; } .lt-g.up { color: #9fd3ff; border-color: #3a78d8; }
+.lt-tx b { color: #fff1cc; } .lt-go { white-space: nowrap; }
+.modal-box.rs2.rep-done .lt { display: none; }
 .rs-foot { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; padding: 4px 14px 0; flex-wrap: wrap; }
 .rs-nav { display: flex; gap: 10px; }
 .rs-rb { display: grid; justify-items: center; gap: 2px; padding: 0; border: 0; background: none; color: #f1e6d2; cursor: pointer; font: 700 .72rem var(--font-display); }
@@ -3298,11 +3309,18 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .rs2 .rs-acts { display: grid; gap: 5px; justify-content: stretch; } .rs-big { display: flex !important; justify-content: center; align-items: center; gap: 6px; min-width: 0; width: 100%; padding: 6px 8px !important; font-size: .8rem !important; }
   .rs2 .rs-nav { order: 2; justify-content: space-between; } .rs-rb svg { width: 32px; height: 32px; padding: 7px; }
   .modal-box.rs2.rep-done { display: flex; }
+  /* a defeat with tips: they sit under the hero cards, the buttons beside both */
+  .modal-box.rs2.has-lt { grid-template-areas: "top top" "rw rw" "heroes foot" "lt foot"; } .has-lt .rs-n { display: none; }
+  .modal-box.rs2 > .lt { grid-area: lt; margin: 0 0 0 10px; padding: 5px 8px; }
+  .lt-h { margin-bottom: 3px; font-size: .7rem; } .lt ul { gap: 4px; } .lt li { grid-template-columns: 24px minmax(0, 1fr) auto; gap: 6px; font-size: .66rem; line-height: 1.25; } .lt li + li { padding-top: 4px; }
+  .lt-ic, .lt-ic img { width: 24px; height: 24px; } .lt-ic .aff { width: 20px; height: 20px; } .lt-g { width: 22px; height: 22px; font-size: .75rem; }
+  .lt-go { padding: 3px 8px !important; font-size: .64rem !important; }
 }
 /* very short phones (status bar showing): a little tighter still */
 @media (max-height: 320px) and (orientation: landscape) {
   .rs-ban h2 { font-size: 1.1rem !important; } .rs2 .rewards.rs-rw { padding: 2px 8px; } .rs2 .rewards li.rt { width: 40px; height: 40px; }
   .rs-h .pp-c { width: 38px; } .rs-n { line-height: 1.15; } .rs-big { padding: 5px 8px !important; } .rs-rb svg { width: 28px; height: 28px; padding: 6px; }
+  .lt li:nth-child(n+3) { display: none; }
 }
 /* popups (daily reward, unlocks) never push their button off a short screen: they scroll, and on a phone on its side
    the daily reward is compact enough to fit whole */

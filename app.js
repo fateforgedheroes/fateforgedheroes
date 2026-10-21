@@ -2050,6 +2050,26 @@
     const now = itemsOf(id), next = [...now.filter(x => x.slot !== it.slot), it];
     return gearFit(id, r, next) - gearFit(id, r, now);
   }
+  // Equip best: slot by slot, repeated until nothing improves (a swap can complete or break a set and so change what is
+  // best for the other slots; one pass used to leave work for a second click), by what the hero's role needs (gearFit),
+  // not raw Power; a piece locked to the hero stays. Returns how many pieces it put on.
+  function equipBest(id) {
+    const h = S.roster[id], was = new Set(itemsOf(id));
+    if (!h) return 0;
+    for (let pass = 0, more = true; more && pass < 8; pass++) {
+      more = false;
+      for (const slot of K.SLOTS) {
+        const cur = S.inv.find(x => x.owner === id && x.slot === slot);
+        const others = itemsOf(id).filter(x => x.slot !== slot);
+        if (cur && cur.lock) continue;
+        const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === id) && wearOk(id, x));
+        let best = cur, bestP = gearFit(id, h, cur ? [...others, cur] : others);
+        for (const c of cands) { const pw = gearFit(id, h, [...others, c]); if (pw > bestP + 1e-6) { best = c; bestP = pw; } }
+        if (best && best !== cur) { if (cur) cur.owner = null; best.owner = id; more = true; }
+      }
+    }
+    return itemsOf(id).filter(x => !was.has(x)).length;
+  }
   function gainFor(id, it) {
     const r = S.roster[id]; if (!r || it.owner === id) return 0;
     const now = itemsOf(id), next = [...now.filter(x => x.slot !== it.slot), it];
@@ -3819,23 +3839,7 @@
       const res = tryUpgrade(item); if (!res) return;
       save(); render(); upgGlow('up', item, res);
     } else if (act === 'bestgear') {
-      // slot by slot, repeated until nothing improves: a swap can complete or break a set and so change what is best
-      // for the other slots (one pass used to leave work for a second click)
-      const h = S.roster[selChamp], was = new Set(itemsOf(selChamp));
-      for (let pass = 0, more = true; more && pass < 8; pass++) {
-        more = false;
-        for (const slot of K.SLOTS) {
-          const cur = S.inv.find(x => x.owner === selChamp && x.slot === slot);
-          const others = itemsOf(selChamp).filter(x => x.slot !== slot);
-          if (cur && cur.lock) continue; // a piece locked to this hero stays
-          const cands = S.inv.filter(x => x.slot === slot && (!x.owner || x.owner === selChamp) && wearOk(selChamp, x));
-          // by what the hero's role needs (gearFit), not raw Power
-          let best = cur, bestP = gearFit(selChamp, h, cur ? [...others, cur] : others);
-          for (const c of cands) { const pw = gearFit(selChamp, h, [...others, c]); if (pw > bestP + 1e-6) { best = c; bestP = pw; } }
-          if (best && best !== cur) { if (cur) cur.owner = null; best.owner = selChamp; more = true; }
-        }
-      }
-      const changed = itemsOf(selChamp).filter(x => !was.has(x)).length;
+      const changed = equipBest(selChamp);
       save(); render(); toast(changed ? `Swapped ${changed} ${changed === 1 ? 'piece' : 'pieces'} of gear.` : 'Already wearing the best available gear.');
     } else if (act === 'unequipall') {
       const all = itemsOf(selChamp), worn = all.filter(x => !x.lock), kept = all.length - worn.length;
@@ -3894,6 +3898,13 @@
       if (h.stars >= K.maxStars(selChamp) || h.lvl < K.maxLvl(h.stars, selChamp) || stoneN(rc.tier) < rc.stones || S.silver < rc.silver) return;
       if (rc.tier === 'lesser') S.stones -= rc.stones; else S.stx[rc.tier] -= rc.stones; S.silver -= rc.silver; h.stars++; track('asc'); SFX.summon(3); save(); render(); toast(`${C[selChamp].short} is now ${h.stars}★. New maximum: level ${K.maxLvl(h.stars, selChamp)}.`);
     } else if (act === 'modal') modalAction(a.dataset.go);
+    else if (act === 'ltgear') {
+      // a defeat tip: Equip best for every hero who fought, right here in the result (the button says what it did)
+      const ids = (B && B.b ? B.b.heroes.map(u => u.id) : S.team).filter(x => S.roster[x]);
+      const n = ids.reduce((t, x) => t + equipBest(x), 0);
+      save(); SFX.click(); a.disabled = true; a.textContent = n ? `✓ ${n} equipped` : '✓ Best on';
+      toast(n ? `Equipped ${n} better ${n === 1 ? 'piece' : 'pieces'} of gear. Try again!` : 'Your team already wears the best spare gear.');
+    }
   });
 
   // ---------- summon ----------
@@ -6284,6 +6295,77 @@
     // "Your homebase is open": the button closes the battle result and goes to the homebase
     btn.addEventListener('click', () => { el.remove(); if (u.k === 'home') { SFX.click(); if (B) modalAction('open-home'); else setTab('home'); window.scrollTo({ top: 0 }); return; } showUnlocks(list.slice(1)); });
   }
+  // ---------- defeat tips: a lost campaign stage, Boss Hall level or Tower floor says what would help most, read from
+  // the team that fought (the boss's own tools, spare gear that suits a hero better, levels against the enemies', the
+  // level cap, a healer, essences that hit Weak, empty slots, upgrades, Fate Shards waiting, a stage to farm), each with
+  // a button that goes there ("Equip best" equips the whole team in place). The first defeat shows the best tip; lost
+  // there again, the best three, and from the third defeat on a wall stage a word that it is one of the chapter's tough
+  // stages. S.lose counts defeats in a row per stage, level or floor (a win clears it; the newest 20 are kept). ----------
+  const loseKey = cfg => cfg.type === 'stage' ? `s${cfg.diff || 0}:${cfg.i}` : cfg.type === 'boss' ? `b${cfg.id}:${cfg.n}` : cfg.type === 'tower' ? `t${cfg.ess}:${cfg.floor}` : '';
+  function loseCount(cfg, win, aborted) {
+    const k = loseKey(cfg), L = S.lose || (S.lose = {});
+    if (!k) return 0;
+    if (win) { delete L[k]; return 0; }
+    if (aborted) return L[k] || 0; // giving up is no defeat to count
+    const n = (L[k] || 0) + 1; delete L[k]; L[k] = n;
+    const ks = Object.keys(L); ks.slice(0, Math.max(0, ks.length - 20)).forEach(x => delete L[x]);
+    return n;
+  }
+  function lossTips(cfg, b) {
+    const ids = b.heroes.map(u => u.id).filter(id => S.roster[id] && C[id]), lv = cfg.lvl || 0, out = [];
+    const list = l => { const a = l.map(id => `<b>${esc(C[id].short)}</b>`); return a.length < 3 ? a.join(' and ') : `${a.slice(0, -1).join(', ')} and ${a[a.length - 1]}`; };
+    const tip = (ic, html, go, lbl, act) => out.push({ ic, html, go, lbl, act });
+    // owned heroes outside this team (not away on an expedition), strongest first
+    const spare = f => Object.keys(S.roster).filter(id => C[id] && !ids.includes(id) && !onExp(id) && f(id)).sort((a, c) => power(statsOf(c)) - power(statsOf(a))).slice(0, 2);
+    if (cfg.type === 'boss') {
+      const tr = K.bossTrait(cfg.bi);
+      if (cfg.n >= K.BTRAIT.from && !ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]))) tip('<span class="lt-g warn">!</span>', `This boss has <b>${K.EFFECTS[tr].n}</b>. ${esc(K.EFFECTS[tr].d)}.`, 'prep', 'Edit team');
+      if (cfg.n >= K.BLIGHT.bh && !ids.some(heals)) { const h = spare(heals); tip(h[0] ? por(h[0]) : '<span class="lt-g heal">✚</span>', `Your team has no healer, and this boss drains every hero each turn (Blight Aura). Bring a hero who heals or shields${h.length ? `: you have ${list(h)}` : ''}.`, 'prep', 'Edit team'); }
+    }
+    if (cfg.type === 'tower') tip(affChip(cfg.ess === 'All' ? 'Aether' : cfg.ess), cfg.ess === 'All' ? 'The Tower of Fate takes any hero, but its foes are far tougher. Bring your four strongest; trying again costs nothing.' : `Only ${cfg.ess} heroes (and your Fateborn) can climb this tower. Level, ascend and gear them, and bring four: a smaller team meets tougher foes. Trying again costs nothing.`, 'prep', 'Edit team');
+    // spare gear that suits a hero better (by its role, as Equip best picks), slots with a locked piece left alone
+    const better = ids.filter(id => {
+      const locked = new Set(itemsOf(id).filter(x => x.lock).map(x => x.slot));
+      return S.inv.some(x => !x.owner && !locked.has(x.slot) && fitGain(id, x) > 0.01);
+    });
+    if (better.length) tip('<span class="lt-g gear">⚔</span>', `Spare gear in your Vault suits ${list(better)} better than what ${better.length === 1 ? 'that hero wears' : 'they wear'} now.`, '', 'Equip best', 'ltgear');
+    // levels: well below the enemies (the Fateborn's stars follow its level, so it never needs ascending)
+    const low = ids.filter(id => S.roster[id].lvl < lv - 4), capped = low.filter(id => !C[id].pc && S.roster[id].lvl >= K.maxLvl(S.roster[id].stars, id)), under = low.filter(id => !capped.includes(id));
+    if (under.length) tip(por(under[0]), `${list(under)} ${under.length === 1 ? `is level ${S.roster[under[0]].lvl}` : `are below level ${lv - 4}`}, the enemies here level ${lv}. Essence Elixirs, spare heroes as food and replaying cleared stages all give XP.`, `hero:level:${under[0]}`, 'Level up');
+    if (capped.length) tip(por(capped[0]), `${list(capped)} ${capped.length === 1 ? 'is' : 'are'} at the level cap for ${capped.length === 1 ? 'its' : 'their'} stars, the enemies here level ${lv}. Ascend to raise the cap.`, `hero:ascend:${capped[0]}`, 'Ascend');
+    if (cfg.type !== 'tower') {
+      // a healer, from Chapter III on (the fights get long) and in the Boss Hall below the Blight Aura
+      if (!ids.some(heals) && (cfg.type === 'stage' ? cfg.diff || cfg.stage.chapter >= 2 : cfg.n < K.BLIGHT.bh)) { const h = spare(heals); tip(h[0] ? por(h[0]) : '<span class="lt-g heal">✚</span>', `Your team has no healer. Fights here are long: a hero who heals or shields keeps everyone standing${h.length ? `: you have ${list(h)}` : ''}.`, 'prep', 'Edit team'); }
+      // essences: half the team or more hitting most foes Weak
+      const foes = (cfg.type === 'stage' ? K.stagePhases(cfg.stage, cfg.diff) : cfg.phases || []).flat().map(unitAff).filter(a => a !== 'Aether');
+      const cnt = {}; foes.forEach(a => (cnt[a] = (cnt[a] || 0) + 1));
+      const main = Object.keys(cnt).sort((a, c) => cnt[c] - cnt[a])[0];
+      const weak = ids.filter(id => foes.filter(f => K.hitType(C[id].aff, f) === 'weak').length * 2 > foes.length);
+      if (main && weak.length >= Math.min(2, ids.length)) {
+        const good = K.ESSENCES.find(e => K.BEATS[e] === main), h = good ? spare(id => C[id].aff === good) : [];
+        tip(affChip(good || main), `Most foes here are ${main}, and ${list(weak)} hit${weak.length === 1 ? 's' : ''} them Weak (less damage, no critical hits).${good ? ` ${good} heroes land Strong Hits on them${h.length ? `: you have ${list(h)}` : ''}.` : ''}`, 'prep', 'Edit team');
+      }
+    }
+    // where the next gear comes from: the last stage cleared below this one, or the level below this one
+    const farm = cfg.type === 'stage' ? Math.min(cfg.i - 1, clearedOn(cfg.diff)) : -1;
+    const farmGo = farm >= 0 ? `farm:${farm}` : cfg.type === 'boss' && cfg.n > 1 ? 'bfarm' : 'back';
+    const empty = ids.filter(id => !better.includes(id) && itemsOf(id).length < K.SLOTS.length);
+    if (empty.length) tip('<span class="lt-g gear">⚔</span>', `${list(empty)} ${empty.length === 1 ? 'has' : 'have'} empty gear slots. Every stage drops gear for one slot (shown on its row): replay those stages to fill them.`, farmGo, 'Farm gear');
+    const worn = ids.flatMap(itemsOf), avg = worn.length ? worn.reduce((t, x) => t + x.lvl, 0) / worn.length : 0;
+    if (worn.length >= 8 && lv >= 20 && avg < Math.min(10, lv / 6)) tip('<span class="lt-g up">▲</span>', `Your team's gear is +${Math.floor(avg)} on average. Upgrade it with Sigils (Heroes, tap a gear slot): every level raises its main stat, and +4, +8, +12 and +16 add or boost a substat.`, `hero:gear:${ids[0]}`, 'Upgrade');
+    const fsN = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0);
+    if (fsN && unlocked('altaar')) tip(shardIc([...K.FATE_SHARDS].reverse().find(f => S.fs[f.id] > 0).id), `You have ${fsN} Fate ${fsN === 1 ? 'Shard' : 'Shards'} waiting. Summon new heroes at the Fate Altar.`, 'open-altaar', 'Fate Altar');
+    if (farm >= 0) tip('<span class="lt-g farm">↻</span>', `Replay ${stageName(farm)} for gear, XP and Sigils${clearedOn(cfg.diff) >= K.STAGES[farm].chapter * 7 + 6 ? ' (Auto ×10 plays it ten times)' : ''}, then come back stronger.`, farmGo, 'Farm');
+    else if (farmGo === 'bfarm' && (S.bh[cfg.id] || 0) >= cfg.n - 1) tip('<span class="lt-g farm">↻</span>', `Beat level ${cfg.n - 1} again for its set pieces and XP, then come back stronger.`, 'bfarm', 'Farm');
+    return out;
+  }
+  function lossCard(cfg, b, n) {
+    const tips = lossTips(cfg, b).slice(0, n > 1 ? 3 : 1);
+    if (!tips.length) return '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
+    const wall = n >= 3 && cfg.type === 'stage' && K.isWall(cfg.stage);
+    const head = n < 2 ? 'Tip' : `Lost here ${n} times in a row.${wall ? ' This is one of the chapter\'s tough stages: build up first.' : ' Try this:'}`;
+    return `<div class="lt ${n > 1 ? 'multi' : ''}"><b class="lt-h">${head}</b><ul>${tips.map(t => `<li><span class="lt-ic">${t.ic}</span><span class="lt-tx">${t.html}</span><button type="button" class="btn small lt-go" data-act="${t.act || 'modal'}"${t.go ? ` data-go="${t.go}"` : ''}>${t.lbl}</button></li>`).join('')}</ul></div>`;
+  }
   function finishBattle(win) {
     const cfg = B.cfg, b = B.b, lvl = cfg.lvl;
     const items = [], loot = [];
@@ -6344,6 +6426,7 @@
     const pxp = win ? (first || cfg.type !== 'tower' ? playerWinXp(lvl, first, cfg.type === 'boss') : 0) : b.aborted || cfg.type === 'tower' ? 0 : Math.round(playerWinXp(lvl) * 0.25);
     const pups = grantPlayerXp(pxp); if (pups.length) paintEnergy();
     if (win) { S.p.st.won++; if (cfg.type === 'boss') S.p.st.bossWon++; } else if (!b.aborted) S.p.st.lost++;
+    const loseN = loseCount(cfg, win, b.aborted);
     if (win && cfg.type === 'stage') { track('camp'); if (cfg.diff === 4 && b.heroes.every(u => u.alive)) track('flaw'); }
     if (win && cfg.type === 'boss') track('boss');
     if (cfg.type === 'tower' && !b.aborted) { track('tower'); if (win && cfg.ids && cfg.ids.length === 1) qBest('solo', cfg.floor); }
@@ -6388,10 +6471,7 @@
       : win && first && last ? `<p class="lede">You finished all ten chapters on ${K.DIFFS[cfg.diff].name}.${nd ? ` ${nd.name} difficulty is now open: tougher enemies, better gear (${rarsHtml(nd.rars)}).` : ' You beat the hardest difficulty!'}</p>`
       : win && first && isStage && cfg.stage.n === 6 && cfg.stage.chapter + 1 < K.CHAPTERS.length ? `<p class="lede">Chapter ${ROMAN[cfg.stage.chapter]} cleared. Chapter ${ROMAN[cfg.stage.chapter + 1]}, ${esc(K.CHAPTERS[cfg.stage.chapter + 1].name)}, is now open.</p>`
       : win && first && cfg.type === 'boss' && cfg.n === 1 && cfg.bi + 1 < K.BOSS_ORDER.length ? `<p class="lede">${esc(K.BOSSES[K.BOSS_ORDER[cfg.bi + 1]].name)} is now open in the Boss Hall.</p>`
-      : win ? '' : !b.aborted && cfg.type === 'tower' ? `<p class="lede">Tip: ${cfg.ess === 'All' ? 'the Tower of Fate takes any hero, but its foes are far tougher' : `only ${cfg.ess} heroes can climb this tower`}. Level, ascend and gear them, and bring your four strongest. Trying again costs nothing.</p>`
-        : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BTRAIT.from && !S.team.some(id => skillFx(id).includes(K.BTRAIT.answer[K.bossTrait(cfg.bi)])) ? `<p class="lede">Tip: this boss has <b>${K.EFFECTS[K.bossTrait(cfg.bi)].n}</b>. ${esc(K.EFFECTS[K.bossTrait(cfg.bi)].d)}.</p>`
-        : !b.aborted && cfg.type === 'boss' && cfg.n >= K.BLIGHT.bh && !S.team.some(heals) ? '<p class="lede">Tip: your team has no healer. This boss drains your whole team every turn (Blight Aura); bring a hero who heals or shields (Draelyn, or a Support from the Fate Altar).</p>'
-        : '<p class="lede">Tip: level your team, equip better gear, bring faster champions, or pick essences that land Strong Hits. If a stage keeps beating you, replay earlier stages for gear and levels first.</p>';
+      : win ? '' : lossCard(cfg, b, Math.max(1, loseN));
     const tower = cfg.type === 'tower';
     const canNext = isStage ? cfg.i + 1 < K.STAGES.length : tower ? cfg.floor < K.TOWER.floors : cfg.n < K.BOSS_LEVELS && (S.bh[cfg.id] || 0) >= cfg.n;
     // the result: the outcome on a banner, what it paid as tiles, a card per hero (level up, damage, taken,
@@ -6432,7 +6512,7 @@
     const openBtns = pups.map(u => u[3]).filter(Boolean).map(t => `<button class="btn violet" data-act="modal" data-go="open-${t}">Open the ${UNLOCK_NAME[t]}</button>`).join('');
     if (pups.length) SFX.up();
     const m = $('#modal');
-    m.innerHTML = `<div class="modal-box result rs2 ${win ? '' : 'lose'}" role="dialog" aria-modal="true" aria-label="${win ? 'Victory' : 'Defeat'}">
+    m.innerHTML = `<div class="modal-box result rs2 ${win ? '' : 'lose'} ${note.startsWith('<div class="lt') ? 'has-lt' : ''}" role="dialog" aria-modal="true" aria-label="${win ? 'Victory' : 'Defeat'}">
       <div class="rs-top"><div class="rs-stage"><b>${esc(cfg.title)}</b><small>${b.turns} turns${win && first ? ' · first clear' : ''}</small></div>
         <div class="rs-ban"><h2>${win ? 'Victory' : b.aborted ? 'Surrendered' : 'Defeat'}</h2></div><span class="rs-sp"></span></div>
       <div class="rs-strip"><span class="rs-lbl">${win ? 'Reward' : 'Consolation'}</span></div>
@@ -6576,6 +6656,15 @@
     endBattleView(); B = null;
     if (!cfg) { render(); return; }
     if (go.startsWith('open-')) setTab(go.slice(5));
+    // the defeat tips (lossTips): a hero's Level up, Ascend or Gear, a cleared stage or the level below to farm
+    else if (go.startsWith('hero:')) {
+      const [, t, id] = go.split(':');
+      if (S.roster[id]) { selChamp = id; HX.view = 'hero'; HB.open = false; champTab = t === 'level' ? 'gear' : t; }
+      setTab('team');
+      if (t === 'level' && S.roster[id]) openLevelUp(id);
+    }
+    else if (go.startsWith('farm:')) openPrep(+go.slice(5));
+    else if (go === 'bfarm') openBossPrep(cfg.id, cfg.n - 1);
     else if (cfg.type === 'siege') { if (go === 'again') startSiege(cfg.from); else if (go === 'prep') openSiegePrep(cfg.from); else if (go === 'champs') setTab('team'); else setTab('siege'); }
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
