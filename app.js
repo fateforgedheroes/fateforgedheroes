@@ -73,10 +73,12 @@
   // Campaign difficulties (K.DIFFS): S.cleared = Easy progress (the old Normal), S.dcl[d] = highest stage cleared on difficulty d >= 1,
   // S.diff = selected difficulty. The old Brutal mode (S.hard, S.clearedHard) carries over as Normal progress.
   // S.seen: unlock messages already shown (speed 3×/5×, Fate Altar, Boss Hall); existing players don't get old ones again.
-  // ---------- Teams: up to TEAM_MAX named teams (S.teams[i] = { name, ids }); S.modeTeam says which team each game mode
-  // uses. S.team is the team in use (the one on the Team screen and in the last battle): the same array as
-  // S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
-  const TEAM_MAX = K.ESSENCES.length, TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['guild', 'Guild Boss'], ['siege', 'Siege']];
+  // ---------- Teams, as in RAID: every game mode keeps its own team (S.teams[i] = { name, mode, ids }, one per
+  // TEAM_MODES entry, in that order; S.modeTeam[mode] = its index), picked on the team screen before every fight (prepHtml);
+  // there are no named teams to make (older saves: each mode got a copy of the named team it used, linkTeams). The
+  // Tower keeps a team per tower (S.tw.team). S.team is the team in use (the last one shown or fought with): the same
+  // array as S.teams[S.tsel].ids, linked again after every load (JSON drops the link) ----------
+  const TEAM_MODES = [['campaign', 'Campaign'], ['boss', 'Boss Hall'], ['arena', 'Arena'], ['defense', 'Arena defense'], ['guild', 'Guild Boss'], ['siege', 'Siege']];
   // The own hero (S.hero = { id, name, g, cls }; engine PC_CLASSES): made at the start, always first in every team and every
   // Tower team (keepHero), 6 stars and skills that follow its level (syncHero, run on every save).
   const heroId = () => (S && S.hero && S.roster[S.hero.id] ? S.hero.id : null);
@@ -89,26 +91,24 @@
   }
   function linkTeams(s) {
     if (!Array.isArray(s.teams) || !s.teams.length) s.teams = [{ name: 'Team 1', ids: Array.isArray(s.team) ? s.team : [] }];
-    s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
     s.modeTeam = s.modeTeam || {};
-    { const hid = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (hid) s.teams.forEach(t => keepHero(t.ids, hid)); }
     if (s.modeTeam.siege == null && s.modeTeam.campaign != null) s.modeTeam.siege = s.modeTeam.campaign;
-    for (const [m] of TEAM_MODES) if (!(s.modeTeam[m] < s.teams.length)) s.modeTeam[m] = 0;
-    s.bossTeam = s.bossTeam || {}; for (const k in s.bossTeam) if (!(s.bossTeam[k] < s.teams.length)) delete s.bossTeam[k];
+    if (s.modeTeam.defense == null && s.modeTeam.arena != null) s.modeTeam.defense = s.modeTeam.arena;
+    // one team per mode, in TEAM_MODES order; a mode without its own team takes a copy of the (named) team it used
+    const old = s.teams, pick = m => old.find(t => t.mode === m) || old[s.modeTeam[m]] || old[0];
+    s.teams = TEAM_MODES.map(([m, l]) => ({ name: l, mode: m, ids: (pick(m).ids || []).filter(id => s.roster[id]).slice(0, 4) }));
+    s.modeTeam = Object.fromEntries(TEAM_MODES.map(([m], k) => [m, k]));
+    delete s.bossTeam; delete s.tfav;
+    { const hid = s.hero && s.roster[s.hero.id] ? s.hero.id : null; if (hid) s.teams.forEach(t => keepHero(t.ids, hid)); }
+    s.tsel = Math.min(Math.max(0, s.tsel | 0), s.teams.length - 1);
     s.team = s.teams[s.tsel].ids;
     return s;
   }
-  // a new team's default name: the first "Team n" that is not taken yet (after a delete the count alone would repeat a name)
-  const freeTeamName = () => { let n = 1; while (S.teams.some(t => t.name === 'Team ' + n)) n++; return 'Team ' + n; };
   const teamIds = mode => (S.teams[S.modeTeam[mode]] || S.teams[0]).ids;
   const inAnyTeam = id => S.teams.some(t => t.ids.includes(id));
   const teamsOf = id => S.teams.filter(t => t.ids.includes(id)).map(t => t.name);
   // switch to the team a mode uses (before its battle)
   function useTeam(mode) { S.tsel = S.modeTeam[mode] || 0; S.team = S.teams[S.tsel].ids; }
-  // the Boss Hall can have a team per boss essence (S.bossTeam[essence] = team index, chosen on the Boss Hall screen);
-  // a boss of an essence without one uses the Boss Hall team (S.modeTeam.boss)
-  const bossTeamIdx = aff => { const i = S.bossTeam && S.bossTeam[aff]; return i != null && i < S.teams.length ? i : (S.modeTeam.boss || 0); };
-  function useBossTeam(aff) { S.tsel = bossTeamIdx(aff); S.team = S.teams[S.tsel].ids; }
   function fixup(s) {
     if (!s.elx || typeof s.elx !== 'object') s.elx = {}; // Essence Elixirs per essence
     if (!s.story || typeof s.story !== 'object') s.story = {}; // story scenes seen (story.js)
@@ -751,7 +751,7 @@
     if (go === 'tower') { const best = Math.max(0, ...Object.values(S.tw.prog)); return best ? `Highest floor ${best}` : 'Not climbed yet'; }
     if (go === 'siege') { sgTick(); return `${S.sg.best ? `Best wave ${S.sg.best}` : 'Not defended yet'} · ${S.sgT} / ${K.SIEGE.tickets} tickets`; }
     if (go === 'expedition') return !S.exp ? 'The ship is ready to sail' : expDone() ? 'The ship is back: collect the rewards' : `At sea · back in ${fmtMins(Math.max(1, Math.ceil((S.exp.end - Date.now()) / 60000)))}`;
-    if (go === 'team') return `${Object.keys(S.roster).length} heroes · team power ${teamPower().toLocaleString('en-US')}`;
+    if (go === 'team') return `${Object.keys(S.roster).length} heroes · team power ${teamPower(teamIds("campaign")).toLocaleString('en-US')}`;
     if (go === 'forge') { const spare = S.inv.filter(x => !x.owner).length; return `${S.inv.length} pieces of gear · ${spare} spare`; }
     if (go === 'altaar') { const n = K.FATE_SHARDS.reduce((t, f) => t + (S.fs[f.id] || 0), 0); return n ? `${n} Fate ${n === 1 ? 'Shard' : 'Shards'} to summon with` : 'No Fate Shards yet'; }
     if (go === 'arena') return signedIn() ? 'Attack and climb the ranking' : 'Needs a free account';
@@ -776,7 +776,7 @@
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
   const NAV_OF = { champions: 'team', vault: 'forge', prep: 'campagne' };
   function sideNav() {
-    const cur = tab === 'prep' && PREP.tower ? 'tower' : tab === 'prep' && PREP.boss ? 'kerkers' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const cur = tab === 'prep' ? prepNav() : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
@@ -966,7 +966,7 @@
     return `<div class="campaign cv sv ${d ? 'hardmode diff-' + D.id : ''}">
       ${head.replace('<div class="cv-head">', '<div class="cv-head"><button type="button" class="btn small cl-back" data-act="chlist">‹ Chapters</button>')}
       <div class="sv-wrap ${spot ? '' : 'lfit'}">${side}<div class="sv-list">${rows}</div></div>
-      ${spot ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">${esc(S.teams[S.modeTeam.campaign].name)} · Edit</button>${playBtn(sel)}</div>`}
+      ${spot ? '<div class="spot-block" data-act="spotblock"></div>' : `<div class="m-act"><button class="btn" data-act="editteam" data-mode="campaign">Team · Edit</button>${playBtn(sel)}</div>`}
       <details class="camp-info"><summary>How the campaign works</summary>
         <p>Ten chapters of seven stages, each fought in ${K.PHASES} phases: your survivors march on with their HP and recover 15% between phases. Every stage drops its own gear slot; the chapter boss waits in the last phase of stage 7. Replay cleared stages to farm the slot you need. Clearing all seven stages of a chapter opens its reward chest, once per difficulty. Clear all ${K.STAGES.length} stages to open the next difficulty.</p>
         <div class="help">
@@ -1018,7 +1018,7 @@
     if (BV.view === 'bosses' || !bossOpen(ci)) return bossListHtml();
     const B0 = K.BOSSES[cur], best = S.bh[cur] || 0, col = AFF_COL[B0.aff], icon = (svg, c) => `<span class="bhv-ic" style="--c:${c}">${svg}</span>`;
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === B0.aff);
-    const ids = S.teams[bossTeamIdx(B0.aff)].ids;
+    const ids = teamIds('boss');
     const tr = K.bossTrait(ci), tef = K.EFFECTS[tr], canAnswer = ids.some(id => skillFx(id).includes(K.BTRAIT.answer[tr]));
     // its own six-piece set: the bonus at 2, 4 and 6 pieces (and the Ascended one), and the essence family bonus
     const SS = K.SETS[K.bossSets(ci)[0]], fam = K.SET_FAMILY[SS.ess];
@@ -1133,17 +1133,16 @@
   const rolesHtml = ids => `<ul class="roles-chk">${teamRoles(ids).map(([k, ok, tip]) => `<li class="${ok ? 'ok' : 'miss'} role-${k.toLowerCase()}" title="${k}${ok ? '' : ' missing'}: ${esc(tip)}" aria-label="${k}${ok ? '' : ' missing'}"><i aria-hidden="true">${{ Damage: '⚔', Healing: '✚', Protection: '⛨', Control: '✦' }[k]}</i></li>`).join('')}</ul>${ids.length && !teamRoles(ids)[1][1] ? '<p class="empty-note roles-tip">No healer in this team. That works in the campaign, but from Boss Hall level 3 on bosses drain your whole team every turn (Blight Aura), and without healing or shields you will not outlast them.</p>' : ''}`;
   // Heroes: one screen like a gacha hero screen. On the left the roster (its own scroll; Show, Sort and a Filter
   // panel), in the middle the chosen hero (art, level, power, team and lock), on the right its tabs (champTab): Gear
-  // (the six slots, total stats with what gear adds, the active sets), Skills, Level up and Ascend. The Teams view
-  // (HX.view) puts the teams in the middle: tapping heroes in the roster puts them in the team or takes them out.
+  // (the six slots, total stats with what gear adds, the active sets), Skills, Level up and Ascend. Teams are not made
+  // here: every mode picks its team on the team screen before its fight (prepHtml).
   // Phones stack it: a strip of four heroes, the hero, the tabs. Nothing scrolls the page on PC, only the columns.
   const HX = { view: 'hero', filt: false };
   const HX_TABS = [['gear', 'Gear'], ['skills', 'Skills'], ['level', 'Level up'], ['ascend', 'Ascend']];
   function rosterTile(id) {
     const c = C[id], r = S.roster[id];
     if (!r) return `<button type="button" class="hx-t missing rar-${c.rar}" style="--ec:${AFF_COL[c.aff]};--rc:var(--r${c.rar})" data-act="hinfo" data-id="${id}" title="${esc(c.name)} · not unlocked yet: ${esc(heroSource(id))}">${por(id)}<span class="hx-lk" aria-hidden="true">${LOCK_SVG}</span></button>`;
-    const slot = S.team.indexOf(id) + 1, teams = HX.view === 'teams';
-    return `<button type="button" class="hx-t rar-${c.rar} ${id === selChamp ? "on" : ""} ${slot ? "tm" : ""}" style="--ec:${AFF_COL[c.aff]};--rc:var(--r${c.rar})" data-act="${teams ? 'toggle' : 'sel'}" data-id="${id}" title="${esc(c.name)} · Lv ${r.lvl}${slot ? ` · in ${esc(S.teams[S.tsel].name)}` : ''}${teams ? (slot ? ' · tap to take out' : ' · tap to add') : ''}">
-      ${por(id)}${essBadge(c.aff)}<span class="hx-lv">${r.lvl}</span>${slot ? `<span class="hx-slot">${slot}</span>` : ''}${r.lock ? '<span class="hx-lock" aria-hidden="true">🔒</span>' : ''}<span class="hx-st">${'★'.repeat(r.stars)}</span></button>`;
+    return `<button type="button" class="hx-t rar-${c.rar} ${id === selChamp ? "on" : ""}" style="--ec:${AFF_COL[c.aff]};--rc:var(--r${c.rar})" data-act="sel" data-id="${id}" title="${esc(c.name)} · Lv ${r.lvl}">
+      ${por(id)}${essBadge(c.aff)}<span class="hx-lv">${r.lvl}</span>${r.lock ? '<span class="hx-lock" aria-hidden="true">🔒</span>' : ''}<span class="hx-st">${'★'.repeat(r.stars)}</span></button>`;
   }
   // on PC the Heroes screen fills the window below the header: only its columns scroll, never the page
   // Screens built as columns that scroll on their own fill the window below the header: Heroes (.hx) on PC and on a
@@ -1172,46 +1171,28 @@
     const opt = (v, label, cur) => `<option value="${v}" ${String(cur) === String(v) ? 'selected' : ''}>${label}</option>`;
     const roster = `<aside class="hx-col hx-ros">
       <div class="hx-rh"><select data-filter="own" aria-label="Show">${[['owned', 'My heroes'], ['all', 'All heroes'], ['missing', 'Not unlocked']].map(([v, l]) => opt(v, l, TF.own)).join('')}</select><select data-filter="sort" aria-label="Sort">${[['power', 'Power'], ['level', 'Level'], ['rarity', 'Rarity'], ['name', 'Name']].map(([v, l]) => opt(v, l, TF.sort)).join('')}</select>
-        <button type="button" class="btn small ${HX.filt || nf ? 'on' : ''}" data-act="hxfilt" aria-expanded="${HX.filt}">Filter${nf ? ` · ${nf}` : ''}</button>
-        <button type="button" class="btn small ${HX.view === 'teams' ? 'primary' : ''} hx-teams" data-act="hxview" data-v="${HX.view === 'teams' ? 'hero' : 'teams'}">${HX.view === 'teams' ? 'Done' : 'Teams'}</button></div>
+        <button type="button" class="btn small ${HX.filt || nf ? 'on' : ''}" data-act="hxfilt" aria-expanded="${HX.filt}">Filter${nf ? ` · ${nf}` : ''}</button></div>
       ${HX.filt ? filterBar() : ''}
-      ${HX.view === 'teams' ? '<p class="empty-note hx-tip">Tap a hero to put it in the team or take it out.</p>' : ''}
       <div class="hx-list">${list.length ? list.map(rosterTile).join('') : '<p class="empty-note">No heroes match these filters.</p>'}</div>
       <small class="empty-note hx-count">${K.CHAMP_ORDER.filter(x => S.roster[x]).length} / ${K.CHAMP_ORDER.length} heroes unlocked</small></aside>`;
-    const mid = HX.view === 'teams' ? hxTeams() : hxHero(selChamp);
-    const bag = HB.open && HX.view !== 'teams';
-    return `<div class="hx ${HX.view === 'teams' ? 'teams' : ''} ${bag ? 'bag' : ''}">${roster}${mid}${bag ? `<aside class="hx-col hx-side hb-side">${hxBag(selChamp)}</aside>` : hxSide(selChamp)}</div>`;
-  }
-  // the middle in the Teams view: the teams, the four places (tap one to see that hero), what the team brings
-  function hxTeams() {
-    const order = S.teams.map((t, i) => i).sort((a, b) => (b === S.tfav) - (a === S.tfav) || a - b);
-    const tabs = order.map(i => { const t = S.teams[i], fav = i === S.tfav; return `<button type="button" class="tm-tab ${i === S.tsel ? 'on' : ''} ${fav ? 'fav' : ''}" data-act="tmsel" data-i="${i}" aria-pressed="${i === S.tsel}"><b>${fav ? '<span class="tm-star" title="Favourite team">★</span> ' : ''}${esc(t.name)}</b><small>${t.ids.length}/4 · ${TEAM_MODES.filter(([m]) => S.modeTeam[m] === i).map(([, l]) => l).join(', ') || 'not used'}</small></button>`; }).join('')
-      + (S.teams.length < TEAM_MAX ? `<button type="button" class="tm-tab add" data-act="tmnew"><b>+ Create a team</b><small>up to ${TEAM_MAX}</small></button>` : '');
-    const modes = TEAM_MODES.map(([m, l]) => { const on = S.modeTeam[m] === S.tsel; return `<button type="button" class="tm-mode ${on ? 'on' : ''}" data-act="tmmode" data-m="${m}" aria-pressed="${on}" title="${on ? `${l} uses this team` : `Use this team for ${l}`}">${on ? '✓ ' : ''}${l}</button>`; }).join('');
-    const slots = [0, 1, 2, 3].map(i => { const id = S.team[i]; return id
-      ? `<button type="button" class="hx-ts rar-${C[id].rar} ${id === selChamp ? "on" : ""}" style="--ec:${AFF_COL[C[id].aff]};--rc:var(--r${C[id].rar})" data-act="sel" data-id="${id}">${por(id)}<b>${esc(C[id].short)}</b><small>Lv ${S.roster[id].lvl} · ${roleStr(C[id])}</small><small>Power ${power(statsOf(id)).toLocaleString('en-US')}</small></button>`
-      : '<div class="hx-ts empty"><small>Empty: tap a hero on the left</small></div>'; }).join('');
-    return `<section class="hx-col hx-mid hx-tm">
-      <div class="tm-tabs" role="group" aria-label="Your teams">${tabs}</div>
-      <div class="tm-row"><span class="tm-lbl">Use ${esc(S.teams[S.tsel].name)} for</span>${modes}</div>
-      <div class="tm-row"><span class="tm-acts"><button type="button" class="linkbtn" data-act="tmfav" aria-pressed="${S.tsel === S.tfav}">${S.tsel === S.tfav ? '★ Favourite' : '☆ Make favourite'}</button><button type="button" class="linkbtn" data-act="tmname">Rename</button>${S.teams.length > 1 ? '<button type="button" class="linkbtn" data-act="tmdel">Delete</button>' : ''}</span><span class="hx-tpow">Team power <b>${teamPower().toLocaleString('en-US')}</b></span></div>
-      <div class="hx-tslots">${slots}</div>
-      ${rolesHtml(S.team)}</section>`;
+    const mid = hxHero(selChamp);
+    const bag = HB.open;
+    return `<div class="hx ${bag ? 'bag' : ''}">${roster}${mid}${bag ? `<aside class="hx-col hx-side hb-side">${hxBag(selChamp)}</aside>` : hxSide(selChamp)}</div>`;
   }
   // a big hero picture (data-big) swaps to the sharp art as soon as that arrived (sprites.js big)
   addEventListener('ffh-big', e => { for (const im of document.querySelectorAll(`img[data-big="${e.detail}"]`)) im.src = SPR.url(e.detail, 2); });
   // the middle in the hero view: the hero on its essence's stage, who it is, level and power, team and lock
   function hxHero(id) {
-    const c = C[id], r = S.roster[id], st = statsOf(id), cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap, inTeam = S.team.includes(id);
-    const other = S.teams.filter((t, i) => i !== S.tsel && t.ids.includes(id)).map(t => esc(t.name));
+    const c = C[id], r = S.roster[id], st = statsOf(id), cap = K.maxLvl(r.stars, id), mxs = K.maxStars(id), need = K.xpNeed(r.lvl), atCap = r.lvl >= cap;
+    const inTeams = c.pc ? [] : S.teams.filter(t => t.ids.includes(id)).map(t => esc(t.name)); // the modes whose team it is in
     return `<section class="hx-col hx-mid" style="--ec:${AFF_COL[c.aff]}">
       <div class="fg-art hx-art"><div class="fg-scene" style="--scene:url(${CHAPTER_BG[ESS_BG[c.aff] || 0]})"></div><div class="fg-ring"></div><div class="fg-floor"></div><img class="${c.dev ? 'dev-art' : ''}" data-big="${id}" src="${SPR.url(id, 2)}" alt=""></div>
       <div class="hx-id"><div class="fg-name">${essBadge(c.aff, 'big')}<div><h2>${esc(c.name)}</h2>${starStr(r.stars, mxs)}</div><div class="hx-pow"><small>Power</small><b>${power(st).toLocaleString('en-US')}</b></div></div>
         <div class="fg-sub"><span class="rartxt rar-${c.rar}">${K.RARITIES[c.rar]}</span> · ${roleStr(c)} · ${c.aff}</div>
         <div class="hx-lvl"><b>Lv ${r.lvl}</b><span>/ ${cap}</span><div class="xpbar"><i style="width:${atCap ? 100 : Math.round(r.xp / need * 100)}%"></i></div><small class="empty-note">${atCap ? (r.stars < mxs ? 'Max for this star: ascend' : 'Max level') : `${r.xp.toLocaleString('en-US')} / ${need.toLocaleString('en-US')} XP`}</small></div></div>
-        <div class="hx-acts"><button type="button" class="btn small ${inTeam || c.pc ? '' : 'primary'}" data-act="toggle" data-id="${id}" ${c.pc ? 'disabled title="Your hero always fights with you"' : ''}>${c.pc ? 'Always in your team' : inTeam ? `Remove from ${esc(S.teams[S.tsel].name)}` : `Add to ${esc(S.teams[S.tsel].name)}`}</button><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${c.pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen">${FCS_SVG} Change class</button>` : ''}</div>
+        <div class="hx-acts"><button type="button" class="btn small lock-btn ${r.lock ? 'on' : ''}" data-act="hlock" data-id="${id}" aria-pressed="${!!r.lock}" title="${r.lock ? 'Locked: this hero can never be fed. Tap to unlock.' : 'Lock this hero so it can never be fed by accident'}">${r.lock ? '🔒 Locked' : '🔓 Lock'}</button>${c.pc ? `<button type="button" class="btn small fcs-btn" data-act="fcopen">${FCS_SVG} Change class</button>` : ''}</div>
         ${HB.open ? `<div class="fg-sgrid hx-mslots">${gearTilesHtml(id, 'hxslot')}</div>` : ''}
-        ${other.length ? `<small class="empty-note hx-also">Also in ${other.join(', ')}</small>` : ''}</section>`;
+        <small class="empty-note hx-also">${c.pc ? 'Your hero fights in every team.' : inTeams.length ? `In your team for ${inTeams.join(', ')}` : 'In no team yet: pick teams before a fight.'}</small></section>`;
   }
   // the right: the hero's tabs
   function hxSide(id) {
@@ -1472,8 +1453,6 @@
       ${others.length ? `<h4 class="fd-h">Heroes outside your team</h4><div class="fodder-list">${others.map(heroRow).join('')}</div>` : ''}
       ${!copies.length && !others.length ? '<p class="empty-note">Nothing to feed yet. Summon at the Fate Altar or capture enemies in the campaign.</p>' : ''}</div>`;
   }
-  // a small popup asking for a team name (Create a team / Rename); onOk(name) with the trimmed name
-  let nameOk = null;
   // every player picks a name of their own once (the default "Adventurer" is not one): asked on Home after the first
   // battle, and the popup has no way out but saving a name (the first name is free)
   // every player picks a name of their own: one still called "Adventurer" (in any spelling) gets the name box on every
@@ -1487,14 +1466,6 @@
       <input id="pn-in" name="pname" maxlength="20" required autocomplete="nickname" placeholder="Your name" value="${S.hero && S.hero.name && S.hero.name !== 'Adventurer' ? esc(S.hero.name) : ''}">
       <div class="modal-actions"><button class="btn primary" type="submit">Save name</button></div></form></div>`;
     m.hidden = false; m.querySelector('input').focus();
-  }
-  function nameBox(title, value, ok, onOk) {
-    nameOk = onOk;
-    const m = $('#modal');
-    m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="nb-t"><h2 id="nb-t">${title}</h2>
-      <form data-form="tmname" class="nb-form"><label class="empty-note" for="nb-in">Team name (up to 20 characters)</label><input id="nb-in" name="tname" maxlength="20" required value="${esc(value)}" autocomplete="off">
-      <div class="modal-actions"><button class="btn primary" type="submit">${ok}</button><button class="btn" type="button" data-act="modal" data-go="close">Cancel</button></div></form></div>`;
-    m.hidden = false; const i = m.querySelector('input'); i.focus(); i.select();
   }
   // "Are you sure?" before feeding away a Rare or better hero
   // skip: a key for questions the player may silence until the game is opened again (a tick box, kept in memory only)
@@ -1734,10 +1705,10 @@
         <div class="ar-top5"><span class="tag">Top 5 of the week (extra)</span><ol>${K.ARENA_RANK_REWARDS.map((t, i) => `<li><b>#${i + 1}</b> ${tierReward(t)}</li>`).join('')}</ol><small class="empty-note">Ranked by rating among everyone who fought that week.</small></div>
         ${st.rewards ? `<button class="btn primary" data-act="arclaim">Claim ${st.rewards} weekly ${st.rewards === 1 ? 'reward' : 'rewards'}</button>` : ''}</div>`;
     const def = `<div class="ar-def"><h3>Your defense</h3>${st.defense ? miniTeam(st.defense) + `<small class="empty-note">Power ${st.defensePower.toLocaleString('en-US')} · levels, skills and gear stay up to date by themselves</small>` : '<p class="empty-note">No defense team yet, so other players cannot find you. Your first attack team becomes your defense.</p>'}
-        <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>Defend with my current team</button><button class="btn small" data-act="editteam" data-mode="arena">Edit arena team</button></div></div>`;
+        <div class="row"><button class="btn small" data-act="ardef" ${AR.busy ? 'disabled' : ''}>${AR.st && AR.st.defense ? 'Change defense team' : 'Set a defense team'}</button></div></div>`;
     const offers = st.offers.map((o, i) => `<div class="ar-opp">${o.avatar && C[o.avatar] ? por(o.avatar) : '<span class="lb-noav"></span>'}<div class="ar-opp-main"><b>${esc(o.name)}</b>${o.kind === 'bot' ? ' <span class="tag">Bot</span>' : ''}<small class="empty-note">Rating ${o.rating} · power ${o.power.toLocaleString('en-US')}</small>${miniTeam(o.team)}</div><button class="btn primary small" data-act="arfight" data-n="${i}" ${AR.busy || st.tokens < 1 ? 'disabled' : ''}>Fight</button></div>`).join('');
     const opps = `<section class="ar-opps"><div class="section-head"><h3>Opponents</h3><button class="btn small" data-act="arrefresh" ${AR.busy ? 'disabled' : ''}>New opponents</button></div>
-      <p class="empty-note">You attack with your arena team (power ${K.teamPower(snapTeam(teamIds('arena'))).toLocaleString('en-US')}). A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
+      <p class="empty-note">Fight opens your arena team, to change it before the fight. A fight costs 1 token; you get a new token every hour.</p>${offers}</section>`;
     // on a phone on its side the arena is four tabs (AR.tab, shell.html .ar-wrap[data-t]): Battle (rating and opponents),
     // Defense, Rewards (the weekly ones) and Rankings; a bigger screen shows everything under each other
     const t = AR.tab || 'fight', tabs = `<div class="ar-tabs" role="tablist" aria-label="Arena">${[['fight', 'Battle'], ['def', 'Defense'], ['week', 'Rewards'], ['board', 'Rankings']].map(([k, l]) => `<button type="button" role="tab" data-act="artab" data-t="${k}" aria-selected="${k === t}">${l}${k === 'week' && st.rewards ? '<span class="dot"></span>' : ''}</button>`).join('')}</div>`;
@@ -1939,7 +1910,7 @@
           <div class="gb-keys">${Array.from({ length: K.GBOSS.keys }, (_, i) => `<i class="${i < keysLeft ? 'on' : ''}"></i>`).join('')}<span>${keysLeft} / ${K.GBOSS.keys} keys left today</span>${keyReset()}</div>
         </div></section>
       <div class="gb-diffs" role="group" aria-label="Difficulty">${diffs}</div>
-      <div class="section-head" style="margin:0"><span class="empty-note">Your team: power ${K.teamPower(snapTeam(teamIds('guild'))).toLocaleString('en-US')} · <button class="linkbtn" data-act="editteam" data-mode="guild">change</button></span>
+      <div class="section-head" style="margin:0"><span class="empty-note">Attack opens your Guild Boss team, to change it before the fight.</span>
         <button class="btn primary" data-act="gbfight" ${keysLeft && !GD.busy ? '' : 'disabled'}>${GD.busy ? 'Fighting…' : 'Attack · 1 key'}</button></div>`;
   }
   function gchestHtml() {
@@ -2936,7 +2907,7 @@
   // over the screen (the icon column on the left is left out on phones). Locked buildings are dimmed and say what
   // opens them; a dot shows where something waits. ----------
   function navDropHtml() {
-    const cur = tab === 'prep' && PREP.tower ? 'tower' : tab === 'prep' && PREP.boss ? 'kerkers' : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const cur = tab === 'prep' ? prepNav() : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const home = `<button type="button" class="nd-it" data-act="tab" data-tab="home"><span class="nd-ic nd-home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg></span><span class="nd-t"><b>Home</b><small>Your homebase</small></span></button>`;
     return `<div class="nd-box" role="menu" aria-label="Buildings">${home}${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
@@ -3372,10 +3343,7 @@
   document.addEventListener('change', e => {
     if (e.target.id === 'cp-diff') { S.diff = +e.target.value; delete S.chap; campSel = null; save(); render(); return; }
     if (e.target.id === 'lb-sub') { const t = e.target; lbLoad(t.value ? `${t.dataset.base}:${t.value}` : t.dataset.all); return; }
-    if (e.target.id === 'bh-team') { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; save(); render(); return; }
     const vf = e.target.closest('[data-vf]'); if (vf) { VT[vf.dataset.vf] = vf.value; VT.open = null; render(); return; }
-    if (e.target.matches && e.target.matches('[data-pp="bteam"]')) { const aff = e.target.dataset.aff, v = e.target.value; S.bossTeam = S.bossTeam || {}; if (v === '') delete S.bossTeam[aff]; else S.bossTeam[aff] = +v; useBossTeam(aff); save(); render(); return; } // a boss level's team pick
-    if (e.target.matches && e.target.matches('[data-pp="team"]')) { S.modeTeam.campaign = +e.target.value; useTeam('campaign'); save(); render(); return; } // the prep screen's team pick
     const gf = e.target.closest('[data-gf]'); if (gf) { FG[gf.dataset.gf] = gf.type === 'checkbox' ? gf.checked : gf.value; FG.pick = null; render(); return; }
     const f = e.target.closest('[data-filter]'); if (!f) return;
     TF[f.dataset.filter] = f.type === 'checkbox' ? f.checked : f.value; render();
@@ -3395,8 +3363,6 @@
     const none = document.querySelector('.gl-none'); if (none) none.hidden = shown > 0;
   });
   document.addEventListener('submit', e => {
-    const tn = e.target.closest('[data-form="tmname"]');
-    if (tn) { e.preventDefault(); const name = tn.tname.value.trim().slice(0, 20); if (!name) return; $('#modal').hidden = true; const f = nameOk; nameOk = null; if (f) f(name); return; }
     const gc = e.target.closest('[data-form="gcreate"]');
     if (gc) {
       e.preventDefault();
@@ -3452,7 +3418,7 @@
     else if (act === 'pcok') { $('#modal').hidden = true; createHero(); }
     else if (act === 'pccancel') $('#modal').hidden = true;
     else if (act === 'tab') { setTab(a.dataset.tab); window.scrollTo({ top: 0 }); }
-    else if (act === 'go') { if (a.dataset.go === 'campagne') CV.view = 'chapters'; if (a.dataset.go === 'kerkers') BV.view = 'bosses'; if (a.dataset.go === 'tower') TV.view = 'towers'; if (a.dataset.go === 'team' && S.teams[S.tfav]) { S.tsel = S.tfav; S.team = S.teams[S.tfav].ids; } if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
+    else if (act === 'go') { if (a.dataset.go === 'campagne') CV.view = 'chapters'; if (a.dataset.go === 'kerkers') BV.view = 'bosses'; if (a.dataset.go === 'tower') TV.view = 'towers'; if (a.dataset.go === 'guild') { SO.tab = 'guild'; GD.view = 'home'; setTab('social'); guildLoad(); } else setTab(a.dataset.go); window.scrollTo({ top: 0 }); }
     else if (act === 'soon') toast('Coming soon.');
     else if (act === 'tutlock') toast('Fight your first campaign battle to open the rest of your homebase.');
     else if (act === 'pnameedit') { editName = true; render(); const i = $('#screen input[name=pname]'); if (i) { i.focus(); i.select(); } }
@@ -3462,8 +3428,8 @@
     else if (act === 'account') { if (window.FFH_CLOUD) window.FFH_CLOUD.openAccount(); }
     else if (act === 'arstate') arenaCall('state');
     else if (act === 'arrefresh') arenaCall('refresh');
-    else if (act === 'ardef') arenaCall('defense').then(r => { if (r.state) toast('Your current team now defends you in the arena.'); });
-    else if (act === 'arfight') arenaCall('start', { offer: +a.dataset.n }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } });
+    else if (act === 'ardef') openDefensePrep();
+    else if (act === 'arfight') openArenaPrep(+a.dataset.n);
     else if (act === 'arlb') loadBoard(a.dataset.kind);
     else if (act === 'arclaim') claimArena().then(socialLoad);
     else if (act === 'hptab') { const box = a.closest('.modal-box'); box.querySelectorAll('[data-act=hptab]').forEach(b => b.setAttribute('aria-selected', b === a ? 'true' : 'false')); box.querySelectorAll('.hp-sec').forEach(s => { s.hidden = s.dataset.sec !== a.dataset.t; }); }
@@ -3490,7 +3456,7 @@
     else if (act === 'gkick') confirmBox('Remove member?', `Remove <b>${esc(a.dataset.name)}</b> from the guild?`, 'Remove', () => guildAct('guild_kick', { other: id }, { ok: 'Member removed.', not_allowed: 'You cannot remove this member.' }));
     else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
-    else if (act === 'gbfight') gbossFight();
+    else if (act === 'gbfight') openGuildPrep();
     else if (act === 'profile') openProfile(id);
     else if (act === 'ginvf') sendInvite(a.dataset.code);
     else if (act === 'ginvopen') openInvite();
@@ -3516,11 +3482,30 @@
     else if (act === 'chclaim') { const c = +a.dataset.chap, d = S.diff || 0; if (clearedOn(d) >= c * 7 + 6 && !chrClaimed(c, d)) { S.chr = S.chr || {}; (S.chr[d] = S.chr[d] || []).push(c); grantGift(chapterReward(c, d)); save(); hud(); render(); SFX.up(); chestPop(c, d, true); } }
     else if (act === 'chpeek') { const c = +a.dataset.chap, d = S.diff || 0; chestPop(c, d, false); }
     else if (act === 'play') { if (fightSpot() || firstSteps()) { spotFight = false; startCampaign(+a.dataset.stage); } else openPrep(+a.dataset.stage); } // Fight opens the team screen first (prepHtml)
-    else if (act === 'ppgo') { spotFight = false; if (PREP.tower) startTower(PREP.tower, twProg(PREP.tower) + 1); else if (PREP.boss) startDungeon(PREP.boss, PREP.n); else startCampaign(PREP.stage); }
-    else if (act === 'ppback') { if (PREP.tower) { TV.view = 'floors'; setTab('tower'); } else if (PREP.boss) { BV.view = 'levels'; setTab('kerkers'); } else { CV.view = 'stages'; setTab('campagne'); } window.scrollTo({ top: 0 }); }
+    else if (act === 'ppgo') {
+      spotFight = false; const m = PREP.mode;
+      if (m === 'tower') startTower(PREP.tower, twProg(PREP.tower) + 1);
+      else if (m === 'boss') startDungeon(PREP.boss, PREP.n);
+      else if (m === 'siege') startSiege(PREP.from);
+      else if (m === 'arena') { useTeam('arena'); arenaCall('start', { offer: PREP.offer }).then(r => { if (r.fight) { track('arena'); startArena(r.fight); } else { toast(r.error || 'The fight could not start.', true); setTab('arena'); } }); }
+      else if (m === 'defense') arenaCall('defense', { team: snapTeam(teamIds('defense')) }).then(r => { if (r.state) { toast('This team now defends you in the arena.'); setTab('arena'); } else toast(r.error || 'The defense could not be saved.', true); });
+      else if (m === 'guild') { useTeam('guild'); gbossFight(); }
+      else startCampaign(PREP.stage);
+    }
+    else if (act === 'ppback') {
+      const m = PREP.mode;
+      if (m === 'tower') { TV.view = 'floors'; setTab('tower'); } else if (m === 'boss') { BV.view = 'levels'; setTab('kerkers'); }
+      else if (m === 'siege') setTab('siege'); else if (m === 'arena' || m === 'defense') setTab('arena');
+      else if (m === 'guild') { SO.tab = 'guild'; GD.view = 'boss'; setTab('social'); }
+      else { CV.view = 'stages'; setTab('campagne'); }
+      window.scrollTo({ top: 0 });
+    }
     else if (act === 'ppph') { PREP.ph = +a.dataset.n; render(); }
-    else if (act === 'auto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
-    else if (act === 'bhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
+    // Auto ×10 in a stage or Boss Hall row opens the team screen first; its own Auto ×10 starts the run
+    else if (act === 'auto10') openPrep(+a.dataset.stage);
+    else if (act === 'ppauto10') startCampaign(+a.dataset.stage, { n: 10, k: 1, won: 0 });
+    else if (act === 'bhauto') openBossPrep(id, +a.dataset.n);
+    else if (act === 'ppbhauto') startDungeon(id, +a.dataset.n, { n: 10, k: 1, won: 0 });
     else if (act === 'spotblock') toast('Tap the glowing Fight button to start.');
     else if (act === 'tournext') { if (tourStep < TOUR.length - 1) { tourStep++; render(); } else { S.seen.tour = true; tourStep = 0; save(); spotFight = true; setTab('campagne'); window.scrollTo({ top: 0 }); } }
     else if (act === 'tourskip') { S.seen.tour = true; tourStep = 0; save(); render(); }
@@ -3539,23 +3524,8 @@
       else toast('Your team is full. Remove someone first.', true);
       save(); render();
     } else if (act === 'sel') { selChamp = id; FG.pick = null; HB.up = null; render(); }
-    else if (act === 'tmsel') { S.tsel = +a.dataset.i; S.team = S.teams[S.tsel].ids; if (!S.team.includes(selChamp)) selChamp = S.team[0] || selChamp; save(); render(); }
-    else if (act === 'tmmode') { S.modeTeam[a.dataset.m] = S.tsel; save(); render(); }
-    else if (act === 'editteam') { useTeam(a.dataset.mode); setTab('team'); }
-    else if (act === 'editbteam') { useBossTeam(a.dataset.aff); setTab('team'); }
-    else if (act === 'tmnew') nameBox('Create a team', freeTeamName(), 'Create', name => { S.teams.push({ name, ids: [...S.team] }); S.tsel = S.teams.length - 1; S.team = S.teams[S.tsel].ids; save(); render(); toast(`${name} is created with the heroes of your current team. Change them below.`, false, 4000); });
-    else if (act === 'tmname') nameBox('Rename team', S.teams[S.tsel].name, 'Save', name => { S.teams[S.tsel].name = name; save(); render(); });
-    else if (act === 'tmfav') { S.tfav = S.tfav === S.tsel ? null : S.tsel; save(); render(); }
-    else if (act === 'tmdel') {
-      const i = S.tsel, t = S.teams[i];
-      confirmBox(`Delete ${esc(t.name)}?`, 'The heroes stay in your roster; only this team is removed. Game modes that used it switch to your first team.', 'Delete', () => {
-        S.teams.splice(i, 1);
-        for (const [m] of TEAM_MODES) S.modeTeam[m] = S.modeTeam[m] === i ? 0 : S.modeTeam[m] > i ? S.modeTeam[m] - 1 : S.modeTeam[m];
-        for (const k in S.bossTeam || {}) { if (S.bossTeam[k] === i) delete S.bossTeam[k]; else if (S.bossTeam[k] > i) S.bossTeam[k]--; }
-        S.tfav = S.tfav === i ? null : S.tfav > i ? S.tfav - 1 : S.tfav;
-        S.tsel = 0; linkTeams(S); save(); render();
-      });
-    }
+    // "Edit team" on a mode's screen: the team screen of that mode (its next fight)
+    else if (act === 'editteam') editTeam(a.dataset.mode);
     else if (act === 'expsel') {
       if (EXSEL.has(id)) { EXSEL.delete(id); render(); return; }
       if (EXSEL.size >= K.EXP_HEROES) { toast(`A crew has at most ${K.EXP_HEROES} heroes.`, true); return; }
@@ -3582,7 +3552,7 @@
     else if (act === 'twlist') { TV.view = 'towers'; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'twrow') { TV.open = TV.open === +a.dataset.n ? 0 : +a.dataset.n; render(); } // a floor row opens and closes
     else if (act === 'twteam') openTowerPrep(S.tw.cur || 'Ember');
-    else if (act === 'sggo') startSiege(+a.dataset.n);
+    else if (act === 'sggo') openSiegePrep(+a.dataset.n);
     else if (act === 'evpop') evPop(+a.dataset.d, a.dataset.k);
     else if (act === 'admload') { ADM.data = null; ADM.err = ''; render(); }
     else if (act === 'setpop') setPop(a.dataset.set);
@@ -4916,19 +4886,72 @@
 
   // ----- start / intro / finish -----
   // rep: an "Auto ×10" run ({ n: 10, k: battle number, won }): the same stage on auto, one battle after the other
-  // ----- before a campaign battle or a Boss Hall level (tab 'prep'): your team on the left (pick a team,
-  // tap a hero to take it out), VS in the middle (enemy level, drops, energy, how your essences hit theirs), the
-  // enemies of each phase on the right, every hero below (tap to put in or take out), Auto ×10 and Fight. A campaign
-  // stage edits the Campaign's team (S.modeTeam.campaign), a boss level the team for the boss's essence (S.bossTeam,
-  // else the Boss Hall team). A new player's first battle skips it. PREP = { stage, ph, boss, n }
-  const PREP = { stage: 0, ph: 0, boss: null, n: 1, tower: null };
-  function openPrep(i) { Object.assign(PREP, { stage: i, ph: 0, boss: null, tower: null }); preBg(K.STAGES[i].chapter); useTeam('campaign'); setTab('prep'); window.scrollTo({ top: 0 }); }
-  function openBossPrep(id, n) { Object.assign(PREP, { boss: id, n, ph: 0, tower: null }); preBg(Math.floor(K.BOSS_ORDER.indexOf(id) * K.CHAPTERS.length / K.BOSS_ORDER.length)); S.bhCur = id; useBossTeam(K.BOSSES[id].aff); setTab('prep'); window.scrollTo({ top: 0 }); }
-  function openTowerPrep(e) { Object.assign(PREP, { tower: e, boss: null, ph: 0 }); preBg(ESS_CH[e] ?? 9); S.tw.cur = e; setTab('prep'); window.scrollTo({ top: 0 }); }
+  // ----- the team screen before every fight (tab 'prep'), as in RAID: your team on the left (tap a hero to take it
+  // out), VS in the middle (enemy level, drops, the cost, how your essences hit theirs), the enemies (of each phase) on
+  // the right, every hero below (tap to put in or take out), Auto ×10 where it exists and Fight. Every mode keeps its
+  // own team (TEAM_MODES): a campaign stage, a Boss Hall level, the Siege, an arena opponent, the arena defense (saved
+  // instead of fought) and the guild boss; a tower floor edits that tower's team (S.tw.team). A new player's first
+  // battle skips it. PREP = { mode, stage, ph, boss, n, tower, from (Siege start wave), offer (arena opponent) }
+  const PREP = { mode: 'stage', stage: 0, ph: 0, boss: null, n: 1, tower: null, from: 1, offer: 0 };
+  // the building lit in the side bar and the menu while the team screen is open: the mode's own
+  function prepNav() { return { tower: 'tower', boss: 'kerkers', siege: 'siege', arena: 'arena', defense: 'arena', guild: 'social' }[PREP.mode] || 'campagne'; }
+  const prepOpen = o => { Object.assign(PREP, { ph: 0, boss: null, tower: null }, o); setTab('prep'); window.scrollTo({ top: 0 }); };
+  function openPrep(i) { preBg(K.STAGES[i].chapter); useTeam('campaign'); prepOpen({ mode: 'stage', stage: i }); }
+  function openBossPrep(id, n) { preBg(Math.floor(K.BOSS_ORDER.indexOf(id) * K.CHAPTERS.length / K.BOSS_ORDER.length)); S.bhCur = id; useTeam('boss'); prepOpen({ mode: 'boss', boss: id, n }); }
+  function openTowerPrep(e) { preBg(ESS_CH[e] ?? 9); S.tw.cur = e; prepOpen({ mode: 'tower', tower: e }); }
+  function openSiegePrep(from) { useTeam('siege'); prepOpen({ mode: 'siege', from }); }
+  function openArenaPrep(n) { useTeam('arena'); prepOpen({ mode: 'arena', offer: n }); }
+  // the arena defense: the team screen shows the heroes that defend now (the server's), and Save sends the new ones
+  function openDefensePrep() {
+    useTeam('defense');
+    const d = defKey() && defGet(), now = d ? defIds(d) : AR.st && AR.st.defense ? AR.st.defense.map(h => h.id).filter(id => S.roster[id]) : [];
+    if (now.length) { S.team.splice(0, S.team.length, ...now.slice(0, 4)); keepHero(S.team, heroId()); }
+    prepOpen({ mode: 'defense' });
+  }
+  function openGuildPrep() { useTeam('guild'); prepOpen({ mode: 'guild' }); }
+  // "Edit team" on a mode's own screen: its team screen, for the fight it would start next
+  function editTeam(mode) {
+    if (mode === 'campaign') openPrep(campSel != null ? campSel : Math.min(K.STAGES.length - 1, clearedOn(S.diff || 0) + 1));
+    else if (mode === 'siege') openSiegePrep(sgStarts().slice(-1)[0] || 1);
+    else if (mode === 'defense') openDefensePrep();
+    else if (mode === 'guild') openGuildPrep();
+    else setTab(mode === 'arena' ? 'arena' : 'team');
+  }
   function prepHtml() {
-    const tower = PREP.tower && K.TOWERS.includes(PREP.tower) ? PREP.tower : null, boss = !tower && PREP.boss && K.BOSSES[PREP.boss] ? PREP.boss : null;
+    const mode = PREP.mode || 'stage', tower = mode === 'tower' && K.TOWERS.includes(PREP.tower) ? PREP.tower : null, boss = mode === 'boss' && K.BOSSES[PREP.boss] ? PREP.boss : null;
     let ph, lvl, rars = [], tile, energy, back, title, sub, teamSel, auto = '', act = 'toggle', fits = () => true, drops = '', warn = '';
-    if (tower) {
+    // what the middle and the button say: the cost (energy, a ticket, a token, a key), the enemy level, Fight
+    let costL = 'Energy', lvlL = 'Enemy level', goTxt = 'Fight', goOff = '', foeLvl = () => lvl, foeNote = '';
+    if (mode === 'siege') {
+      const w = PREP.from, W = K.siegeWave(w), cp = Math.ceil(w / K.SIEGE.cp) * K.SIEGE.cp; sgTick(); useTeam('siege');
+      ph = [K.siegeFoes(w)]; lvl = W.lvl; energy = `${S.sgT} / ${K.SIEGE.tickets}`; costL = 'Tickets';
+      back = 'The Siege'; title = `Wave ${w}`; sub = 'The Siege · every wave stronger'; teamSel = '<span class="pp-tn">Siege team</span>';
+      drops = `<span><small>Checkpoint</small><b>Wave ${cp}</b></span>`;
+      goTxt = `Start <span class="sg-cost">${TICKET_SVG}1</span>`; if (S.sgT < 1) goOff = `No tickets left: the next one comes in ${fmtLeft(S.sgAt + sgMs() - Date.now())}`;
+    } else if (mode === 'arena') {
+      const o = AR.st && AR.st.offers && AR.st.offers[PREP.offer];
+      if (!o) { setTimeout(() => setTab('arena')); return ''; }
+      useTeam('arena');
+      const lv = Object.fromEntries(o.team.map(h => [h.id, h.lvl]));
+      ph = [o.team.map(h => h.id).filter(id => C[id])]; foeLvl = f => lv[f]; lvlL = 'Their power'; costL = 'Tokens';
+      energy = `${AR.st.tokens} / ${K.ARENA_TOKENS}`; drops = `<span><small>Rating</small><b>${o.rating}</b></span>`;
+      back = 'Arena'; title = `vs ${esc(o.name)}`; sub = `Arena${o.kind === 'bot' ? ' · Bot' : ''} · power ${o.power.toLocaleString('en-US')}`; teamSel = '<span class="pp-tn">Arena team</span>';
+      goTxt = 'Fight · 1 token'; if (AR.st.tokens < 1) goOff = 'No tokens left'; if (AR.busy) goOff = 'Please wait';
+      lvl = o.power.toLocaleString('en-US');
+    } else if (mode === 'defense') {
+      useTeam('defense');
+      ph = [[]]; lvl = AR.st && AR.st.defensePower ? AR.st.defensePower.toLocaleString('en-US') : '–'; lvlL = 'Defending now'; costL = 'Cost'; energy = 'Free';
+      back = 'Arena'; title = 'Arena defense'; sub = 'The team other players fight'; teamSel = '<span class="pp-tn">Defense team</span>';
+      goTxt = 'Save defense'; if (AR.busy) goOff = 'Please wait';
+      foeNote = `<p class="empty-note pp-note">Other players attack this team in the arena while you are away. Its levels, skills and gear stay up to date by themselves.</p>${AR.st && AR.st.defense ? miniTeam(AR.st.defense) : ''}`;
+    } else if (mode === 'guild') {
+      const g = GD.mine; if (!g) { setTimeout(() => { SO.tab = 'guild'; setTab('social'); }); return ''; }
+      const ess = K.gbossEss(today()), art = K.GBOSS.art[ess], keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0)); useTeam('guild');
+      ph = [[art]]; lvl = K.DIFFS[GD.d].name; lvlL = 'Difficulty'; foeLvl = () => ''; costL = 'Keys'; energy = `${keysLeft} / ${K.GBOSS.keys}`;
+      drops = `<span><small>Points</small><b>×${K.GBOSS.mult[GD.d]}</b></span>`;
+      back = 'Guild boss'; title = esc(K.BOSSES[art].name); sub = `Guild boss · ${ess}`; teamSel = '<span class="pp-tn">Guild Boss team</span>';
+      goTxt = 'Attack · 1 key'; if (!keysLeft) goOff = 'No keys left today'; if (GD.busy) goOff = 'Fighting…';
+    } else if (tower) {
       // a tower floor: its own team (heroes of its essence and your own hero, tapped in and out with twpick), one fight, no energy
       const f = Math.min(K.TOWER.floors, twProg(tower) + 1), F = K.towerFloor(f), n = twTeam(tower).length;
       ph = [K.towerFoes(tower, f)]; lvl = F.lvl; energy = 'Free'; act = 'twpick'; fits = id => twFits(id, tower);
@@ -4937,28 +4960,28 @@
       drops = `<span><small>First clear</small><span class="tw-msi">${twBigIc(K.towerReward(f)) || `${ic('coin')} ${K.towerReward(f).silver.toLocaleString('en-US')}`}</span></span>`;
       if (n && n < 4) warn = `<p class="tw-warn">${n === 1 ? 'One hero' : `${n} heroes`}: foes ${Math.round((K.TOWER.solo[n - 1] - 1) * 100)}% stronger.</p>`;
     } else if (boss) {
-      const bo = K.BOSSES[boss], bi = K.BOSS_ORDER.indexOf(boss), n = PREP.n, own = S.bossTeam && S.bossTeam[bo.aff] != null && S.bossTeam[bo.aff] < S.teams.length;
-      useBossTeam(bo.aff);
+      const bo = K.BOSSES[boss], bi = K.BOSS_ORDER.indexOf(boss), n = PREP.n;
+      useTeam('boss');
       ph = K.bossPhases(boss, n); lvl = K.bossLvl(bi, n); rars = K.bossLoot(n).rars; tile = 'random'; energy = K.bossEnergy(n);
       back = esc(bo.name); title = `Level ${n}`; sub = `${esc(bo.name)} · ${K.DIFFS[K.bossDiff(n)].name}`;
-      teamSel = `<select data-pp="bteam" data-aff="${bo.aff}" aria-label="Team against ${bo.aff} bosses"><option value="" ${own ? '' : 'selected'}>Boss Hall team (${esc(S.teams[S.modeTeam.boss || 0].name)})</option>${S.teams.map((t, k) => `<option value="${k}" ${own && k === S.tsel ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
-      auto = n <= (S.bh[boss] || 0) ? `<button type="button" class="btn violet" data-act="bhauto" data-id="${boss}" data-n="${n}">Auto ×10</button>` : '';
+      teamSel = '<span class="pp-tn">Boss Hall team</span>';
+      auto = n <= (S.bh[boss] || 0) ? `<button type="button" class="btn violet" data-act="ppbhauto" data-id="${boss}" data-n="${n}">Auto ×10</button>` : '';
     } else {
       const i = PREP.stage, st = K.STAGES[i], d = S.diff || 0, D = K.DIFFS[d], chapDone = clearedOn(d) >= st.chapter * 7 + 6;
       useTeam('campaign');
       ph = K.stagePhases(st, d); lvl = K.diffLvl(st, d); rars = D.rars; tile = st.slot || 'random'; energy = stEn(i, d);
       back = esc(K.CHAPTERS[st.chapter].name); title = st.n === 6 ? 'Boss stage' : `Stage ${st.n + 1}`; sub = `Chapter ${ROMAN[st.chapter]} · ${esc(D.name)}`;
-      teamSel = `<select data-pp="team" aria-label="Team for the campaign">${S.teams.map((t, k) => `<option value="${k}" ${k === S.modeTeam.campaign ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select>`;
-      auto = clearedOn(d) >= i ? `<button type="button" class="btn ${chapDone ? 'violet' : ''}" data-act="auto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>` : '';
+      teamSel = '<span class="pp-tn">Campaign team</span>';
+      auto = clearedOn(d) >= i ? `<button type="button" class="btn ${chapDone ? 'violet' : ''}" data-act="ppauto10" data-stage="${i}" ${chapDone ? '' : `disabled title="Clear all of Chapter ${ROMAN[st.chapter]} on ${esc(D.name)} first"`}>${chapDone ? '' : LOCK_SVG}Auto ×10</button>` : '';
     }
-    const tids = tower ? twTeam(tower) : S.team, foes = ph[PREP.ph] || ph[0];
+    const tids = tower ? twTeam(tower) : S.team, foes = ph[PREP.ph] || ph[0], U = f => E[f] || C[f];
     // the sharp battle art of this fight starts loading while the team is picked (sprites.js hires)
     for (const id of [...tids, ...ph.flat()]) SPR.loadHi(id);
     const card = (id, cls, act) => `<button type="button" class="pp-c ${cls || ''} rar-${C[id].rar}" style="--ec:${AFF_COL[C[id].aff]};--rc:var(--r${C[id].rar})" ${act || ''} title="${esc(C[id].name)}">${por(id)}${essBadge(C[id].aff)}<span class="hx-lv">${S.roster[id].lvl}</span><span class="hx-st">${'★'.repeat(S.roster[id].stars)}</span></button>`;
     const slots = [0, 1, 2, 3].map(k => tids[k] ? card(tids[k], 'pp-slot', `data-act="${act}" data-id="${tids[k]}"`) : '<div class="pp-c pp-slot empty"><small>Empty</small></div>').join('');
-    const foeCard = f => { const u = E[f]; return `<span class="pp-c foe ${K.BOSSES[f] ? 'boss' : ''}" style="--ec:${AFF_COL[u.aff]}" title="${esc(u.name)}">${por(f)}${essBadge(u.aff)}<span class="hx-lv">${lvl}</span></span>`; };
+    const foeCard = f => { const u = U(f), l = foeLvl(f); return `<span class="pp-c foe ${K.BOSSES[f] ? 'boss' : ''}" style="--ec:${AFF_COL[u.aff]}" title="${esc(u.name)}">${por(f)}${essBadge(u.aff)}${l ? `<span class="hx-lv">${l}</span>` : ''}</span>`; };
     // how the team's essences meet these foes: Strong / Weak hits, counted per hero against the phase's foes
-    const edge = tids.map(id => { const hits = foes.map(f => K.hitType(C[id].aff, E[f].aff)); return [id, hits.filter(h => h === 'strong').length, hits.filter(h => h === 'weak').length]; });
+    const edge = tids.map(id => { const hits = foes.map(f => K.hitType(C[id].aff, U(f).aff)); return [id, hits.filter(h => h === 'strong').length, hits.filter(h => h === 'weak').length]; });
     const strong = edge.filter(e => e[1] > e[2]).length, weak = edge.filter(e => e[2] > e[1]).length;
     const list = Object.keys(S.roster).filter(id => C[id] && !C[id].captured && fits(id)).sort((a, b) => (tids.includes(b) - tids.includes(a)) || power(statsOf(b)) - power(statsOf(a)));
     const roster = list.map(id => card(id, `${tids.includes(id) ? 'in' : ''} ${onExp(id) ? 'away' : ''}`, `data-act="${act}" data-id="${id}"`)).join('');
@@ -4968,14 +4991,14 @@
         <section class="pp-side me"><div class="pp-h">${teamSel}<span class="pp-pw">Power <b>${teamPower(tids).toLocaleString('en-US')}</b></span></div>
           <div class="pp-slots">${slots}</div>${rolesHtml(tids)}${warn}</section>
         <section class="pp-vs"><b class="pp-vsb">VS</b>
-          <div class="pp-info"><span><small>Enemy level</small><b>${lvl}</b></span>${drops || `<span><small>Drops</small><span class="st-dic">${rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[tile][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear">`).join('')}</span></span>`}<span><small>Energy</small><b>${energy}</b></span></div>
+          <div class="pp-info"><span><small>${lvlL}</small><b>${lvl}</b></span>${drops || `<span><small>Drops</small><span class="st-dic">${rars.map(r => `<img class="gt-ic rar-${r}" src="${GEAR_TILE[tile][Math.max(1, r)]}" alt="" title="${K.RARITIES[r]} gear">`).join('')}</span></span>`}<span><small>${costL}</small><b>${energy}</b></span></div>
           <p class="pp-edge">${strong ? `<span class="good">${strong} ${strong === 1 ? 'hero hits' : 'heroes hit'} Strong</span>` : ''}${strong && weak ? ' · ' : ''}${weak ? `<span class="bad">${weak} ${weak === 1 ? 'hero hits' : 'heroes hit'} Weak</span>` : ''}${!strong && !weak ? 'No essence edge either way' : ''}</p></section>
         <section class="pp-side foe"><div class="pp-h">${ph.length > 1 ? `<div class="seg pp-ph" role="group" aria-label="Phase">${ph.map((p, k) => `<button type="button" class="${k === PREP.ph ? 'on' : ''}" data-act="ppph" data-n="${k}" aria-pressed="${k === PREP.ph}">Phase ${k + 1}${p.some(f => K.BOSSES[f]) ? ' · Boss' : ''}</button>`).join('')}</div>` : `<span class="pp-tn">${foes.length} ${foes.length === 1 ? 'foe' : 'foes'}</span>`}</div>
-          <div class="pp-slots foes">${foes.map(foeCard).join('')}</div>
-          <p class="pp-ess">${[...new Set(foes.map(f => E[f].aff))].map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</p></section>
+          ${foeNote || `<div class="pp-slots foes">${foes.map(foeCard).join('')}</div>`}
+          <p class="pp-ess">${[...new Set(foes.map(f => U(f).aff))].map(e => `<b class="cv-ess" style="--c:${AFF_COL[e]}">${e}</b>`).join('')}</p></section>
       </div>
       <div class="pp-bottom"><div class="pp-roster">${roster}</div>
-        <div class="pp-go">${auto}<button type="button" class="btn primary pp-fight" data-act="ppgo" ${tids.length ? '' : 'disabled'}>Fight${typeof energy === 'number' ? enCost(energy) : ''}</button></div></div>
+        <div class="pp-go">${auto}<button type="button" class="btn primary pp-fight" data-act="ppgo" ${tids.length && !goOff ? '' : `disabled title="${esc(goOff || 'Pick heroes first')}"`}>${goTxt}${typeof energy === 'number' ? enCost(energy) : ''}</button></div></div>
     </div>`;
   }
   function startCampaign(i, rep) {
@@ -4989,7 +5012,7 @@
     if (!bhLvlOpen(n)) { toast(`${bhLvlNeed(n)}.`, true); render(); return; }
     if (!spendEnergy(K.bossEnergy(n))) { render(); return; }
     const bi = K.BOSS_ORDER.indexOf(id), bo = K.BOSSES[id];
-    useBossTeam(bo.aff);
+    useTeam('boss');
     runBattle({ type: 'boss', id, bi, n, rep, lvl: K.bossLvl(bi, n), foes: K.bossFoes(id, n), phases: K.bossPhases(id, n), area: AREA_OF[bo.aff], bg: chapterBg(Math.floor(bi * K.CHAPTERS.length / K.BOSS_ORDER.length)), title: `${bo.name} · level ${n}` });
   }
   // enemies of phase p (0-based): campaign stages and Boss Hall levels both have K.PHASES phases
@@ -5864,7 +5887,7 @@
           else { S.fodder[cid] = (S.fodder[cid] || 0) + 1; captured = { id: cid, isNew: false }; }
         }
         if (Math.random() < K.ELIXIR.camp) { const foes = K.stagePhases(cfg.stage, cfg.diff).flat(); elixir = unitAff(K.pick(foes)); }
-        if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; if (S.team.length < 4) S.team.push(u); }
+        if (!hard && u && !S.roster[u]) { S.roster[u] = newHero(u); S.roster[u].lvl = Math.max(1, Math.min(K.maxLvl(S.roster[u].stars, u), Math.min(...S.team.map(id => S.roster[id].lvl)) - 1)); unlock = u; for (const t of S.teams) if (t.ids.length < 4 && !t.ids.includes(u)) t.ids.push(u); }
       } else if (cfg.type === 'tower') {
         // a floor pays once, on its first clear (the tower climbs one floor at a time)
         if (cfg.floor > (S.tw.prog[cfg.ess] || 0)) { S.tw.prog[cfg.ess] = cfg.floor; first = true; }
@@ -6135,7 +6158,7 @@
     endBattleView(); B = null;
     if (!cfg) { render(); return; }
     if (go.startsWith('open-')) setTab(go.slice(5));
-    else if (cfg.type === 'siege') { if (go === 'again') startSiege(cfg.from); else if (go === 'prep') { useTeam('siege'); setTab('team'); } else if (go === 'champs') setTab('team'); else setTab('siege'); }
+    else if (cfg.type === 'siege') { if (go === 'again') startSiege(cfg.from); else if (go === 'prep') openSiegePrep(cfg.from); else if (go === 'champs') setTab('team'); else setTab('siege'); }
     else if (go === 'next') { if (cfg.type === 'stage') startCampaign(cfg.i + 1); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor + 1); else startDungeon(cfg.id, cfg.n + 1); }
     else if (go === 'again') { if (cfg.type === 'stage') startCampaign(cfg.i); else if (cfg.type === 'tower') startTower(cfg.ess, cfg.floor); else startDungeon(cfg.id, cfg.n); }
     else if (go === 'auto10') { if (cfg.type === 'stage') startCampaign(cfg.i, { n: 10, k: 1, won: 0 }); else startDungeon(cfg.id, cfg.n, { n: 10, k: 1, won: 0 }); }
