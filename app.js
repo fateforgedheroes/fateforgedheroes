@@ -3945,6 +3945,7 @@
   const clock = () => (PAUSE.on ? PAUSE.since : performance.now()) - PAUSE.total;
   const resumed = () => (PAUSE.on ? new Promise(r => PAUSE.waiters.push(r)) : Promise.resolve());
   function setPaused(on) {
+    if (on) PAUSE.hit = false; // a real pause (the guide) takes over a hit-stop: its timer must not end it
     if (on === PAUSE.on) return;
     if (on) { PAUSE.on = true; PAUSE.since = performance.now(); return; }
     PAUSE.total += performance.now() - PAUSE.since; PAUSE.on = false;
@@ -4204,6 +4205,7 @@
   }
   const VFXCOL = { fire: '#ff8a2a', water: '#7ad0ff', dark: '#9a6aff', blood: '#e0303a', poison: '#9ae050', smoke: '#a8a8b0', curse: '#c080ff', holy: '#ffe8a0', thorns: '#6ac04a', rune: '#7ab8ff' };
   function impactFx(u, skill, t) {
+    impactGlow(u, skill, t);
     const v = skill.vfx || (skill.anim === 'melee' ? 'slash' : 'dark');
     const [x, y] = center(t), dir = u.side === 'hero' ? 1 : -1;
     if (v === 'slash') { addFx({ kind: 'slash', x, y, dir, col: '#fff4e0', dur: 200 }); burst(x, y, '#fff0c8', 6, 1.2); }
@@ -4217,9 +4219,118 @@
     else if (v === 'quake') { burst(x, t._rs.y - 2, ['#8a7a68', '#5a4a3a'], 12, 1.5, 2, 0.12); }
     else { const col = VFXCOL[v] || AFF_COL[u.aff]; addFx({ kind: 'ring', x, y, col, dur: 240, r: 16 }); burst(x, y, col, 10, 1.4, v === 'smoke' ? 2 : 1, v === 'poison' || v === 'smoke' ? -0.02 : 0.06); }
   }
+  // ----- the glowing layer over the pixel effects: smooth light drawn additively on the impact, so a hit jumps out next
+  // to the smooth manga figures. Every hit gets a flare, a shock ring and sparks in the attacker's essence, plus its own
+  // particles (Ember embers, Verdant leaves, Storm and Radiant sparks, Frost ice shards, Umbral wisps, Aether prisms); a
+  // skill hits bigger than a basic attack (a slash arc for melee, lightning for Storm, a light pillar for Radiant, a void
+  // implosion for Umbral, a ground ring); a critical hit adds speed rays, a white flare and a short hit-stop; a skill
+  // first charges a magic circle under its caster. At 5× (calm) only a small flare. Effects: drawFx, particles: frame.
+  const ESS_FX = {
+    Ember: { col: '#ff7a2a', hot: '#ffd27a', p: 'ember' }, Verdant: { col: '#66d04a', hot: '#e0ffb8', p: 'leaf' },
+    Storm: { col: '#5ac8ff', hot: '#fff6a0', p: 'spark' }, Frost: { col: '#8ad8ff', hot: '#ffffff', p: 'shard' },
+    Radiant: { col: '#ffd45a', hot: '#fffbe0', p: 'spark' }, Umbral: { col: '#a46aff', hot: '#f0d8ff', p: 'wisp' },
+    Aether: { col: '#c8b8ff', hot: '#ffffff', p: 'prism' },
+  };
+  const essFx = aff => ESS_FX[aff] || ESS_FX.Aether;
+  const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; };
+  // glowing particles of a kind (spark, ember, shard, leaf, wisp, prism) flying out from a spot
+  function fxp(x, y, k, col, n, sp, up) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, s = (0.5 + Math.random()) * (sp || 1.6);
+      R.parts.push({ k, x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s * 0.8 - (up || 0.5), col: Array.isArray(col) ? col[i % col.length] : col, life: 22 + Math.random() * 18, max: 40, size: k === 'shard' ? 2.2 + Math.random() * 1.6 : k === 'leaf' ? 2 + Math.random() : 1.2 + Math.random(),
+        grav: k === 'ember' || k === 'wisp' ? -0.03 : k === 'leaf' ? 0.02 : 0.07, rot: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.4, h: Math.random() * 360 });
+    }
+  }
+  // a short freeze of the fight on a big blow (the battle clock stops; particles and flares keep moving)
+  function hitStop(ms) {
+    if (PAUSE.on || calm() || document.hidden) return;
+    setPaused(true); PAUSE.hit = true;
+    setTimeout(() => { if (PAUSE.hit) { PAUSE.hit = false; setPaused(false); } }, ms);
+  }
+  function impactGlow(u, skill, t) {
+    const E = essFx(u.aff), [x, y] = center(t), big = skill.cd > 0, many = skill.target === 'enemies' || skill.target === 'all', q = many ? 0.6 : 1;
+    if (calm()) { addFx({ kind: 'flare', x, y, col: E.col, hot: E.hot, r: big ? 18 : 12, dur: 180 }); return; }
+    addFx({ kind: 'flare', x, y, col: E.col, hot: E.hot, r: (big ? 26 : 17) * (many ? 0.8 : 1), dur: big ? 340 : 230 });
+    if (!many) addFx({ kind: 'shock', x, y, col: E.col, r: big ? 32 : 20, w: big ? 2.6 : 1.8, flat: 0.7, dur: big ? 380 : 260 }); // one target: a ring in the air too
+    fxp(x, y, 'spark', [E.hot, '#ffffff', E.col], Math.round((big ? 12 : 7) * q), big ? 2.6 : 1.9, 0.3);
+    fxp(x, y, E.p, [E.col, E.hot], Math.round((big ? 14 : 6) * q), big ? 1.8 : 1.3);
+    if (!big) return;
+    const gy = t._rs.y, dir = u.side === 'hero' ? 1 : -1;
+    addFx({ kind: 'shock', x: t._rs.x, y: gy, col: E.col, r: many ? 26 : 36, w: 2, flat: 0.28, dur: 460 }); // a ring over the ground
+    if (skill.anim === 'melee') addFx({ kind: 'arc', x, y, dir, col: E.col, hot: E.hot, r: Math.max(18, t._rs.m.top * 0.42), dur: 260 });
+    if (u.aff === 'Storm') addFx({ kind: 'bolt', x, y, col: E.col, dur: 300 });
+    else if (u.aff === 'Radiant') addFx({ kind: 'pillar', x, y: gy, col: E.col, hot: E.hot, w: 22, dur: 380 });
+    else if (u.aff === 'Umbral') addFx({ kind: 'implode', x, y, col: E.col, r: 34, dur: 380 });
+    if (!many) R.shake = Math.max(R.shake, 3);
+  }
+  // a glowing particle by its kind (fxp): a spark streak, a glowing ember or wisp, a turning ice shard or leaf, a prism star
+  function drawPart(p) {
+    const a = Math.min(1, p.life / 14); p.rot = (p.rot || 0) + (p.vr || 0);
+    g.globalCompositeOperation = p.k === 'leaf' ? 'source-over' : 'lighter'; g.globalAlpha = a; g.fillStyle = p.col;
+    if (p.k === 'spark') { g.strokeStyle = p.col; g.lineWidth = p.size * 0.8; g.lineCap = 'round'; g.beginPath(); g.moveTo(p.x - p.vx * 2.5, p.y - p.vy * 2.5); g.lineTo(p.x, p.y); g.stroke(); }
+    else if (p.k === 'ember' || p.k === 'wisp') { const r = p.k === 'wisp' ? p.size * (2 + (1 - p.life / (p.max || 40)) * 3) : p.size * 2.2; g.globalAlpha = a * 0.35; g.beginPath(); g.arc(p.x, p.y, r, 0, 7); g.fill(); g.globalAlpha = a; g.beginPath(); g.arc(p.x, p.y, p.size * 0.7, 0, 7); g.fill(); }
+    else if (p.k === 'shard' || p.k === 'leaf') {
+      g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.beginPath();
+      if (p.k === 'shard') { g.moveTo(0, -p.size); g.lineTo(p.size * 0.45, 0); g.lineTo(0, p.size); g.lineTo(-p.size * 0.45, 0); g.closePath(); } else { g.ellipse(0, 0, p.size, p.size * 0.45, 0, 0, 7); p.vx *= 0.97; }
+      g.fill(); g.restore();
+    } else if (p.k === 'prism') { const s = p.size * 1.4; g.fillStyle = `hsl(${(p.h + p.life * 9) % 360},90%,72%)`; g.fillRect(p.x - s, p.y - 0.4, s * 2, 0.8); g.fillRect(p.x - 0.4, p.y - s, 0.8, s * 2); }
+  }
+  // a skill gathers its power first: a magic circle under the caster and light streaming in
+  function chargeFx(u) {
+    if (calm()) return Promise.resolve();
+    const E = essFx(u.aff), rs = u._rs, [x, y] = center(u);
+    addFx({ kind: 'circle', x: rs.x, y: rs.y, col: E.col, r: Math.max(20, rs.m.cw * 0.7), dur: 520 });
+    for (let i = 0; i < 14; i++) { const a = Math.random() * Math.PI * 2, d = 26 + Math.random() * 16; R.parts.push({ k: 'spark', x: x + Math.cos(a) * d, y: y + Math.sin(a) * d * 0.7, vx: -Math.cos(a) * d / 16, vy: -Math.sin(a) * d * 0.7 / 16, col: i % 2 ? E.hot : E.col, life: 16, max: 16, size: 1.4, grav: 0 }); }
+    return sleep(170);
+  }
   function drawFx(now) {
     R.fx = R.fx.filter(f => now - f.t0 < f.dur);
+    g.save();
     for (const f of R.fx) {
+      const k = Math.max(0, (now - f.t0) / f.dur), out = 1 - (1 - Math.min(1, k * 1.6)) ** 3; // out: an ease-out of the start
+      if (f.kind === 'flare') {
+        const r = Math.max(1, f.r * (0.35 + 0.65 * out)), gr = g.createRadialGradient(f.x, f.y, 0, f.x, f.y, r);
+        gr.addColorStop(0, rgba('#ffffff', 0.7)); gr.addColorStop(0.22, rgba(f.hot || f.col, 0.6)); gr.addColorStop(0.55, rgba(f.col, 0.32)); gr.addColorStop(1, rgba(f.col, 0));
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = (1 - k) * (f.a || 1); g.fillStyle = gr; g.beginPath(); g.arc(f.x, f.y, r, 0, 7); g.fill();
+      } else if (f.kind === 'shock') {
+        const r = f.r * (0.15 + 0.85 * out);
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = (1 - k) * 0.7; g.strokeStyle = f.col; g.lineWidth = Math.max(0.3, f.w * 0.8 * (1 - k));
+        g.beginPath(); g.ellipse(f.x, f.y, r, r * f.flat, 0, 0, 7); g.stroke();
+        g.strokeStyle = rgba('#ffffff', 0.35); g.lineWidth = Math.max(0.2, f.w * 0.3 * (1 - k)); g.beginPath(); g.ellipse(f.x, f.y, r * 0.96, r * f.flat * 0.96, 0, 0, 7); g.stroke();
+      } else if (f.kind === 'rays') {
+        if (!f.ang) f.ang = Array.from({ length: f.n || 12 }, () => [Math.random() * Math.PI * 2, 0.6 + Math.random() * 0.6]);
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1 - k; g.lineCap = 'round';
+        for (const [a, l] of f.ang) { const r0 = f.r * (0.15 + 0.55 * out), r1 = r0 + f.r * l * (1 - k * 0.6); g.strokeStyle = f.col; g.lineWidth = 1.6 * (1 - k) + 0.3; g.beginPath(); g.moveTo(f.x + Math.cos(a) * r0, f.y + Math.sin(a) * r0 * 0.8); g.lineTo(f.x + Math.cos(a) * r1, f.y + Math.sin(a) * r1 * 0.8); g.stroke(); }
+      } else if (f.kind === 'arc') {
+        // a big slash crescent through the target, swept in the attack's direction
+        const a0 = f.dir > 0 ? -2.2 : -0.94, sweep = 2.4 * out, a1 = f.dir > 0 ? a0 + sweep : a0 - sweep;
+        g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+        for (const [w, c, al] of [[6, f.col, 0.45], [3, f.hot, 0.8], [1.2, '#ffffff', 1]]) { g.globalAlpha = al * (1 - k); g.strokeStyle = c; g.lineWidth = w * (1 - k * 0.5); g.beginPath(); g.arc(f.x - f.dir * f.r * 0.25, f.y + f.r * 0.1, f.r, Math.min(a0, a1), Math.max(a0, a1)); g.stroke(); }
+      } else if (f.kind === 'bolt') {
+        // lightning from the sky onto the target, a new zigzag every few frames
+        if (!f.pts || now - (f.at || 0) > 55) { f.at = now; f.pts = []; let px = f.x + (Math.random() - 0.5) * 20; for (let y = -4; y < f.y; y += 9) { f.pts.push([px, y]); px += (Math.random() - 0.5) * 12; } f.pts.push([f.x, f.y]); }
+        g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round';
+        for (const [w, c, al] of [[5, f.col, 0.35], [2, '#e8f8ff', 0.95]]) { g.globalAlpha = al * (1 - k) * (0.7 + Math.random() * 0.3); g.strokeStyle = c; g.lineWidth = w; g.beginPath(); f.pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.stroke(); }
+      } else if (f.kind === 'pillar') {
+        const w = f.w * Math.sin(Math.min(1, k * 1.3) * Math.PI) + 1, gr = g.createLinearGradient(f.x - w / 2, 0, f.x + w / 2, 0);
+        gr.addColorStop(0, rgba(f.col, 0)); gr.addColorStop(0.35, rgba(f.col, 0.55)); gr.addColorStop(0.5, rgba(f.hot, 0.95)); gr.addColorStop(0.65, rgba(f.col, 0.55)); gr.addColorStop(1, rgba(f.col, 0));
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1; g.fillStyle = gr; g.fillRect(f.x - w / 2, 0, w, f.y + 2);
+      } else if (f.kind === 'implode') {
+        const r = f.r * (1 - out) + 2;
+        g.globalCompositeOperation = 'source-over'; g.globalAlpha = 0.45 * (1 - k); g.fillStyle = '#12061e'; g.beginPath(); g.arc(f.x, f.y, Math.max(2, f.r * 0.45 * (1 - k * 0.5)), 0, 7); g.fill();
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1 - k * 0.8; g.strokeStyle = f.col; g.lineWidth = 2.2; g.beginPath(); g.arc(f.x, f.y, r, 0, 7); g.stroke();
+      } else if (f.kind === 'circle') {
+        // a magic circle on the ground: two rings and runes turning, fading in and out
+        const al = Math.sin(Math.min(1, k) * Math.PI), r = f.r * (0.7 + 0.3 * out);
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = al; g.strokeStyle = f.col; g.lineWidth = 1.7;
+        g.beginPath(); g.ellipse(f.x, f.y, r, r * 0.3, 0, 0, 7); g.stroke(); g.lineWidth = 0.7; g.beginPath(); g.ellipse(f.x, f.y, r * 0.72, r * 0.22, 0, 0, 7); g.stroke();
+        g.fillStyle = f.col; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + k * 3; g.fillRect(f.x + Math.cos(a) * r * 0.86 - 1, f.y + Math.sin(a) * r * 0.26 - 1, 2, 2); }
+        const gr = g.createRadialGradient(f.x, f.y, 0, f.x, f.y, r); gr.addColorStop(0, rgba(f.col, 0.55)); gr.addColorStop(1, rgba(f.col, 0)); g.fillStyle = gr; g.globalAlpha = al; g.beginPath(); g.ellipse(f.x, f.y, r, r * 0.3, 0, 0, 7); g.fill();
+      }
+    }
+    g.restore();
+    for (const f of R.fx) {
+      if (['flare', 'shock', 'rays', 'arc', 'bolt', 'pillar', 'implode', 'circle'].includes(f.kind)) continue;
       const k = Math.max(0, (now - f.t0) / f.dur); // the frame time can be a hair before the effect started
       g.globalAlpha = 1 - k * 0.6;
       if (f.kind === 'slash') {
@@ -4287,6 +4398,9 @@
       } else if (p.kind === 'glob') {
         g.fillStyle = p.col; g.fillRect(X - 3, Y - 3, 6, 6); g.fillStyle = '#ffffff'; g.fillRect(X - 2, Y - 2, 2, 2);
       } else {
+        // a spell orb: a soft glow around its core (additive), then the pixel core
+        const gr = g.createRadialGradient(x, y, 0, x, y, 9); gr.addColorStop(0, rgba('#ffffff', 0.8)); gr.addColorStop(0.35, rgba(p.col, 0.6)); gr.addColorStop(1, rgba(p.col, 0));
+        g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.beginPath(); g.arc(x, y, 9, 0, 7); g.fill(); g.globalCompositeOperation = 'source-over';
         g.fillStyle = p.col; g.fillRect(X - 3, Y - 3, 7, 7); g.fillStyle = '#fff6e0'; g.fillRect(X - 1, Y - 1, 3, 3);
         part(x - d * 4, y + (Math.random() - 0.5) * 4, -d * 0.3, (Math.random() - 0.5) * 0.3, p.col, 14, Math.random() < 0.5 ? 2 : 1, 0);
       }
@@ -4582,7 +4696,8 @@
     drawProjs(now);
     drawFx(now);
     R.parts = R.parts.filter(p => (p.life -= 1) > 0);
-    for (const p of R.parts) { p.x += p.vx; p.y += p.vy; p.vy += p.grav; g.fillStyle = p.col; g.globalAlpha = Math.min(1, p.life / 12); g.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size); }
+    for (const p of R.parts) { p.x += p.vx; p.y += p.vy; p.vy += p.grav; if (p.k) { drawPart(p); continue; } g.fillStyle = p.col; g.globalAlpha = Math.min(1, p.life / 12); g.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size); }
+    g.globalCompositeOperation = 'source-over';
     g.globalAlpha = 1;
     if (R.dim > 0.01) { g.fillStyle = `rgba(6,4,8,${R.dim})`; g.fillRect(0, 0, W, H); }
     requestAnimationFrame(frame);
@@ -4656,6 +4771,7 @@
     if (!skill.cd) rs.alt = !rs.alt; // a character with poses but no skill swings attack 1 and attack 2 in turn
     if (skill.anim === 'melee') {
       SFX.swing();
+      if (skill.cd > 0 && !calm()) addFx({ kind: 'shock', x: rs.x, y: rs.y, col: essFx(u.aff).col, r: 26, w: 2, flat: 0.3, dur: 320 }); // a skill's leap kicks off from a ring on the ground
       const tx = targets.reduce((s, t) => s + t._rs.x, 0) / targets.length - dir * ((u.big ? 30 : 22) + Math.max(...targets.map(t => t.immortal ? Math.round(t._rs.m.cw * 0.38) : t.big ? 20 : 8)));
       const ty = targets.reduce((s, t) => s + t._rs.y, 0) / targets.length;
       const dx = tx - rs.x, dy = ty - rs.y;
@@ -4673,8 +4789,14 @@
       setPose(u, 'cast', 500);
       const allies = targets.filter(t => t.side === u.side);
       const list = allies.length ? allies : [u];
-      if (v === 'heal') { SFX.heal(); for (const t of list) { rise(t._rs.x, t._rs.y - 8, ['#9be070', '#d8ffb0'], 14, 26); addFx({ kind: 'ring', x: t._rs.x, y: t._rs.y - 4, col: '#9be070', r: 20, dur: 420 }); } }
-      else if (v === 'shield') { SFX.shield(); for (const t of list) addFx({ kind: 'dome', x: t._rs.x, y: t._rs.y, rx: t._rs.m.cw / 2 + 8, ry: t._rs.m.top + 6, col: '#9fd0ff', dur: 520 }); }
+      if (v === 'heal') {
+        SFX.heal();
+        for (const t of list) {
+          rise(t._rs.x, t._rs.y - 8, ['#9be070', '#d8ffb0'], 14, 26); addFx({ kind: 'ring', x: t._rs.x, y: t._rs.y - 4, col: '#9be070', r: 20, dur: 420 });
+          if (!calm()) { addFx({ kind: 'flare', x: t._rs.x, y: t._rs.y - t._rs.m.top * 0.5, col: '#7be060', hot: '#e8ffd0', r: 26, dur: 420, a: 0.7 }); fxp(t._rs.x, t._rs.y - 6, 'ember', ['#9be070', '#e8ffd0'], 8, 0.8, 0.8); }
+        }
+      }
+      else if (v === 'shield') { SFX.shield(); for (const t of list) { addFx({ kind: 'dome', x: t._rs.x, y: t._rs.y, rx: t._rs.m.cw / 2 + 8, ry: t._rs.m.top + 6, col: '#9fd0ff', dur: 520 }); if (!calm()) addFx({ kind: 'shock', x: t._rs.x, y: t._rs.y, col: '#9fd0ff', r: t._rs.m.cw * 0.7 + 8, w: 2, flat: 0.3, dur: 420 }); } }
       else if (v === 'revive') { SFX.heal(); for (const t of targets) { addFx({ kind: 'beam', x: t._rs.x, y: t._rs.y, col: '#ffe8a0', w: 18, dur: 500 }); rise(t._rs.x, t._rs.y - 6, ['#ffe8a0', '#ffffff'], 20, 20); } }
       else if (v === 'dust') { for (let i = 0; i < 4; i++) burst(rs.x + (Math.random() - 0.5) * 40, rs.y - 4, ['#6a5040', '#8a7058'], 8, 1.6, 2, 0.08); R.shake = 4; SFX.boom(); }
       else if (v === 'curse') { SFX.magic(); rise(rs.x, rs.y - 10, ['#c080ff', '#6a3a9a'], 18, 40); }
@@ -4688,6 +4810,7 @@
       rs.ox = 0; rs.glow = 0;
       const list = skill.random ? [targets[0]] : targets;
       const col = VFXCOL[v] || AFF_COL[u.aff];
+      if (skill.cd > 0) await chargeFx(u); // a skill gathers its power first
       if (v === 'arrowrain') { SFX.arrow(); await Promise.all(list.map(t => falling(t, 'arrow', '#d8c8a8', 5))); }
       else if (v === 'meteor') { SFX.fire(); await Promise.all(list.map(t => falling(t, 'rock', '#ff8a2a', 2))); SFX.boom(); }
       else if (v === 'holy' || v === 'sunfall') { SFX.magic(); await Promise.all(list.map(t => addFx({ kind: 'beam', x: center(t)[0], y: t._rs.y, col, w: v === 'sunfall' ? 30 : 12, dur: v === 'sunfall' ? 420 : 300 }))); }
@@ -4750,6 +4873,12 @@
         popup(t, String(amt), info.crit ? 'crit' : 'dmg');
         setPose(t, 'hit', 340);
         if (info.crit) { SFX.crit(); R.shake = Math.max(R.shake, 5); } else SFX.hit(); // no white screen flash on a crit (it was too much)
+        // a critical hit: speed rays, a white flare and a short hit-stop; a Strong Hit: a golden ring
+        if (!calm()) {
+          const [x, y] = center(t);
+          if (info.crit) { addFx({ kind: 'rays', x, y, col: '#fff1c8', r: 44, n: 14, dur: 320 }); addFx({ kind: 'flare', x, y, col: '#ffe8b0', hot: '#ffffff', r: 36, dur: 260, a: 0.85 }); fxp(x, y, 'spark', ['#ffffff', '#ffe8a0'], 10, 3); hitStop(90); }
+          else if (info.hit === 'strong') addFx({ kind: 'shock', x, y, col: '#ffd45a', r: 26, w: 2, flat: 0.8, dur: 300 });
+        }
       }
       if (info.armored === true) popup(t, 'Armor', 'resist');
       if (info.armored === 'pop') popup(t, 'Protected', 'resist');
@@ -4775,6 +4904,7 @@
     breakHit: () => updateOverlay(),
     affinityBreak: t => {
       R.shake = 9; flash(); SFX.crit(); SFX.boom();
+      if (!calm()) { const [bx, by] = center(t); addFx({ kind: 'rays', x: bx, y: by, col: AFF_COL[t.aff], r: 60, n: 18, dur: 420 }); addFx({ kind: 'shock', x: bx, y: by, col: '#ffffff', r: 50, w: 3, flat: 0.8, dur: 460 }); hitStop(120); }
       const [x, y] = center(t); burst(x, y, ['#fff6d0', AFF_COL[t.aff], '#ffffff'], 30, 2.6, 2);
       queueBanner('AFFINITY BREAK', t.name + ' is stunned', 'big brkb', 900);
       updateOverlay();
