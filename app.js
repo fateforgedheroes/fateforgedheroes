@@ -2680,7 +2680,7 @@
     S.gems -= own; return true;
   }
   const MARKET = [
-    { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: '+100 Energy, on top of your bar (you can hold up to twice your bar). Dearer with every refill on the same day.', r: { energy: 100 }, price: [30, 40, 60, 80, 100], per: 'day' },
+    { id: 'energy', group: 'Energy', name: 'Energy Refill', desc: 'Fills your energy up to your max energy. Dearer with every refill on the same day.', full: true, r: {}, price: [30, 40, 60, 80, 100], per: 'day' },
     { id: 'fate', group: 'Fate Shards', name: K.SHARD.fate.name, desc: 'Summons a hero at the Fate Altar, mostly Uncommon or Rare.', r: { fs: { fate: 1 } }, price: 15, limit: 10, per: 'day' },
     { id: 'greater', group: 'Fate Shards', name: K.SHARD.greater.name, desc: 'Better odds on Rare and Epic heroes.', r: { fs: { greater: 1 } }, price: 90, limit: 3, per: 'day' },
     { id: 'ancient', group: 'Fate Shards', name: K.SHARD.ancient.name, desc: 'Epic and Legendary heroes; counts for the Epic pity.', r: { fs: { ancient: 1 } }, price: 300, limit: 3, per: 'week' },
@@ -2715,12 +2715,15 @@
     const n = mkBought(it), price = mkPrice(it);
     if (n >= mkLimit(it)) { toast(`Sold out for ${it.per === 'week' ? 'this week' : 'today'}.`); return; }
     if (gemsAll() < price) { toast(`Not enough Crystals: this costs ${price}, you have ${gemsAll()}.`, true); return; }
-    if (it.r.energy) { energyTick(); if (S.energy + it.r.energy > enCeil()) { toast(`Your energy is nearly full: you can hold at most ${enCeil()} (twice your bar). Spend some first.`, true, 4000); return; } }
+    // the Energy Refill fills the energy up to the account's max energy (energy above it, from level-ups or gifts,
+    // stays); not when it is full already
+    if (it.full) { energyTick(); if (S.energy >= enMax()) { toast(`Your energy is already full (${S.energy} / ${enMax()}).`, true, 3500); return; } }
     const go = async () => {
       if (MK.busy || gemsAll() < mkPrice(it) || mkBought(it) >= mkLimit(it)) return;
       MK.busy = true; const ok = await payGems(mkPrice(it), it.id); MK.busy = false; if (!ok) return;
       const m = mkState(), book = it.per === 'week' ? m.w : m.d;
       book[it.id] = (book[it.id] || 0) + 1;
+      if (it.full) { energyTick(); const was = S.energy; S.energy = Math.max(S.energy, enMax()); paintEnergy(); save(); hud(); SFX.up(); render(); toast(`Energy refilled: +${S.energy - was}, now ${S.energy} / ${enMax()}.`, false, 3000); return; }
       grantGift(it.r); save(); hud(); SFX.up(); render();
       toast(`Bought: ${giftParts(it.r).join(' · ')}.`, false, 3000);
     };
@@ -2728,7 +2731,7 @@
   }
   function marketHtml() {
     if (Date.now() - PAID.at > 30000) setTimeout(paidLoad, 0); // the bought Crystals, fresh when the Market opens
-    const icon = it => it.fcs ? `<span class="mk-ic fcs">${FCS_SVG}</span>` : it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
+    const icon = it => it.fcs ? `<span class="mk-ic fcs">${FCS_SVG}</span>` : it.full || it.r.energy ? `<span class="mk-ic en">${EN_SVG}</span>` : it.r.fs ? `<span class="mk-ic">${shardIc(Object.keys(it.r.fs)[0])}</span>` : it.r.silver ? `<span class="mk-ic">${ic('coin')}</span>` : `<span class="mk-ic">${stoneIc(rewardStones(it.r).greater ? 'greater' : 'lesser')}</span>`;
     const card = it => {
       if (it.fcs) {
         const have = fcs().n >= 1, price = fcsPrice(), wait = fcsWait();
