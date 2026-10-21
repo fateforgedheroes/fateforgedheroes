@@ -20,7 +20,7 @@ A turn-based fantasy hero collector for the browser, made for phones held sidewa
 | `hi/`, `sheets/`, `backgrounds/` | Larger art, loaded when a battle needs it |
 | `desktop.html` | The phone frame the game plays in on computers and tablets |
 | `privacy.html`, `favicon.png`, `manifest.webmanifest`, `icon-*.png` | Copied into the site as they are |
-| `0001_*.sql` … `0027_*.sql` | Database setup, run once each, in order, in the Supabase SQL Editor |
+| `0001_*.sql` … `0028_*.sql` | Database setup, run once each, in order, in the Supabase SQL Editor |
 | `supabase/functions/arena/` | The server for the arena and the guild boss (Edge Function) |
 | `build.mjs`, `strip.mjs` | Build: puts the page together and takes the comments out |
 | `campaign-sim.cjs` | Balance test: auto-plays the whole campaign for every class |

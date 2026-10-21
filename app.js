@@ -1747,7 +1747,8 @@
   // ================= GUILDS =================
   // Guilds live in Supabase (0006_guilds.sql): name, tag, info (the guildmaster writes it, max 250 characters), up to
   // 25 members with roles. The guild boss is played by the server (Edge Function `arena`, action 'gboss') and
-  // replayed here like an arena fight; the weekly Guild Chest arrives as mail. The Guild Shop is not built yet.
+  // replayed here like an arena fight; the weekly Guild Chest arrives as mail. Guild Quests (0027) and the guild level,
+  // Guild Coins and the Guild Shop (0028) are further down.
   const GUILD_COST = 5000, GUILD_MAX = 25;
   const GD = { mine: undefined, list: null, q: '', err: '', busy: false, view: 'home', editInfo: false, d: 0, who: null };
   async function guildLoad() {
@@ -1817,6 +1818,7 @@
     if (GD.view === 'boss') return err + gbossHtml();
     if (GD.view === 'chest') return err + gchestHtml();
     if (GD.view === 'quests') return err + gquestHtml();
+    if (GD.view === 'shop') return err + gshopHtml();
     return err + guildHomeHtml();
   }
   function guildBrowseHtml() {
@@ -1856,17 +1858,18 @@
     };
     const keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
     if (!GQ.st || Date.now() - GQ.at > 60000) setTimeout(gqLoad, 0);
+    if (!GS.st || Date.now() - GS.at > 60000) setTimeout(gsLoad, 0);
     const gqN = GQ.st && GQ.st.guild ? GQ.st.quests.filter(gqDone).length : null;
     // the guild home: on a phone on its side the guild, its tiles and invites on the left and the members beside them
     // (.g-home); elsewhere everything under each other with Leave guild last
     return `<div class="g-home"><div class="g-left"><section class="g-card">${emblem(g)}<div class="g-head"><h3>${esc(g.name)} <span class="tag">[${esc(g.tag)}]</span></h3>
         <small class="empty-note">${g.members.length} / ${GUILD_MAX} members · Guildmaster ${esc(gm ? gm.name : '?')} · ${g.open ? 'open to new members' : 'closed'} · you: ${ROLE_NAME[me]}</small>
-        ${info}</div></section>
+        ${gLevelHtml()}${info}</div></section>
       <div class="g-tiles">
         <button type="button" class="g-tile" data-act="gview" data-v="boss"><img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt=""><b>Guild Boss</b><small>${keysLeft} / ${K.GBOSS.keys} keys left today</small><small>${keyReset()}</small></button>
         <button type="button" class="g-tile" data-act="gview" data-v="quests"><span class="g-chest-ic">${svgIcon('scroll')}</span><b>Guild Quests</b><small>${gqN === null ? 'Shared goals every week' : `${gqN} / 4 reached this week`}</small>${gqClaimN() ? '<span class="dot" aria-label="Reward to claim"></span>' : ''}</button>
         <button type="button" class="g-tile" data-act="gview" data-v="chest"><span class="g-chest-ic">${svgIcon('gift')}</span><b>Guild Chest</b><small>${tier ? tier.name : 'No chest yet'} · ${myPts.toLocaleString('en-US')} points</small></button>
-        <div class="g-tile locked" aria-disabled="true"><span class="g-medal">${LOCK_SVG}</span><b>Guild Shop</b><small>Coming soon</small></div>
+        <button type="button" class="g-tile" data-act="gview" data-v="shop"><span class="g-chest-ic gs-tic">${GCOIN}</span><b>Guild Shop</b><small>${GS.st && GS.st.guild ? `${Number(GS.st.coins).toLocaleString('en-US')} Guild Coins` : 'Spend Guild Coins'}</small></button>
       </div>
       <div class="row g-leave">${me === 'leader' || me === 'officer' ? '<button class="btn small primary" data-act="ginvopen">Invite members</button>' : ''}<button class="btn small danger" data-act="gleave">Leave guild</button></div></div>
       <section class="fr-sec g-mem"><h3>Members <small class="empty-note">${g.members.length} / ${GUILD_MAX}</small></h3>${gActivity(g.members)}<ul class="fr-list g-members">${gSorted(g.members).map(memberRow).join('')}</ul></section></div>`;
@@ -1907,7 +1910,7 @@
   function gbossHtml() {
     const g = GD.mine, ess = K.gbossEss(today()), art = K.GBOSS.art[ess], keysLeft = Math.max(0, K.GBOSS.keys - (g.keys_used || 0));
     if (!gbOpen(GD.d)) GD.d = 0;
-    const diffs = K.DIFFS.map((x, i) => `<button type="button" class="${i === GD.d ? 'sel' : ''}" data-act="gbd" data-n="${i}" ${gbOpen(i) ? '' : 'disabled title="Clear the previous campaign difficulty first"'}>${gbOpen(i) ? '' : LOCK_SVG}${esc(x.name)}<small>×${K.GBOSS.mult[i]} points</small></button>`).join('');
+    const diffs = K.DIFFS.map((x, i) => `<button type="button" class="${i === GD.d ? 'sel' : ''}" data-act="gbd" data-n="${i}" ${gbOpen(i) ? '' : 'disabled title="Clear the previous campaign difficulty first"'}>${gbOpen(i) ? '' : LOCK_SVG}${esc(x.name)}<small>×${K.GBOSS.mult[i]} points · +${gcRate(i)} ${GCOIN}</small></button>`).join('');
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === ess);
     return `<div class="section-head" style="margin:0">${guildBack}</div>${tnLink('guild')}
       <section class="gb-card"><div class="gb-art"><img class="spr" src="${SPR.url(art, 2)}" alt="${esc(K.BOSSES[art].name)}"></div>
@@ -1957,7 +1960,7 @@
     GQ.busy = false;
     if (B) return;
     if (tab === 'social' && SO.tab === 'guild' && GD.view === 'quests') render();
-    else if (gqClaimN() !== was && (tab === 'home' || tab === 'social')) render(); // a dot to add or take away
+    else if (gqClaimN() !== was && !GD.editInfo && (tab === 'home' || tab === 'social')) render(); // a dot to add or take away
   }
   async function gqClaim(k) {
     if (GQ.busy) return; GQ.busy = true;
@@ -1968,7 +1971,7 @@
       const q = GQ.st && GQ.st.quests.find(x => x.k === k);
       mailPop(res.rewards, k === 'all' ? 'Guild quests · bonus chest' : `Guild quest · ${q ? q.name : ''}`);
     } else toast('Not reached yet, already claimed, or you did not help with it.');
-    await gqLoad(); render();
+    await gqLoad(); gsLoad(); render();
   }
   function gquestHtml() {
     if (!GQ.st || Date.now() - GQ.at > 30000) setTimeout(gqLoad, 0);
@@ -1976,7 +1979,8 @@
     const st = GQ.st;
     if (!st) return head + '<p class="empty-note">Loading the guild quests…</p>';
     if (!st.guild) return head + '<p class="empty-note">Join a guild to take part.</p>';
-    const rws = r => `<span class="tn-rws">${begParts(r).map(x => `<span class="tn-rw">${x[0]}<b>${x[1]}</b></span>`).join('')}</span>`;
+    // the reward, plus the Guild Coins the claim brings and the guild XP the goal gives the guild (0028)
+    const gr = GS.st && GS.st.rates, rws = (r, k) => `<span class="tn-rws">${begParts(r).map(x => `<span class="tn-rw">${x[0]}<b>${x[1]}</b></span>`).join('')}${gr ? `<span class="tn-rw">${GCOIN}<b>${k === 'all' ? gr.bonus : gr.quest} Guild Coins</b></span><span class="tn-rw gq-xp"><b>+${k === 'all' ? 150 : 100} guild XP</b></span>` : ''}</span>`;
     const card = q => {
       const [d, icn, how] = GQ_INFO[q.k] || ['', 'banner', ''], done = gqDone(q), pct = Math.min(100, Math.round(Number(q.total) / Math.max(1, Number(q.target)) * 100));
       const helped = Number(q.mine) >= Number(q.min);
@@ -1984,15 +1988,65 @@
       const ic = icn === 'boss' ? `<img class="spr" src="${SPR.url(K.GBOSS.art[K.gbossEss(today())], 1)}" alt="">` : svgIcon(icn);
       return `<li class="gq-card ${done ? 'done' : ''} ${gqCan(q) ? 'ready' : ''}"><span class="gq-ic">${ic}</span><div class="gq-main"><b>${esc(q.name)}</b><small>${d}</small>
         <div class="gq-bar"><i style="width:${pct}%"></i><span>${gqVal(q.k, q.total)} / ${gqVal(q.k, q.target)}</span></div>
-        <div class="gq-sub"><small class="gq-me">You: <b>${gqVal(q.k, q.mine)}</b>${helped ? '' : ` · ${how} to claim`}</small>${rws(q.r)}</div></div><span class="gq-act">${act}</span></li>`;
+        <div class="gq-sub"><small class="gq-me">You: <b>${gqVal(q.k, q.mine)}</b>${helped ? '' : ` · ${how} to claim`}</small>${rws(q.r, q.k)}</div></div><span class="gq-act">${act}</span></li>`;
     };
     const b = st.bonus, n = st.quests.filter(gqDone).length;
     const bAct = b.claimed ? '<span class="tn-ok">✓ Claimed</span>' : b.done && b.ok ? '<button type="button" class="btn primary small" data-act="gqclaim" data-k="all">Claim</button>' : `<span class="gq-st">${b.done ? 'Help with two quests to claim' : `${n} / 4`}</span>`;
     const bonus = `<li class="gq-card bonus ${b.done ? 'done' : ''} ${b.done && b.ok && !b.claimed ? 'ready' : ''}"><span class="gq-ic">${svgIcon('gift')}</span><div class="gq-main"><b>Bonus chest</b><small>All four reached: a chest for everyone who helped with two or more.</small>
-      <div class="gq-bar"><i style="width:${n * 25}%"></i><span>${n} / 4 quests</span></div><div class="gq-sub">${rws(b.r)}</div></div><span class="gq-act">${bAct}</span></li>`;
+      <div class="gq-bar"><i style="width:${n * 25}%"></i><span>${n} / 4 quests</span></div><div class="gq-sub">${rws(b.r, 'all')}</div></div><span class="gq-act">${bAct}</span></li>`;
     const by = st.by.map(m => `<tr class="${m.me ? 'me' : ''}"><td>${m.avatar && C[m.avatar] ? por(m.avatar) : ''}<b>${esc(m.name)}</b></td><td class="num">${gqVal('boss', m.boss)}</td><td class="num">${m.keys}</td><td class="num">${m.arena}</td><td class="num">${gqVal('play', m.play)}</td></tr>`).join('');
     return head + `<div class="gq-wrap lfit"><section class="gq-quests"><p class="empty-note gq-lede">Four goals for the whole guild this week. Reach one together and everyone who helped claims its reward.</p><ul class="gq-list">${st.quests.map(card).join('')}${bonus}</ul></section>
       <section class="fr-sec gq-mem"><h3>Who helped</h3><div class="tbl-wrap"><table class="gq-tbl"><tr><th>Member</th><th>Boss points</th><th>Keys</th><th>Arena wins</th><th>Played</th></tr>${by}</table></div></section></div>`;
+  }
+  // ---------- guild level, Guild Coins and the Guild Shop (0028_guild_shop.sql). Guild XP comes from guild quest goals
+  // reached (100 each, 150 more for all four) and sets the guild level (1-10), which opens more of the shop. Guild Coins
+  // are the player's, counted by the server from what it keeps (40 per quest claimed, 80 for the bonus chest, 2-10 per
+  // guild boss fight by difficulty, minus what was bought); the shop sells for them with a limit per item and week.
+  // GS.st is gshop_state (fetched with the guild quests). ----------
+  const GS = { st: null, at: 0, who: '', busy: false, arm: '' };
+  const GCOIN = '<svg class="gcoin" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7"/><path d="M8 4l3.2 1.3v2.4c0 2.1-1.4 3.6-3.2 4.3-1.8-.7-3.2-2.2-3.2-4.3V5.3z"/></svg>';
+  const gcRate = d => ((GS.st && GS.st.rates && GS.st.rates.boss) || [2, 3, 5, 7, 10])[d] || 0;
+  async function gsLoad() {
+    const cl = cloud(); if (!cl || !cl.signedIn() || GS.busy || !unlocked('guild')) return;
+    GS.busy = true; const was = JSON.stringify(GS.st);
+    try { const who = cl.info().email; if (GS.who !== who) Object.assign(GS, { who, st: null }); GS.st = await cl.rpc('gshop_state'); GS.at = Date.now(); } catch (e) { /* a database without 0028: no shop yet */ }
+    GS.busy = false;
+    // drawn again only when something changed (and never over guild info being written)
+    if (!B && tab === 'social' && SO.tab === 'guild' && !GD.editInfo && JSON.stringify(GS.st) !== was) render();
+  }
+  async function gsBuy(id) {
+    const it = GS.st && GS.st.items.find(x => x.id === id); if (!it || GS.busy) return;
+    if (it.price >= 250 && GS.arm !== id) { GS.arm = id; render(); return; } // a big buy asks for a second tap
+    GS.arm = ''; GS.busy = true;
+    let res = null; try { res = await cloud().rpc('gshop_buy', { it_id: id }); } catch (e) { toast('No connection to the server. Try again in a moment.', true); }
+    GS.busy = false; if (!res) return;
+    if (res.rewards) { grantGift(res.rewards); save(); hud(); SFX.up(); mailPop(res.rewards, 'Guild Shop'); }
+    else toast({ level: 'Your guild needs a higher level for that.', limit: 'You bought the most this week already.', coins: 'Not enough Guild Coins.', no_guild: 'Join a guild first.' }[res.error] || 'That did not work.', true);
+    await gsLoad(); render();
+  }
+  // the guild's level with its XP bar (the guild card and the shop)
+  function gLevelHtml(full) {
+    const s = GS.st; if (!s || !s.guild) return '';
+    const pct = s.next ? Math.round((s.xp - s.cur) / (s.next - s.cur) * 100) : 100;
+    return `<div class="g-lvl"><span class="g-lvn" title="Guild level">Lv ${s.level}</span><div class="gq-bar"><i style="width:${pct}%"></i><span>${s.next ? `${s.xp.toLocaleString('en-US')} / ${s.next.toLocaleString('en-US')} guild XP` : 'Highest level'}</span></div></div>${full ? '<small class="empty-note">Guild XP: +100 for every guild quest goal your guild reaches, +150 when it reaches all four in a week. A higher level opens more of the Guild Shop.</small>' : ''}`;
+  }
+  function gshopHtml() {
+    if (!GS.st || Date.now() - GS.at > 30000) setTimeout(gsLoad, 0);
+    const head = `<div class="section-head" style="margin:0">${guildBack}<span class="tag">Limits reset in ${untilUtc(nextMonday())}</span></div>`;
+    const s = GS.st;
+    if (!s) return head + '<p class="empty-note">Opening the Guild Shop…</p>';
+    if (!s.guild) return head + '<p class="empty-note">Join a guild to use the Guild Shop.</p>';
+    const r = s.rates || { quest: 40, bonus: 80, boss: [2, 3, 5, 7, 10] };
+    const tile = it => {
+      const parts = begParts(it.r), open = s.level >= it.lvl, left = it.limit - it.bought, can = open && left > 0 && s.coins >= it.price;
+      const act = !open ? `<span class="gs-lock">${LOCK_SVG}Guild level ${it.lvl}</span>` : left <= 0 ? '<span class="tn-ok">Sold out this week</span>'
+        : `<button type="button" class="btn ${GS.arm === it.id ? 'danger' : 'primary'} small" data-act="gsbuy" data-id="${it.id}" ${can && !GS.busy ? '' : 'disabled'}>${GS.arm === it.id ? 'Sure? Buy' : 'Buy'} · ${GCOIN} ${it.price.toLocaleString('en-US')}</button>`;
+      return `<li class="gs-item ${open ? '' : 'locked'}"><span class="gs-ic">${parts.map(p => p[0]).join('')}</span><b>${parts.map(p => p[1]).join(' + ')}</b><small>${open ? `${Math.max(0, left)} / ${it.limit} left this week` : `${GCOIN} ${it.price.toLocaleString('en-US')}`}</small>${act}</li>`;
+    };
+    return head + `<div class="gs-wrap lfit"><section class="gs-top"><div class="gs-coins">${GCOIN}<b>${Number(s.coins).toLocaleString('en-US')}</b><span>Guild Coins</span></div>
+        <div class="gs-lvbox">${gLevelHtml(true)}</div>
+        <small class="empty-note gs-earn">Earn Guild Coins: ${r.quest} for every guild quest you claim (${r.bonus} for the bonus chest) and ${r.boss[0]}-${r.boss[r.boss.length - 1]} for every guild boss fight, more on a harder difficulty. They stay yours when you change guild.</small></section>
+      <ul class="gs-grid">${s.items.map(tile).join('')}</ul></div>`;
   }
   async function gbossFight() {
     if (GD.busy) return;
@@ -3101,7 +3155,7 @@
   async function socialLoad() {
     if (!signedIn()) PAID.n = 0;
     if (!signedIn() || SO.loading) { paintMail(); return; }
-    paidLoad(); admCheck(); begLoad(); gqLoad();
+    paidLoad(); admCheck(); begLoad(); gqLoad(); gsLoad();
     // the arena defense follows the heroes (defSync); an account whose defense this device has not seen yet asks once
     if (unlocked('arena') && !defGet() && !AR.busy) arenaCall('state');
     const cl = cloud(), who = cl.info().email;
@@ -3674,6 +3728,7 @@
     else if (act === 'gkick') confirmBox('Remove member?', `Remove <b>${esc(a.dataset.name)}</b> from the guild?`, 'Remove', () => guildAct('guild_kick', { other: id }, { ok: 'Member removed.', not_allowed: 'You cannot remove this member.' }));
     else if (act === 'gview') { GD.view = a.dataset.v; GD.editInfo = false; render(); window.scrollTo({ top: 0 }); }
     else if (act === 'gqclaim') gqClaim(a.dataset.k);
+    else if (act === 'gsbuy') gsBuy(a.dataset.id);
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') openGuildPrep();
     else if (act === 'ptopen') ptPop(); // the playtime chests

@@ -1437,6 +1437,20 @@ div.stage { cursor: default; color: inherit; font: inherit; }
 .gq-act { display: grid; justify-items: end; } .gq-st { font-size: .78rem; color: var(--muted); text-align: right; max-width: 120px; }
 .gq-tbl { width: 100%; border-collapse: collapse; font-size: .85rem; } .gq-tbl th { text-align: right; color: var(--muted); font-weight: 600; padding: 4px 6px; white-space: nowrap; }
 .gq-tbl th:first-child, .gq-tbl td:first-child { text-align: left; } .gq-tbl td { padding: 4px 6px; border-top: 1px solid rgba(217, 180, 90, .15); font-variant-numeric: tabular-nums; } .gq-tbl td.num { text-align: right; white-space: nowrap; }
+/* Guild Coins, the guild level and the Guild Shop (app.js gshopHtml) */
+.gcoin { width: 1.15em; height: 1.15em; vertical-align: -.22em; flex: none; } .gcoin circle { fill: #b9862a; stroke: #f3d891; stroke-width: 1; } .gcoin path { fill: #5e3f10; stroke: #f8e3a6; stroke-width: .8; stroke-linejoin: round; }
+.g-tile > .gs-tic svg.gcoin { width: 38px; height: 38px; margin: 0; } .gq-xp b { color: #c9a8ff !important; }
+.g-lvl { display: flex; align-items: center; gap: 8px; margin: 4px 0; } .g-lvl .gq-bar { flex: 1; min-width: 0; }
+.g-lvn { flex: none; padding: 1px 8px; border-radius: 10px; font: 700 .8rem var(--font-display); color: #1a1208; background: linear-gradient(180deg, #f6dc94, #c9962f); box-shadow: 0 0 0 1px #000, 0 0 8px rgba(240, 190, 90, .45); }
+.gs-wrap { display: grid; gap: 10px; margin-top: 8px; }
+.gs-top { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 16px; align-items: center; padding: 12px 14px; background: linear-gradient(120deg, #2c2213, var(--panel) 70%); border: 2px solid var(--gold); }
+.gs-coins { display: grid; justify-items: center; gap: 2px; } .gs-coins .gcoin { width: 44px; height: 44px; } .gs-coins b { font: 700 1.5rem var(--font-display); color: #f7dfa4; font-variant-numeric: tabular-nums; } .gs-coins span { font-size: .78rem; color: var(--muted); }
+.gs-lvbox { display: grid; gap: 4px; min-width: 0; } .gs-earn { grid-column: 1 / -1; }
+.gs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.gs-item { display: grid; justify-items: center; align-content: start; gap: 4px; padding: 10px 8px; text-align: center; background: var(--panel); border: 2px solid var(--line); }
+.gs-item.locked { opacity: .6; } .gs-item > b { font-size: .86rem; line-height: 1.2; } .gs-item > small { color: var(--muted); font-size: .74rem; }
+.gs-ic { display: flex; gap: 2px; justify-content: center; min-height: 36px; align-items: center; } .gs-ic img, .gs-ic svg { width: 32px; height: 32px; } .gs-ic .beg-por img { width: 32px; height: 32px; }
+.gs-item .btn { margin-top: 2px; } .gs-lock { display: inline-flex; align-items: center; gap: 4px; font-size: .74rem; color: var(--muted); } .gs-lock .lock-ic { width: 14px; height: 14px; }
 .gq-tbl td:first-child { display: flex; align-items: center; gap: 6px; min-width: 0; } .gq-tbl td:first-child b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .gq-tbl img.spr { width: 24px; height: 24px; border-radius: 4px; flex: none; } .gq-tbl tr.me td { color: var(--gold); }
 .g-members li.me { background: color-mix(in srgb, var(--gold) 7%, transparent); }
 .g-leave { justify-content: flex-end; display: flex; margin-top: 10px; }
@@ -3759,6 +3773,14 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .navmain:has(.gq-wrap) > .dc-banner { display: none; } .navmain:has(.gq-wrap) .section-head { padding-block: 0 !important; } .navmain:has(.gq-wrap) .section-head .btn { padding: 3px 10px; min-height: 0; font-size: .74rem; }
   .gq-st { font-size: .62rem; max-width: 80px; } .gq-act .btn { padding: 3px 8px; min-height: 0; font-size: .72rem; }
   .gq-tbl { font-size: .66rem; } .gq-tbl th, .gq-tbl td { padding: 2px 4px; } .gq-tbl img.spr { width: 18px; height: 18px; }
+  /* Guild Shop: the coins and the level in a slim bar on top, the items as small tiles that scroll */
+  .navmain:has(.gs-wrap) > .dc-banner { display: none; } .navmain:has(.gs-wrap) .section-head { padding-block: 0 !important; } .navmain:has(.gs-wrap) .section-head .btn { padding: 3px 10px; min-height: 0; font-size: .74rem; }
+  .gs-wrap { grid-template-rows: auto minmax(0, 1fr); gap: 4px; margin-top: 4px; } .gs-grid { overflow-y: auto; min-height: 0; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px; align-content: start; scrollbar-width: thin; }
+  .gs-top { grid-template-columns: auto minmax(0, 1fr); padding: 4px 10px; gap: 2px 12px; } .gs-coins { grid-auto-flow: column; align-items: center; gap: 4px; } .gs-coins .gcoin { width: 22px; height: 22px; } .gs-coins b { font-size: 1rem; } .gs-coins span { font-size: .62rem; }
+  .gs-lvbox .empty-note, .gs-earn { display: none; } .g-lvl { margin: 0; } .g-lvn { font-size: .66rem; padding: 0 6px; }
+  .gs-item { padding: 4px; gap: 1px; } .gs-item > b { font-size: .66rem; } .gs-item > small { font-size: .58rem; } .gs-ic { min-height: 22px; } .gs-ic img, .gs-ic svg, .gs-ic .beg-por img { width: 20px; height: 20px; }
+  .g-tile > .gs-tic svg.gcoin { width: 22px; height: 22px; }
+  .gs-item .btn { padding: 2px 6px; min-height: 0; font-size: .64rem; } .g-card .g-lvl .gq-bar { height: 12px; } .g-card .g-lvl .gq-bar > span { font-size: .56rem; line-height: 12px; }
   /* name and role on one line (a long name ends in …), the stats below, the Guildmaster's buttons on a line of their own,
      so the buttons never squeeze the name into a column of single letters */
   .fr-list li.gm-row { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "av id" "av stats" "av acts"; column-gap: 8px; row-gap: 3px; padding: 4px 6px; }
