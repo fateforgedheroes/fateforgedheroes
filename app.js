@@ -4171,6 +4171,19 @@
     $('#ov').appendChild(el);
     setTimeout(() => { el.remove(); rs.popN = Math.max(0, rs.popN - 1); }, 1050);
   }
+  // a big skill's name over its attacker: it pops up glowing in the attacker's essence, rises and fades (a special, the
+  // third skill, bigger and golden); shown instead of a banner across the field, so the fight does not stop for it
+  function skillCallout(u, skill) {
+    const rs = u._rs; if (!rs) return;
+    const el = document.createElement('div');
+    el.className = 'skc' + (isSpecial(u, skill) ? ' sp' : '') + (u.side === 'enemy' ? ' foe' : '');
+    el.style.setProperty('--c', essFx(u.aff).col);
+    el.textContent = skill.name;
+    el.style.left = pctX(rs.x + rs.ox); el.style.top = pctY(rs.y - rs.m.top - 16);
+    const ms = 1500 / Math.min(spd, 2); el.style.animationDuration = ms + 'ms'; // faster at 2× and up
+    $('#ov').appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  }
   // calm() = 5× speed: no screen flashes or shakes and fewer sounds (too flashy at that speed)
   const calm = () => spd >= 5;
   function flash() { if (calm()) return; const f = $('#flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
@@ -4255,6 +4268,7 @@
     fxp(x, y, 'spark', [E.hot, '#ffffff', E.col], Math.round((big ? 12 : 7) * q), big ? 2.6 : 1.9, 0.3);
     fxp(x, y, E.p, [E.col, E.hot], Math.round((big ? 14 : 6) * q), big ? 1.8 : 1.3);
     if (!big) return;
+    if (isSpecial(u, skill)) specialImpact(u, t, many);
     const gy = t._rs.y, dir = u.side === 'hero' ? 1 : -1;
     addFx({ kind: 'shock', x: t._rs.x, y: gy, col: E.col, r: many ? 26 : 36, w: 2, flat: 0.28, dur: 460 }); // a ring over the ground
     if (skill.anim === 'melee') addFx({ kind: 'arc', x, y, dir, col: E.col, hot: E.hot, r: Math.max(18, t._rs.m.top * 0.42), dur: 260 });
@@ -4274,6 +4288,38 @@
       if (p.k === 'shard') { g.moveTo(0, -p.size); g.lineTo(p.size * 0.45, 0); g.lineTo(0, p.size); g.lineTo(-p.size * 0.45, 0); g.closePath(); } else { g.ellipse(0, 0, p.size, p.size * 0.45, 0, 0, 7); p.vx *= 0.97; }
       g.fill(); g.restore();
     } else if (p.k === 'prism') { const s = p.size * 1.4; g.fillStyle = `hsl(${(p.h + p.life * 9) % 360},90%,72%)`; g.fillRect(p.x - s, p.y - 0.4, s * 2, 0.8); g.fillRect(p.x - 0.4, p.y - s, 0.8, s * 2); }
+  }
+  // the special (a hero's or enemy's third skill, with a cooldown) is bigger still: the field darkens (R.udim, behind the
+  // figures) while the caster charges in a light pillar over a wide magic circle, light streams in and the screen starts
+  // to shake; on impact a huge flare, two shock rings, rays, twice the particles, a colour wash over the whole field
+  // (once per special), a heavy shake and a hit-stop, and an essence's own outburst (Storm three bolts, Radiant a wide
+  // pillar, Umbral a great implosion, Ember an inferno, Frost an ice storm, Verdant a leaf storm, Aether rainbow rays)
+  const isSpecial = (u, skill) => skill.cd > 0 && u.skills && u.skills.indexOf(skill) === 2;
+  async function specialCharge(u) {
+    const E = essFx(u.aff), rs = u._rs, [x, y] = center(u);
+    SFX.magic(); R.udim = 0;
+    addFx({ kind: 'circle', x: rs.x, y: rs.y, col: E.col, r: Math.max(34, rs.m.cw * 1.15), dur: 820 });
+    addFx({ kind: 'pillar', x: rs.x, y: rs.y, col: E.col, hot: E.hot, w: Math.max(20, rs.m.cw * 0.7), dur: 680 });
+    addFx({ kind: 'flare', x, y, col: E.col, hot: E.hot, r: 44, dur: 640, a: 0.75 });
+    for (let i = 0; i < 30; i++) { const a = Math.random() * Math.PI * 2, d = 40 + Math.random() * 30; R.parts.push({ k: i % 3 ? 'spark' : E.p, x: x + Math.cos(a) * d, y: y + Math.sin(a) * d * 0.7, vx: -Math.cos(a) * d / 22, vy: -Math.sin(a) * d * 0.7 / 22, col: i % 2 ? E.hot : E.col, life: 22, max: 22, size: 1.6, grav: 0, rot: a, vr: 0.2, h: i * 12 }); }
+    await tween(420, k => { R.udim = 0.45 * Math.sin(Math.min(1, k * 1.5) * Math.PI / 2); rs.glow = Math.sin(k * Math.PI); R.shake = Math.max(R.shake, 2.5 * k); });
+    rs.glow = 0; rs.special = true; // the impact clears the dark and does the once-per-special outburst
+  }
+  function specialImpact(u, t, many) {
+    const E = essFx(u.aff), [x, y] = center(t), gy = t._rs.y, rs = u._rs;
+    addFx({ kind: 'flare', x, y, col: E.col, hot: E.hot, r: many ? 40 : 56, dur: 500 });
+    addFx({ kind: 'shock', x, y, col: E.hot, r: 58, w: 3.5, flat: 0.75, dur: 540 });
+    addFx({ kind: 'shock', x: t._rs.x, y: gy, col: E.col, r: 66, w: 3, flat: 0.28, dur: 640 });
+    addFx({ kind: 'rays', x, y, col: E.hot, r: 66, n: 20, dur: 480 });
+    fxp(x, y, E.p, [E.col, E.hot], many ? 16 : 30, 2.6); fxp(x, y, 'spark', ['#ffffff', E.hot, E.col], many ? 12 : 24, 3.4, 0.4);
+    if (u.aff === 'Storm') for (let i = 0; i < 3; i++) addFx({ kind: 'bolt', x: x + (i - 1) * 14, y, col: E.col, dur: 420 });
+    else if (u.aff === 'Radiant') addFx({ kind: 'pillar', x, y: gy, col: E.col, hot: E.hot, w: 46, dur: 560 });
+    else if (u.aff === 'Umbral') addFx({ kind: 'implode', x, y, col: E.col, r: 70, dur: 560 });
+    else if (u.aff === 'Ember') { addFx({ kind: 'flare', x, y: y - 10, col: '#ff3a1a', hot: '#ffcf5a', r: 46, dur: 600 }); rise(x, gy - 6, ['#ff8a2a', '#ffd060', '#ff4a1a'], 30, 50); fxp(x, gy - 4, 'ember', ['#ff7a2a', '#ffd27a'], 20, 1.4, 1.4); }
+    else if (u.aff === 'Frost') { fxp(x, y, 'shard', ['#bfeaff', '#ffffff', '#7ac8ff'], 30, 3.2, 0.2); addFx({ kind: 'shock', x, y, col: '#ffffff', r: 44, w: 2, flat: 0.9, dur: 420 }); }
+    else if (u.aff === 'Verdant') fxp(x, y, 'leaf', ['#6ad04a', '#a8e870', '#3a9a3a'], 36, 2.6, 0.6);
+    else { addFx({ kind: 'rays', x, y, col: '#d8c8ff', r: 80, n: 26, dur: 560 }); fxp(x, y, 'prism', '#ffffff', 26, 2.4); }
+    if (rs.special) { rs.special = false; R.udim = 0; addFx({ kind: 'tint', col: E.col, dur: 360 }); R.shake = Math.max(R.shake, 9); hitStop(130); }
   }
   // a skill gathers its power first: a magic circle under the caster and light streaming in
   function chargeFx(u) {
@@ -4319,6 +4365,9 @@
         const r = f.r * (1 - out) + 2;
         g.globalCompositeOperation = 'source-over'; g.globalAlpha = 0.45 * (1 - k); g.fillStyle = '#12061e'; g.beginPath(); g.arc(f.x, f.y, Math.max(2, f.r * 0.45 * (1 - k * 0.5)), 0, 7); g.fill();
         g.globalCompositeOperation = 'lighter'; g.globalAlpha = 1 - k * 0.8; g.strokeStyle = f.col; g.lineWidth = 2.2; g.beginPath(); g.arc(f.x, f.y, r, 0, 7); g.stroke();
+      } else if (f.kind === 'tint') {
+        // a special's colour wash over the whole field
+        g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.3 * (1 - k); g.fillStyle = f.col; g.fillRect(0, 0, W, H);
       } else if (f.kind === 'circle') {
         // a magic circle on the ground: two rings and runes turning, fading in and out
         const al = Math.sin(Math.min(1, k) * Math.PI), r = f.r * (0.7 + 0.3 * out);
@@ -4330,7 +4379,7 @@
     }
     g.restore();
     for (const f of R.fx) {
-      if (['flare', 'shock', 'rays', 'arc', 'bolt', 'pillar', 'implode', 'circle'].includes(f.kind)) continue;
+      if (['flare', 'shock', 'rays', 'arc', 'bolt', 'pillar', 'implode', 'circle', 'tint'].includes(f.kind)) continue;
       const k = Math.max(0, (now - f.t0) / f.dur); // the frame time can be a hair before the effect started
       g.globalAlpha = 1 - k * 0.6;
       if (f.kind === 'slash') {
@@ -4649,6 +4698,7 @@
     const ashCol = [ 'rgba(190,160,150,.5)', 'rgba(180,210,225,.4)', 'rgba(200,190,170,.35)', 'rgba(200,255,140,.55)', 'rgba(255,150,60,.65)' ][R.area];
     g.fillStyle = ashCol;
     for (const a of R.ash) { a.x += a.vx; a.y += R.area === 4 ? -a.vy : a.vy; if (a.y > H) a.y = -2; if (a.y < -2) a.y = H; if (a.x < 0) a.x = W; g.fillRect(Math.round(a.x), Math.round(a.y), 1, 1); }
+    if (R.udim > 0.01) { g.fillStyle = `rgba(6,4,10,${R.udim})`; g.fillRect(0, 0, W, H); } // a special charging: the field darkens behind the figures
     const sorted = [...R.units].sort((a, b) => a._rs.y - b._rs.y);
     const pulse = 0.55 + 0.45 * Math.sin(now / 160);
     for (const u of sorted) {
@@ -4769,6 +4819,7 @@
     rs.skIdx = u.skills.indexOf(skill); // which skill (an animated sheet may have its own row for the third)
     rs.skAnim = skill.anim; // melee, ranged, magic, buff (manga figures draw a slash for melee strikes)
     if (!skill.cd) rs.alt = !rs.alt; // a character with poses but no skill swings attack 1 and attack 2 in turn
+    if (isSpecial(u, skill) && !calm()) await specialCharge(u); // the third skill: the big charge first
     if (skill.anim === 'melee') {
       SFX.swing();
       if (skill.cd > 0 && !calm()) addFx({ kind: 'shock', x: rs.x, y: rs.y, col: essFx(u.aff).col, r: 26, w: 2, flat: 0.3, dur: 320 }); // a skill's leap kicks off from a ring on the ground
@@ -4802,6 +4853,11 @@
       else if (v === 'curse') { SFX.magic(); rise(rs.x, rs.y - 10, ['#c080ff', '#6a3a9a'], 18, 40); }
       else if (v === 'dark') { SFX.magic(); for (const t of targets) { const [x, y] = center(t); burst(x, y, ['#9a6aff', '#3a1a5a'], 12, 1.2); } }
       else { SFX.buff(); for (const t of list) { rise(t._rs.x, t._rs.y - 4, [AFF_COL[u.aff], '#fff6e0'], 12, 24); } }
+      // a special that heals or strengthens: every ally bursts with light, and the colour wash
+      if (rs.special) {
+        rs.special = false; R.udim = 0; const E = essFx(u.aff); addFx({ kind: 'tint', col: E.col, dur: 360 }); R.shake = Math.max(R.shake, 5);
+        for (const t of list) { const [x, y] = center(t); addFx({ kind: 'flare', x, y, col: E.col, hot: E.hot, r: 44, dur: 520, a: 0.8 }); addFx({ kind: 'rays', x, y, col: E.hot, r: 50, n: 16, dur: 460 }); fxp(x, y, E.p, [E.col, E.hot], 14, 2); }
+      }
       await tween(340, k => { rs.glow = Math.sin(k * Math.PI); for (const t of list) if (t !== u) t._rs.glow = Math.sin(k * Math.PI) * 0.7; });
       rs.glow = 0; for (const t of list) t._rs.glow = 0;
     } else {
@@ -4810,7 +4866,7 @@
       rs.ox = 0; rs.glow = 0;
       const list = skill.random ? [targets[0]] : targets;
       const col = VFXCOL[v] || AFF_COL[u.aff];
-      if (skill.cd > 0) await chargeFx(u); // a skill gathers its power first
+      if (skill.cd > 0 && !isSpecial(u, skill)) await chargeFx(u); // a skill gathers its power first (a special charged already)
       if (v === 'arrowrain') { SFX.arrow(); await Promise.all(list.map(t => falling(t, 'arrow', '#d8c8a8', 5))); }
       else if (v === 'meteor') { SFX.fire(); await Promise.all(list.map(t => falling(t, 'rock', '#ff8a2a', 2))); SFX.boom(); }
       else if (v === 'holy' || v === 'sunfall') { SFX.magic(); await Promise.all(list.map(t => addFx({ kind: 'beam', x: center(t)[0], y: t._rs.y, col, w: v === 'sunfall' ? 30 : 12, dur: v === 'sunfall' ? 420 : 300 }))); }
@@ -4827,6 +4883,7 @@
   }
   async function animAfter(u, skill) {
     const rs = u._rs;
+    if (rs.special) { rs.special = false; R.udim = 0; } // a special that hit nothing: the field lights up again
     if (skill.anim === 'melee') {
       await sleep(150);
       const sx = rs.ox, sy = rs.oy;
@@ -4859,12 +4916,8 @@
     round: r => { $('#b-round').textContent = (B && B.cfg.type === 'siege' ? `Wave ${B.cfg.from + B.ph} · ` : B && B.nPh > 1 ? `Phase ${B.ph + 1}/${B.nPh} · ` : '') + 'Turn ' + r + (B && B.cfg.type === 'siege' ? (r < K.SIEGE.rageAt ? ` · rage at ${K.SIEGE.rageAt}` : ' · ENRAGED') : B && B.cfg.type === 'arena' && r > K.ARENA_FURY.at - 20 ? (r >= K.ARENA_FURY.at + K.ARENA_FURY.every ? ` · FURY +${Math.round(K.ARENA_FURY.atk * Math.floor((r - K.ARENA_FURY.at) / K.ARENA_FURY.every) * 100)}%` : ` · fury at ${K.ARENA_FURY.at + K.ARENA_FURY.every}`) : ''); },
     fury: v => { if (v === 1) { SFX.banner(); if (!calm()) R.shake = 6; queueBanner('Arena fury!', 'The fight took too long: both teams deal more damage every 10 turns', 'big enemy', 1000); } updateOverlay(); },
     impact: (u, skill, t) => impactFx(u, skill, t),
-    banner: async (u, skill) => {
-      await bannerQ;
-      SFX.banner(); R.dim = 0.35;
-      await showBanner(skill.name, u.name, u.side === 'enemy' ? 'enemy' : '', 620);
-      R.dim = 0;
-    },
+    // a big skill: its name lights up over the attacker (no banner across the field and no wait, so the fight flows on)
+    banner: async (u, skill) => { await bannerQ; SFX.banner(); skillCallout(u, skill); },
     hit: (t, amt, info) => {
       const rs = t._rs; rs.flash = calm() ? 0.35 : 1;
       if (info.kind === 'poison' || info.kind === 'burn' || info.kind === 'bleed') { popup(t, '-' + amt, info.kind); rise(rs.x, rs.y - 10, info.kind === 'burn' ? ['#ff8a2a', '#ffd060'] : info.kind === 'bleed' ? ['#e0303a', '#801018'] : ['#a8e060', '#6a9a3a'], 6, 16); }
