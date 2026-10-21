@@ -778,7 +778,7 @@
   // (MENU_ART, cropped by CSS), the open screen lit, locked ones dimmed, a dot when something waits
   const NAV_OF = { champions: 'team', vault: 'forge', prep: 'campagne' };
   function sideNav() {
-    const cur = tab === 'prep' ? prepNav() : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const cur = tab === 'prep' ? prepNav() : tab === 'tourney' ? (tnKind() === 'arena' ? 'arena' : 'social') : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     return `<nav class="snav" aria-label="Buildings">${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
       return `<button type="button" class="sn ${z.go === cur ? 'on' : ''} ${locked ? 'locked' : ''}" data-act="go" data-go="${z.go}" title="${esc(z.label)}${locked ? ` (opens after ${needTxt(z.go)})` : ''}" ${z.go === cur ? 'aria-current="page"' : ''}>
@@ -826,7 +826,7 @@
       if (needName()) setTimeout(showNameBox, 300); else if (loginDue()) setTimeout(showLogin, 600); else if (begDue()) setTimeout(showBeginner, 700); else if (linkDue()) setTimeout(showLink, 900); else if (discordDue()) setTimeout(showDiscord, 900);
       return;
     }
-    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'events' ? eventsHtml() : tab === 'admin' ? adminHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
+    el.innerHTML = `<div class="navwrap">${sideNav()}<div class="navmain">${backBar()}${tab === 'campagne' ? campaignHtml() : tab === 'prep' ? prepHtml() : tab === 'kerkers' ? dungeonsHtml() : tab === 'altaar' ? altarHtml() : tab === 'team' ? teamHtml() : tab === 'profiel' ? townHallHtml() : tab === 'arena' ? arenaHtml() : tab === 'social' ? socialHtml() : tab === 'guide' ? guideHtml() : tab === 'mail' ? mailHtml() : tab === 'forge' ? forgeHtml() : tab === 'expedition' ? expedHtml() : tab === 'tower' ? towerHtml() : tab === 'siege' ? siegeHtml() : tab === 'tourney' ? tourneyHtml() : tab === 'events' ? eventsHtml() : tab === 'admin' ? adminHtml() : tab === 'market' ? marketHtml() : teamHtml()}</div></div>`;
     navTop(); hxFit();
     if (tab === 'kerkers') paintDungeonArt();
     if (fightSpot()) { const f = el.querySelector('.spot-go'); if (f) requestAnimationFrame(() => f.scrollIntoView({ block: 'center' })); }
@@ -1715,7 +1715,7 @@
     // on a phone on its side the arena is four tabs (AR.tab, shell.html .ar-wrap[data-t]): Battle (rating and opponents),
     // Defense, Rewards (the weekly ones) and Rankings; a bigger screen shows everything under each other
     const t = AR.tab || 'fight', tabs = `<div class="ar-tabs" role="tablist" aria-label="Arena">${[['fight', 'Battle'], ['def', 'Defense'], ['week', 'Rewards'], ['board', 'Rankings']].map(([k, l]) => `<button type="button" role="tab" data-act="artab" data-t="${k}" aria-selected="${k === t}">${l}${k === 'week' && st.rewards ? '<span class="dot"></span>' : ''}</button>`).join('')}</div>`;
-    return head + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="ar-wrap lfit" data-t="${t}">${tabs}<div class="arena">${me}${def}</div>${opps}${boardHtml()}</div>`;
+    return head + tnLink('arena') + (AR.err ? `<p class="ar-err">${esc(AR.err)}</p>` : '') + `<div class="ar-wrap lfit" data-t="${t}">${tabs}<div class="arena">${me}${def}</div>${opps}${boardHtml()}</div>`;
   }
   function startArena(f) {
     runBattle({ type: 'arena', att: f.att, def: f.def, seed: f.seed, win: f.win, fight: f, area: f.seed % 5, bg: chapterBg(f.seed % K.CHAPTERS.length), title: `Arena · vs ${f.opponent.name}` });
@@ -1906,7 +1906,7 @@
     if (!gbOpen(GD.d)) GD.d = 0;
     const diffs = K.DIFFS.map((x, i) => `<button type="button" class="${i === GD.d ? 'sel' : ''}" data-act="gbd" data-n="${i}" ${gbOpen(i) ? '' : 'disabled title="Clear the previous campaign difficulty first"'}>${gbOpen(i) ? '' : LOCK_SVG}${esc(x.name)}<small>×${K.GBOSS.mult[i]} points</small></button>`).join('');
     const beaten = K.ESSENCES.filter(e => K.BEATS[e] === ess);
-    return `<div class="section-head" style="margin:0">${guildBack}</div>
+    return `<div class="section-head" style="margin:0">${guildBack}</div>${tnLink('guild')}
       <section class="gb-card"><div class="gb-art"><img class="spr" src="${SPR.url(art, 2)}" alt="${esc(K.BOSSES[art].name)}"></div>
         <div class="gb-main"><span class="tag">Today's guild boss · a new one every day</span><h3>${esc(K.BOSSES[art].name)} ${affChip(ess)}</h3>${K.BOSSES[art].title ? `<span class="gb-title">${esc(K.BOSSES[art].title)}</span>` : ''}
           <p class="empty-note">It cannot be killed: deal as much damage as you can before your team falls or the boss has taken ${K.GBOSS.turns} turns. It enrages after ${K.ENRAGE.at} of its turns. ${ess === 'Aether' ? 'No essence has the advantage today.' : `Strong against it today: ${beaten.map(e => affChip(e) + ' ' + e).join(', ')}.`}</p>
@@ -3035,7 +3035,7 @@
   // over the screen (the icon column on the left is left out on phones). Locked buildings are dimmed and say what
   // opens them; a dot shows where something waits. ----------
   function navDropHtml() {
-    const cur = tab === 'prep' ? prepNav() : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
+    const cur = tab === 'prep' ? prepNav() : tab === 'tourney' ? (tnKind() === 'arena' ? 'arena' : 'social') : NAV_OF[tab] || tab, shards = K.FATE_SHARDS.some(f => (S.fs[f.id] || 0) > 0);
     const home = `<button type="button" class="nd-it" data-act="tab" data-tab="home"><span class="nd-ic nd-home"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 15V7l2-1V3h1.6v2.2L8 4l6 3v8H9.8v-4H6.2v4z"/></svg></span><span class="nd-t"><b>Home</b><small>Your homebase</small></span></button>`;
     return `<div class="nd-box" role="menu" aria-label="Buildings">${home}${HOME_LIST.map(z => {
       const locked = !unlocked(z.go), dot = !locked && ((z.go === 'altaar' && shards) || (z.go === 'profiel' && thClaimN()) || (z.go === 'expedition' && expDone()) || (z.go === 'siege' && sgFull()));
@@ -3587,6 +3587,7 @@
     else if (act === 'gbd') { GD.d = +a.dataset.n; render(); }
     else if (act === 'gbfight') openGuildPrep();
     else if (act === 'ptopen') ptPop(); // the playtime chests
+    else if (act === 'tnclaim') tnClaim(+a.dataset.n); // a tournament milestone
     else if (act === 'profile') openProfile(id);
     else if (act === 'ginvf') sendInvite(a.dataset.code);
     else if (act === 'ginvopen') openInvite();
@@ -5616,10 +5617,15 @@
     blood: { name: 'Blood Moon Siege', col: '#d8443a', go: 'siege', u: 'siege' },
     storm: { name: 'Shard Storm', col: '#9a7cf0', go: 'altaar', u: 'altaar' },
     hunt: { name: 'Boss Hunt', col: '#e8933a', go: 'kerkers', u: 'kerkers' },
+    // the weekly tournaments (0026_tournaments.sql): the Arena Tournament in cycle weeks 1 and 3, the Guild Boss Tournament in 0 and 2
+    arena_t: { name: 'Arena Tournament', col: '#e2574c', go: 'tourney', u: 'arena' },
+    guild_t: { name: 'Guild Boss Tournament', col: '#3fb3a3', go: 'tourney', u: 'guild' },
   };
   const EV_SVG = {
     blood: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 1.5A6.5 6.5 0 1 0 14.5 11 5.5 5.5 0 0 1 10.5 1.5z"/></svg>',
     hunt: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M7.2 1h1.6v2.1A5 5 0 0 1 12.9 7.2H15v1.6h-2.1A5 5 0 0 1 8.8 12.9V15H7.2v-2.1A5 5 0 0 1 3.1 8.8H1V7.2h2.1A5 5 0 0 1 7.2 3.1zM8 4.6A3.4 3.4 0 1 0 8 11.4 3.4 3.4 0 0 0 8 4.6zm0 2.2A1.2 1.2 0 1 1 8 9.2 1.2 1.2 0 0 1 8 6.8z"/></svg>',
+    arena_t: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 1l5.2 5.2-1.4 1.4L1 2.8V1zm12 0v1.8L4.7 12.1l1.2 1.2-1 1-1.6-1.6L1.6 14.4.4 13.2l1.7-1.7L.5 9.9l1-1 1.2 1.2L12.2 1zM9.6 9.6l1.4-1.4 2.5 2.5 1.1-1.1 1 1-1.6 1.6 1.7 1.7-1.2 1.2-1.7-1.7-1.6 1.6-1-1 1.1-1.1z"/></svg>',
+    guild_t: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1h10v5.2c0 3.6-2.4 6.6-5 8.3-2.6-1.7-5-4.7-5-8.3zm5 2.6L6.9 6H4.6l1.9 1.5-.7 2.4L8 8.4l2.2 1.5-.7-2.4L11.4 6H9.1z"/></svg>',
   };
   // every event that runs on UTC day d, with its first day and the day after its last
   function evOnDay(d) {
@@ -5628,6 +5634,7 @@
     if (c === 1 && dow >= 5) out.push({ k: 'blood', from: ws + 5, to: ws + 7 });
     if (c === 2) out.push({ k: 'hunt', boss: K.BOSS_ORDER[((d % 25) + 25) % 25], from: ws, to: ws + 7, day: d });
     if ((c === 2 || c === 0) && dow >= 5) out.push({ k: 'storm', shard: c === 2 ? 'ancient' : 'mythic', from: ws + 5, to: ws + 7 });
+    out.push(c === 1 || c === 3 ? { k: 'arena_t', from: ws, to: ws + 7 } : { k: 'guild_t', from: ws, to: ws + 7 }); // a tournament every week
     return out;
   }
   const evNow = k => evOnDay(evDay()).find(e => e.k === k) || null;
@@ -5636,6 +5643,8 @@
   function evText(e) {
     if (e.k === 'tide') return `${e.ess} heroes gain 50% more XP, ${e.ess} Elixirs drop twice${e.ess !== 'Aether' ? `, and the ${twName(e.ess)} pays double Sigils and XP on first clears` : ''}.`;
     if (e.k === 'blood') return 'A blood moon hangs over the Siege: tickets come back every hour instead of every two, and every kill pays double XP and Sigils.';
+    if (e.k === 'arena_t') return 'Every arena attack scores: 10 points for a win, 2 for a loss. Claim rewards at five milestones; on Monday the top 10 earn more, up to a Mythic Fate Shard.';
+    if (e.k === 'guild_t') return 'Every guild boss fight scores its guild boss points (damage x difficulty). Claim rewards at five milestones; on Monday the top 10 earn more, up to a Mythic Fate Shard.';
     if (e.k === 'storm') return `Every ${K.SHARD[e.shard].name} you summon counts double towards the Legendary pity.`;
     return `Today's hunted boss: ${K.BOSSES[e.boss].name}. Every Boss Hall win against it drops one more set piece and ${/^[AEIOU]/.test(K.BOSSES[e.boss].aff) ? 'an' : 'a'} ${K.BOSSES[e.boss].aff} Elixir. A new boss every day.`;
   }
@@ -5648,6 +5657,57 @@
   }
   // a hint on the screen an event touches
   const evHint = (e, extra) => e ? `<div class="ev-hint" style="--evc:${EVENTS[e.k].col}"><span class="ev-ic">${evIc(e)}</span><span><b>${esc(evTitle(e))}</b> · ${esc(extra || evText(e))} <small>(${evLeft(e)} left)</small></span></div>` : '';
+  // ---------- the weekly tournament (tab 'tourney', 0026_tournaments.sql): this week's Arena or Guild Boss Tournament,
+  // scored by the server from fights it decided itself. The screen: my points and rank, the five milestones (claim each,
+  // tnClaim: the server checks the points and returns the reward), the rank rewards and the top 20. TN.st is
+  // tourney_state(), fetched when the screen opens (at most every 20 s). The Arena and the guild boss show a link to it.
+  const TN = { st: null, at: 0, who: '', busy: false };
+  const tnKind = () => (TN.st ? TN.st.kind : evNow('arena_t') ? 'arena' : 'guild');
+  const tnName = k => (k === 'arena' ? 'Arena Tournament' : 'Guild Boss Tournament');
+  async function tnLoad() {
+    const cl = cloud(); if (!cl || !cl.signedIn() || TN.busy) return;
+    TN.busy = true;
+    try { const who = cl.info().email; if (TN.who !== who) Object.assign(TN, { who, st: null }); TN.st = await cl.rpc('tourney_state'); TN.at = Date.now(); } catch (e) { TN.err = true; }
+    TN.busy = false; if ((tab === 'tourney' || tab === 'arena' || tab === 'social') && !B) render();
+  }
+  // a link on the Arena and the guild boss screen: the tournament that runs, and my points when known
+  function tnLink(k) {
+    const e = evNow(k === 'arena' ? 'arena_t' : 'guild_t'); if (!e) return '';
+    if (!TN.st || Date.now() - TN.at > 60000) setTimeout(tnLoad, 0); // my points, fresh once a minute
+    const pts = TN.st && TN.st.kind === k ? ` · <b>${Number(TN.st.points).toLocaleString('en-US')}</b> points` : '';
+    return `<button type="button" class="ev-hint tn-link" style="--evc:${EVENTS[e.k].col}" data-act="go" data-go="tourney"><span class="ev-ic">${evIc(e)}</span><span><b>${tnName(k)}</b> this week${pts} <small>(${evLeft(e)} left)</small></span><span class="ev-go">›</span></button>`;
+  }
+  function tourneyHtml() {
+    const k = tnKind(), E0 = EVENTS[k === 'arena' ? 'arena_t' : 'guild_t'], e = evNow(k === 'arena' ? 'arena_t' : 'guild_t');
+    const head = `<div class="section-head"><div><h2>${tnName(k)}</h2><p class="lede">${esc(e ? evText(e) : '')}</p></div></div>`;
+    if (!unlocked(k)) return head + `<p class="empty-note">${LOCK_SVG} The ${tnName(k)} opens with the ${k === 'arena' ? 'Arena' : 'guilds'}, after ${needTxt(k)}.</p>`;
+    const cl = cloud();
+    if (!cl || !cl.signedIn()) return head + `<div class="lockbox">${LOCK_SVG}<div><h3>Sign in to take part</h3><p class="empty-note">Tournament points come from fights the server keeps, so you need an account.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div>`;
+    if (!TN.st || Date.now() - TN.at > 20000) setTimeout(tnLoad, 0);
+    if (!TN.st) return head + '<p class="empty-note">Loading the tournament…</p>';
+    const st = TN.st, pts = Number(st.points) || 0, steps = st.def.steps, n = v => Number(v).toLocaleString('en-US');
+    const rows = steps.map((s, i) => {
+      const got = st.claimed.includes(i), ok = pts >= s.p, prev = i ? steps[i - 1].p : 0, pct = Math.max(0, Math.min(100, Math.round((pts - prev) / (s.p - prev) * 100)));
+      const r = begParts(s.r).map(x => `<span class="tn-rw">${x[0]}<b>${x[1]}</b></span>`).join('');
+      return `<li class="tn-step ${got ? 'got' : ok ? 'ready' : ''}"><span class="tn-p">${n(s.p)}</span><span class="tn-rws">${r}</span>${got ? '<span class="tn-ok">✓ Claimed</span>' : ok ? `<button type="button" class="btn primary small" data-act="tnclaim" data-n="${i}">Claim</button>` : `<span class="tn-bar"><i style="width:${pct}%"></i></span>`}</li>`;
+    }).join('');
+    const ranks = st.def.ranks.map((r, i) => `<li><b>${i ? `${st.def.ranks[i - 1].to + 1}-${r.to}` : '#1'}</b><span class="tn-rws">${begParts(r.r).map(x => `<span class="tn-rw">${x[0]}<b>${x[1]}</b></span>`).join('')}</span></li>`).join('');
+    const row = b => `<li class="${b.me ? 'me' : ''}"><span class="lb-rank">${b.rank}</span>${b.avatar && C[b.avatar] ? por(b.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(b.name || '?')}</b></span><span class="lb-score">${n(b.points)}</span></li>`;
+    const board = st.board.length ? `<ol class="lb">${st.board.map(row).join('')}${st.me && !st.board.some(b => b.me) ? `<li class="gap">…</li>${row({ ...st.me, name: S.p.name, avatar: avatarId(), me: true })}` : ''}</ol>` : '<p class="empty-note">Nobody has scored yet. Be the first!</p>';
+    const goBtn = k === 'arena' ? '<button class="btn primary small" data-act="go" data-go="arena">To the Arena ›</button>' : '<button class="btn primary small" data-act="go" data-go="guild">To the guild boss ›</button>';
+    return `${head}<div class="tn-wrap lfit" style="--evc:${E0.col}">
+      <section class="tn-me"><div class="tn-sum"><span class="ev-ic">${evIc({ k: k === 'arena' ? 'arena_t' : 'guild_t' })}</span><div><small>Your points</small><b>${n(pts)}</b><small>${st.me ? `Rank #${st.me.rank}` : 'Not ranked yet'} · ends in ${untilUtc(new Date(st.end).getTime())}</small></div>${goBtn}</div>
+        <h3>Milestones</h3><ol class="tn-steps">${rows}</ol><p class="empty-note">Claim them here; on Monday every milestone you reached but did not claim arrives in your Mail.</p></section>
+      <section class="tn-board"><h3>Top 10 rewards <small>(by Mail on Monday)</small></h3><ol class="tn-ranks">${ranks}</ol><h3>Ranking</h3>${board}</section></div>`;
+  }
+  async function tnClaim(i) {
+    if (TN.busy) return; TN.busy = true;
+    let res = null; try { res = await cloud().rpc('tourney_claim', { i }); } catch (e) { toast('No connection to the server. Try again in a moment.', true); }
+    TN.busy = false; if (!res) return;
+    if (res.rewards) { grantGift(res.rewards); save(); hud(); SFX.up(); if (TN.st && !TN.st.claimed.includes(i)) TN.st.claimed.push(i); mailPop(res.rewards, `${tnName(tnKind())} · ${Number(TN.st.def.steps[i].p).toLocaleString('en-US')} points`); }
+    else toast('Not reached yet, or already claimed.');
+    render();
+  }
   const evHunted = id => { const e = evNow('hunt'); return !!e && e.boss === id; };
   const evTideOf = aff => { const e = evNow('tide'); return !!e && e.ess === aff; };
   // ---------- Admin (0016_admin.sql): player numbers, only for accounts in the admins table ----------
@@ -5792,7 +5852,7 @@
       cal += `<button type="button" class="ev-wk" data-act="evpop" data-d="${ws}" data-k="tide" title="${esc(evTitle(tide))}">${essIcon(tide.ess)}${tide.ess}</button>`;
       for (let d = ws; d < ws + 7; d++) {
         const evs = evOnDay(d).filter(e => e.k !== 'tide'), date = new Date(d * 86400000);
-        cal += `<span class="ev-day ${d < d0 ? 'past' : d === d0 ? 'today' : ''}"><b>${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}</b>${evs.map(e => `<button type="button" class="ev-mini" style="--evc:${EVENTS[e.k].col}" data-act="evpop" data-d="${d}" data-k="${e.k}" title="${esc(evTitle(e))}">${esc(e.k === 'hunt' ? K.BOSSES[e.boss].name : e.k === 'storm' ? K.SHARD[e.shard].name.replace(/ Fate Shard$/, '') + ' Storm' : 'Blood Moon')}</button>`).join('')}</span>`;
+        cal += `<span class="ev-day ${d < d0 ? 'past' : d === d0 ? 'today' : ''}"><b>${date.getUTCDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][date.getUTCMonth()]}</b>${evs.map(e => `<button type="button" class="ev-mini" style="--evc:${EVENTS[e.k].col}" data-act="evpop" data-d="${d}" data-k="${e.k}" title="${esc(evTitle(e))}">${esc(e.k === 'hunt' ? K.BOSSES[e.boss].name : e.k === 'storm' ? K.SHARD[e.shard].name.replace(/ Fate Shard$/, '') + ' Storm' : e.k === 'arena_t' ? 'Arena Tourney' : e.k === 'guild_t' ? 'Guild Tourney' : 'Blood Moon')}</button>`).join('')}</span>`;
       }
     }
     return `<div class="evs"><div class="section-head"><div><h2>Events</h2><p class="lede">Every week brings its own events. They follow a four-week cycle, so they keep coming back.</p></div></div>
