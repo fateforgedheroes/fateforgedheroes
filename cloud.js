@@ -351,6 +351,13 @@
       let data = null; try { data = await res.json(); } catch (e) { data = null; }
       return data || { error: 'The server did not answer (HTTP ' + res.status + ').' };
     },
+    // the anonymous play signal (0022_play_signal.sql): also for guests (the anon key alone); never throws
+    async ping(body) {
+      if (!enabled) return;
+      const send = auth => req('/rest/v1/rpc/play_ping', { method: 'POST', body, auth });
+      try { if (session) await valid(); } catch (e) { /* an expired sign-in still counts, as a guest */ }
+      try { await send(!!session); } catch (e) { if (session && e.status === 401) try { await send(false); } catch (e2) { /* offline */ } }
+    },
     // calls a database function (leaderboard, claim_arena_rewards)
     async rpc(name, body) { if (!(await valid())) throw new Error('Please sign in first.'); return req('/rest/v1/rpc/' + name, { method: 'POST', body: body || {} }); },
     // called on every local save; uploads a few seconds later

@@ -3510,6 +3510,9 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .adm-b em { font-style: normal; font-size: .58rem; color: var(--fg); font-variant-numeric: tabular-nums; } .adm-b small { font-size: .55rem; color: var(--muted); }
 .adm-lv { display: grid; gap: 3px; } .adm-lv div { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 2.6em; align-items: center; gap: 6px; font-size: .75rem; }
 .adm-lv i { display: block; height: 10px; border-radius: 3px; background: #9a7cf0; } .adm-lv b { text-align: right; font-variant-numeric: tabular-nums; }
+/* the play signal (0022): a heading over each group, the funnel with longer labels in green */
+.adm-h { margin: 10px 0 6px; color: var(--gold); font-size: .95rem; letter-spacing: .03em; } .adm-h:first-of-type { margin-top: 4px; }
+.adm-funnel div { grid-template-columns: 9.5em minmax(0, 1fr) 2.6em; } .adm-funnel i { background: #7ccf8a; }
 .adm-lb { margin-top: 8px; } .adm-lbl { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
 .adm-lbl li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; background: rgba(0, 0, 0, .3); border-left: 3px solid #e0453a; }
 .adm-lbl li.allowed { border-left-color: #5bc46a; } .adm-lbl li.hidden { border-left-color: #777; opacity: .8; }

@@ -670,10 +670,12 @@
     document.body.appendChild(el);
     el.addEventListener('click', e => { if (e.target === el || e.target.closest('button')) { el.remove(); if (e.target.closest('[data-link]') && cloud()) cloud().openAccount(); } });
   }
+  const PING = { at: 0, who: '' }; // the anonymous play signal (playPing): when it was last sent, the account it counted
   function paintAccount() {
     linkPaid();
     // the mail badge follows the account: load friends and mail when someone signs in (or switches account)
     paintMail(); if (signedIn() && SO.who !== cloud().info().email) socialLoad();
+    if (signedIn() && PING.who !== cloud().info().email) { PING.who = cloud().info().email; playPing(true); } // the play signal counts the account
     // no hero yet (hero creation): a plain person icon instead of an avatar
     if (!avatarId()) { $('#account').innerHTML = `<svg class="acc-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3"/><path d="M2 15c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5"/></svg><span class="acc-lv">${presEmblem(S.p.prestige, 'sm')}Lv ${S.p.lvl}</span>`; return; }
     const b = $('#account'), cl = window.FFH_CLOUD && window.FFH_CLOUD.info();
@@ -5282,6 +5284,7 @@
     if (ADM.busy) return; ADM.busy = true; ADM.err = '';
     try { ADM.data = await cloud().rpc('admin_stats'); ADM.at = Date.now(); } catch (e) { ADM.err = String(e && e.message || e); }
     try { ADM.lb = await cloud().rpc('admin_lb_list'); } catch (e) { ADM.lb = null; } // no 0017 yet: no list
+    try { ADM.play = await cloud().rpc('admin_play'); } catch (e) { ADM.play = null; } // no 0022 yet: accounts only
     await admChLoad();
     ADM.busy = false; if (tab === 'admin') render();
   }
@@ -5342,6 +5345,22 @@
     catch (e) { toast('Could not change it: ' + (e && e.message || e), true); }
     if (tab === 'admin') render();
   }
+  // everyone who plays, guests too (the play signal, 0022): who played now, today, this week and this month, players and
+  // new players per day, how far players first seen in the last 30 days got, and how many of those guests made an account
+  function admPlayHtml(bars) {
+    const p = ADM.play; if (!p) return '';
+    const n = v => (+v || 0).toLocaleString('en-US'), A = p.active || {}, f = p.funnel || {};
+    const days = (p.days || []).map(r => ({ ...r, all: (+r.guests || 0) + (+r.accounts || 0) }));
+    const tile = (k, l, s) => { const x = A[k] || {}, g = +x.guests || 0, a = +x.accounts || 0; return `<div class="adm-t"><b>${n(g + a)}</b><span>${l}</span><small>${n(g)} guests · ${n(a)} accounts${s ? ` · ${s}` : ''}</small></div>`; };
+    const steps = [['started', 'Opened the game'], ['hero', 'Created their hero'], ['won', 'Won a battle'], ['ch1', 'Cleared Chapter I'], ['ch2', 'Cleared Chapter II'], ['ch3', 'Cleared Chapter III'], ['ch5', 'Cleared Chapter V'], ['easy', 'Cleared all of Easy']];
+    const top = Math.max(1, +f.started || 0), today = days[days.length - 1] || {};
+    return `<h3 class="adm-h">Everyone who plays</h3>
+      <div class="adm-tiles">${tile('now', 'Playing now', 'last 15 min')}${tile('24h', 'Played today', 'last 24 hours')}${tile('7d', 'Played this week', 'last 7 days')}${tile('30d', 'Played this month', 'last 30 days')}</div>
+      <div class="adm-cols"><section class="adm-sec"><h3>Players per day</h3>${bars(days, 'all', '#e9c46f')}<p class="empty-note">Today ${n(today.guests)} guests and ${n(today.accounts)} accounts. A browser counts once a day, as an account when it was signed in.</p></section>
+        <section class="adm-sec"><h3>New players per day</h3>${bars(days, 'new', '#7ccf8a')}<p class="empty-note">Browsers seen for the first time (since the play signal started).</p></section>
+        <section class="adm-sec"><h3>How far new players get</h3><p class="empty-note">First seen in the last 30 days. ${n(p.converted)} of ${n(p.guests30)} guests made an account.</p>
+          <div class="adm-lv adm-funnel">${steps.map(([k, l]) => `<div><span>${l}</span><i style="width:${Math.round((+f[k] || 0) / top * 100)}%"></i><b>${n(f[k])}</b></div>`).join('')}</div></section></div>`;
+  }
   function adminHtml() {
     if (!ADM.ok) return '<p class="empty-note">Only for the owner.</p>';
     if (!ADM.data && !ADM.err) { setTimeout(admLoad, 0); return '<div class="adm"><div class="section-head"><div><h2>Admin</h2></div></div><p class="empty-note">Loading the numbers…</p></div>'; }
@@ -5351,11 +5370,12 @@
     const bars = (rows, k, col) => { const max = Math.max(1, ...rows.map(r => +r[k] || 0)); return `<div class="adm-bars" style="--bc:${col}">${rows.map(r => `<div class="adm-b" title="${esc(r.d)}: ${n(r[k])}"><i style="height:${Math.round((+r[k] || 0) / max * 100)}%"></i><em>${n(r[k])}</em><small>${esc(r.d.split(' ')[0])}</small></div>`).join('')}</div>`; };
     const days = x.days || [], lv = x.levels || [], lmax = Math.max(1, ...lv.map(r => r.n));
     const tabs = ADM.ch == null ? '' : `<div class="adm-tabs"><button type="button" class="${ADM.view === 'stats' ? 'on' : ''}" data-act="admview" data-v="stats">Players</button><button type="button" class="${ADM.view === 'cheat' ? 'on' : ''}" data-act="admview" data-v="cheat">Cheaters${ADM.rev ? ` <b class="adm-badge">${ADM.rev}</b>` : ''}</button></div>`;
-    const head = `<div class="section-head"><div><h2>Admin</h2><p class="lede">Accounts only: guests play in their browser and are not counted. Updated ${new Date(ADM.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</p></div><button class="btn small" data-act="admload">Refresh</button></div>${tabs}`;
+    const head = `<div class="section-head"><div><h2>Admin</h2><p class="lede">${ADM.play ? 'Everyone who plays counts guests too; the account numbers come from cloud saves.' : 'Accounts only: guests are not counted until 0022_play_signal.sql runs.'} Updated ${new Date(ADM.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}.</p></div><button class="btn small" data-act="admload">Refresh</button></div>${tabs}`;
     if (ADM.ch != null && ADM.view === 'cheat') return `<div class="adm">${head}${admChHtml()}</div>`;
     return `<div class="adm">${head}
       ${ADM.rev ? `<button type="button" class="adm-alert" data-act="admview" data-v="cheat">⚠ ${ADM.rev} suspected cheater${ADM.rev > 1 ? 's' : ''} to review ›</button>` : ''}
-      <div class="adm-tiles">${tile(x.active24h, 'Active today', 'last 24 hours')}${tile(x.active7d, 'Active this week', 'last 7 days')}${tile(x.active30d, 'Active this month', 'last 30 days')}${tile(x.accounts, 'Accounts', `${n(x.new24h)} new today · ${n(x.new7d)} this week`)}
+      ${admPlayHtml(bars)}
+      ${ADM.play ? '<h3 class="adm-h">Accounts</h3>' : ''}<div class="adm-tiles">${tile(x.active24h, 'Active today', 'last 24 hours')}${tile(x.active7d, 'Active this week', 'last 7 days')}${tile(x.active30d, 'Active this month', 'last 30 days')}${tile(x.accounts, 'Accounts', `${n(x.new24h)} new today · ${n(x.new7d)} this week`)}
         ${tile(x.arenaWeek, 'In the arena', `this week · ${n(x.arenaFights24h)} fights today`)}${tile(x.chatters7d, 'Chatting', `last 7 days · ${n(x.messages24h)} messages today`)}${tile(x.guilds, 'Guilds', `${n(x.guildMembers)} members`)}${tile(x.bought, 'Bought Crystals', 'in wallets')}</div>
       <div class="adm-cols"><section class="adm-sec"><h3>Active players per day</h3>${bars(days, 'active', '#e9c46f')}<p class="empty-note">A player counts on a day a save of theirs was written (approximate for very busy players).</p></section>
         <section class="adm-sec"><h3>New accounts per day</h3>${bars(days, 'new', '#5fb4e8')}</section>
@@ -6148,6 +6168,23 @@
     toast('A new season has begun: everyone starts fresh. Choose your hero!', false, 7000);
     return true;
   }
+  // ---- the anonymous play signal (0022_play_signal.sql), so the Admin screen counts guests too: a random code for this
+  // browser (localStorage ffh-dev, not in the save), the player level, battles won, Easy stages cleared and whether the
+  // hero was made; at the start, every 15 minutes while the game is shown and right after signing in. Nothing personal.
+  function playPing(force) {
+    const cl = cloud(); if (!cl || !cl.ping || location.protocol === 'file:' || !S) return;
+    if (!force && Date.now() - PING.at < 15 * 60000) return;
+    // a sign-in kept in this browser that cloud.js has not restored yet (it clears one that fails): wait for it, or a
+    // player with an account would also count as a guest
+    if (!cl.signedIn()) { try { const s = localStorage.getItem('ffh-session'); if (s && s !== 'null') return; } catch (e) { return; } }
+    let dev = '';
+    try {
+      dev = localStorage.getItem('ffh-dev') || '';
+      if (!/^[a-z0-9]{16,40}$/.test(dev)) { dev = Array.from(crypto.getRandomValues(new Uint8Array(12)), b => b.toString(36).padStart(2, '0')).join(''); localStorage.setItem('ffh-dev', dev); }
+    } catch (e) { return; }
+    PING.at = Date.now();
+    cl.ping({ dev, lvl: S.p.lvl || 0, stages: Math.max(0, S.cleared + 1), won: (S.p.st && S.p.st.won) || 0, hero: !noHero() });
+  }
   // ---- new version notice: build.mjs stamps window.FFH_BUILD into the page and writes the same id to /version.json.
   // A tab left open for days finds a newer build there and shows a banner (never during a battle: render() and the
   // battle start repaint it); tapping it saves, uploads the save and reloads. Offline or opened from a file: silent.
@@ -6207,6 +6244,8 @@
     document.addEventListener('keydown', e => { const el = $('#newver'); if (el && !el.hidden && e.target !== $('#newver-go')) { e.preventDefault(); e.stopPropagation(); $('#newver-go').focus(); } }, true);
     setInterval(() => { if (document.visibilityState === 'visible') checkVersion(); }, 300000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+    playPing(); setInterval(() => { if (document.visibilityState === 'visible') playPing(); }, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) playPing(); });
     if (announceReset()) return;
     const m7 = S.migrated7; delete S.migrated7;
     if (S.migrated) { delete S.migrated; delete S.migrated4; delete S.migrated5; delete S.migrated6; save(); toast('Your progress was carried over. Your champions were replaced by the new heroes.'); }

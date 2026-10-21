@@ -56,6 +56,11 @@ const head = `<!doctype html>
 <link rel="icon" href="/favicon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<script>
+// Vercel Web Analytics (anonymous visits, no cookies), only on the real site so a local copy loads nothing
+{ const h = location.hostname;
+  if (h === 'fateforgedheroes.com' || h.endsWith('.fateforgedheroes.com') || h.endsWith('.vercel.app')) { const s = document.createElement('script'); s.defer = true; s.src = '/_vercel/insights/script.js'; document.head.appendChild(s); } }
+</script>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
