@@ -2672,6 +2672,16 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
 .lbg .th-head { align-items: center; }
 .lb-pick { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; font: 700 .8rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; color: var(--gold); }
 .lb-pick select { flex: 1; max-width: 320px; min-height: 36px; padding: 0 8px; background: var(--panel-2); color: var(--fg); border: 1px solid var(--gold-dim); border-radius: 6px; font: inherit; text-transform: none; letter-spacing: 0; font-family: var(--font-body); font-size: .95rem; }
+/* weekly leaderboard prizes (app.js lbPrizesHtml): the period toggle, a strip with the prizes, medals for this week's top 3
+   and a crown by the name of last week's #1 */
+.lb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 6px 0 0; } .lb-bar .lbp { flex: 1 1 320px; margin: 0; }
+.lb-wk { margin: 0; } .lb-wk button { min-height: 30px; }
+.lbp { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin: 8px 0 2px; padding: 6px 10px; border: 1px solid rgba(243, 198, 74, .55); border-radius: 8px; background: linear-gradient(90deg, rgba(90, 64, 12, .5), rgba(30, 22, 10, .5)); }
+.lbp-h { display: grid; } .lbp-h b { color: #ffe08a; font-family: var(--font-display); } .lbp-h small { color: var(--muted); font-size: .76rem; }
+.lbp-cs { display: flex; flex-wrap: wrap; gap: 4px 10px; } .lbp-c { display: inline-flex; align-items: center; gap: 4px; font-size: .95rem; }
+.lbp-r { display: inline-flex; align-items: center; gap: 2px; } .lbp-r img, .lbp-r svg { width: 18px; height: 18px; } .lbp-r b { font-size: .78rem; color: #f7ead0; }
+.lb-crown { margin-left: 4px; font-size: .9em; } .lb li.prize { background: linear-gradient(90deg, rgba(243, 198, 74, .18), var(--panel-2) 60%); } .lb li.prize .lb-rank { font-size: 1.15rem; }
+.lb-score b { color: #f7dfa4; font-size: .95rem; } .lb-score small { display: block; font-size: .7rem; }
 /* Auto ×10: which battle of the run this is, over the top left of the battlefield */
 .b-rep { position: absolute; top: 8px; left: 8px; z-index: 6; padding: 3px 10px; border-radius: 999px; background: rgba(10, 7, 12, .85); border: 1px solid var(--gold); color: #f3e3bd; font: 700 .78rem var(--font-tag); letter-spacing: .06em; text-transform: uppercase; pointer-events: none; box-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
 .b-rep b { color: #ffe08a; font-size: 1rem; }
@@ -3757,6 +3767,10 @@ img[src^="data:image/webp"] { image-rendering: auto !important; }
   .mk-wrap .mk-card { min-width: 0; overflow: hidden; } .mk-wrap .mk-main { width: 100%; }
   /* Town Hall: slim tabs; each tab's content scrolls in its own box (.th-body.lfit), smaller text and cards */
   .th-tabs { margin-bottom: 4px !important; } .th-tabs button { min-height: 28px !important; padding: 0 9px !important; font-size: .72rem !important; }
+  /* Leaderboards: the period toggle and the prize strip on one line, the explanation left out (it is in the toggle and the strip) */
+  .lb-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 4px 0 0; } .lb-bar .lb-wk { margin: 0; } .lb-wk button { min-height: 26px !important; padding: 0 9px; font-size: .68rem; }
+  .lb-bar .lbp { flex: 1; min-width: 0; margin: 0; padding: 2px 8px; gap: 2px 8px; } .lbp-h small { display: none; } .lbp-h b { font-size: .74rem; }
+  .lbp-c { font-size: .78rem; gap: 2px; } .lbp-cs { gap: 2px 8px; } .lbp-r img, .lbp-r svg { width: 14px; height: 14px; } .lbp-r b { font-size: .66rem; } .lbg .lb-note { display: none; }
   .th-body { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-right: 2px; font-size: .86rem; }
   .th-body .th-sec { padding: 6px 10px !important; margin-bottom: 6px; gap: 5px; } .th-body h3 { font-size: .86rem; margin: 0; } .th-body .btn { padding: 3px 9px; min-height: 0; font-size: .74rem; }
   .th-body .profile > section, .th-body .prof-cols > section { padding: 6px 10px !important; } .prof-av img { width: 64px; height: 64px; } .th-body .pname { font-size: 1.05rem; } .prof-cols { gap: 6px; }

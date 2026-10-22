@@ -2922,7 +2922,29 @@
   }
   // ----- global leaderboards (Town Hall tab): campaign, Boss Hall (all bosses or one), arena, Tower of Essence (all
   // towers or one). The rows come from the `leaderboard` database function (0003 + 0010); the arena list adds the bots.
-  const LB = { kind: 'campaign', rows: null, err: '', loading: '' };
+  const LB = { kind: 'campaign', rows: null, err: '', loading: '', week: true, wk: false };
+  // ---------- weekly leaderboard prizes (0030_leaderboard_prizes.sql): every Monday the top 3 of every leaderboard win a
+  // prize by mail (#1 royally). Campaign, Boss Hall, Tower and Siege rank the progress made that week in points (a stage
+  // counts 1 on Easy up to 5 on Nightmare; harder Boss Hall levels, Tower floors and Siege waves count more): their
+  // "This week" board (lb_week, LB.week); Arena and Guilds are weekly already. LBP.info = lb_prize_info: the prizes, the
+  // week's end and last week's winners (a crown by the name of last week's #1).
+  const LBP = { info: null, at: 0 };
+  const LB_WEEK = ['campaign', 'bosses', 'tower', 'siege'];
+  async function lbpLoad() {
+    const cl = cloud(); if (!cl || !cl.signedIn()) return;
+    LBP.at = Date.now();
+    try { LBP.info = await cl.rpc('lb_prize_info'); } catch (e) { /* a database without 0030: no prizes yet */ }
+    if (tab === 'profiel' && TH.tab === 'leaders' && !B) render();
+  }
+  const lbCrown = (kind, name) => LBP.info && (LBP.info.winners || []).some(x => x.kind === kind && x.place === 1 && x.name === name) ? '<span class="lb-crown" title="#1 on this leaderboard last week">👑</span>' : '';
+  // the prizes of the board shown: a strip with the time left and the three prizes (icons, the full text in their tooltips)
+  function lbPrizesHtml(kind) {
+    if (!kind || !LBP.info || !LBP.info.prizes) return '';
+    const pz = LBP.info.prizes[kind === 'guilds' ? 'guild' : 'player'], medal = ['🥇', '🥈', '🥉'];
+    const who = kind === 'guilds' ? 'every member who fought for a top 3 guild' : kind === 'arena' ? 'the top 3 who fought this week' : 'the top 3 of This week';
+    const chips = pz.map((r, i) => `<span class="lbp-c">${medal[i]}${begParts(r).map(p => `<span class="lbp-r" title="${esc(p[1])}">${p[0]}<b>${esc(p[1].split(' ')[0])}</b></span>`).join('')}</span>`).join('');
+    return `<div class="lbp"><span class="lbp-h"><b>🏆 Weekly prizes · ${untilUtc(new Date(LBP.info.end).getTime())} left</b><small>for ${who}</small></span><span class="lbp-cs">${chips}</span></div>`;
+  }
   // players who never picked a name (still "Adventurer") stay off every leaderboard (the database leaves them out too,
   // 0014_leaderboard_names.sql; this also covers a database without that file)
   const named = rows => rows.filter(r => !/^\s*adventurer\s*$/i.test(r.name || 'Adventurer'));
@@ -2930,12 +2952,13 @@
     const cl = cloud();
     LB.kind = kind; LB.rows = null; LB.err = '';
     if (!cl || !cl.signedIn()) return;
+    const wk = LB.week && LB_WEEK.includes(kind); // the "This week" board (0030)
     LB.loading = kind; if (tab === 'profiel' && !B) render();
     let rows = null;
     // the guilds have their own function (0012_guild_board.sql): 'guilds' = this week, 'guilds:all', 'guilds:best'
-    try { rows = kind.startsWith('guilds') ? await cl.rpc('guild_board', { kind: kind.split(':')[1] || 'week' }) : await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
-    if (LB.kind !== kind) return;
-    LB.rows = kind.startsWith('guilds') ? rows || [] : named(rows || []); LB.loading = '';
+    try { rows = kind.startsWith('guilds') ? await cl.rpc('guild_board', { kind: kind.split(':')[1] || 'week' }) : wk ? await cl.rpc('lb_week', { kind }) : await cl.rpc('leaderboard', { kind }); } catch (e) { LB.err = 'The leaderboard could not be loaded.'; }
+    if (LB.kind !== kind || wk !== (LB.week && LB_WEEK.includes(kind))) return;
+    LB.rows = kind.startsWith('guilds') ? rows || [] : named(rows || []); LB.wk = wk; LB.loading = '';
     if (tab === 'profiel' && TH.tab === 'leaders' && !B) render();
   }
   function leadersHtml() {
@@ -2943,7 +2966,10 @@
     if (!cl || !cl.enabled) return '<section class="th-sec"><p class="empty-note">Leaderboards need the online version of the game.</p></section>';
     if (!cl.signedIn()) return `<section class="th-sec"><div class="lockbox">${LOCK_SVG}<div><h3>Sign in to see the leaderboards</h3><p class="empty-note">Rankings are read from the accounts of signed-in players.</p><button class="btn primary" data-act="account">Sign in or create an account</button></div></div></section>`;
     if (!LB.rows && !LB.err && LB.loading !== LB.kind) lbLoad(LB.kind);
-    const main = LB.kind.split(':')[0], sub = LB.kind.split(':')[1] || '';
+    if (Date.now() - LBP.at > 300000) setTimeout(lbpLoad, 0);
+    const main = LB.kind.split(':')[0], sub = LB.kind.split(':')[1] || '', wk = LB.wk && LB_WEEK.includes(LB.kind);
+    // the board's prize kind (the whole Boss Hall and every tower together, the guilds' week; not one boss or one tower)
+    const pk = sub ? '' : main === 'guilds' ? 'guilds' : main;
     const groups = [['campaign', 'Campaign'], ['bosses', 'Boss Hall'], ['arena', 'Arena'], ['tower', 'Tower of Essence'], ['siege', 'Siege'], ['guilds', 'Guilds']];
     const seg = `<div class="seg" role="group" aria-label="Leaderboard">${groups.map(([k, l]) => `<button type="button" data-act="lbkind" data-kind="${k}" aria-pressed="${main === k || (k === 'bosses' && main === 'boss')}">${l}</button>`).join('')}</div>`;
     // Boss Hall and the towers: everything together, or one boss / one tower
@@ -2955,9 +2981,13 @@
       : main === 'siege' ? `Wave ${r.score} / ${K.SIEGE.waves}${r.detail && r.detail.kills ? ` · ${Number(r.detail.kills).toLocaleString('en-US')} enemies defeated` : ''}`
       : sub ? `Floor ${r.score} / ${K.TOWER.floors}` : `${r.score.toLocaleString('en-US')} floors${r.detail && r.detail.best ? ` · best ${r.detail.best}` : ''}`;
     const list = LB.rows && main === 'arena' ? withBots(LB.rows) : LB.rows;
-    const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${fmt(r)}</span></li>`).join('') : '';
-    const note = main === 'guilds' ? 'Every guild ranked by its guild boss fights (counted by the server), plus your own guild. A fight counts for the guild its player was in at the time.' : main === 'arena' ? 'Ratings from fights the server played.' : 'Top 100 of every player with an account, plus your own place.';
-    return `<section class="th-sec lbg"><div class="th-head"><h3>Leaderboards</h3>${seg}</div>${pick}<p class="empty-note">${note}</p>
+    const rows = list ? list.map(r => main === 'guilds' ? `<li class="${r.me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span>${emblem(r)}<span class="lb-name"><b>${esc(r.name)}${pk === 'guilds' ? lbCrown('guilds', r.name) : ''}</b><small class="empty-note">${r.members} ${r.members === 1 ? 'member' : 'members'} · ${Number(r.hits).toLocaleString('en-US')} boss ${Number(r.hits) === 1 ? 'fight' : 'fights'}</small></span><span class="lb-score">${fmt(r)}</span></li>` : `<li class="${r.me ? 'me' : ''} ${wk && r.rank <= 3 ? 'prize' : ''}"><span class="lb-rank">${wk && r.rank <= 3 ? ['🥇', '🥈', '🥉'][r.rank - 1] : r.rank}</span>${r.avatar && C[r.avatar] ? por(r.avatar) : '<span class="lb-noav"></span>'}<span class="lb-name"><b>${esc(r.name)}${pk ? lbCrown(pk, r.name) : ''}</b>${r.lvl ? `<small class="empty-note">Player level ${r.lvl}</small>` : ''}</span><span class="lb-score">${wk ? `<b>+${Number(r.gain).toLocaleString('en-US')}</b> points <small class="empty-note">${Number(r.total).toLocaleString('en-US')} in all</small>` : fmt(r)}</span></li>`).join('') : '';
+    const note = wk ? 'Progress made this week, in points: a campaign stage counts 1 on Easy up to 5 on Nightmare; higher Boss Hall levels, Tower floors and Siege waves count more. A new week starts every Monday (UTC).'
+      : main === 'guilds' ? 'Every guild ranked by its guild boss fights (counted by the server), plus your own guild. A fight counts for the guild its player was in at the time.' : main === 'arena' ? 'Ratings from fights the server played.' : 'Top 100 of every player with an account, plus your own place.';
+    // Campaign, Boss Hall, Tower and Siege: this week's progress (the weekly prizes go by it) or everything so far
+    const wsel = LB_WEEK.includes(main) && !sub ? `<div class="seg lb-wk" role="group" aria-label="Period">${[[1, 'This week'], [0, 'All time']].map(([v, l]) => `<button type="button" data-act="lbweek" data-w="${v}" aria-pressed="${!!v === LB.week}">${l}</button>`).join('')}</div>` : '';
+    const strip = lbPrizesHtml(pk === 'guilds' || pk === 'arena' || LB_WEEK.includes(pk) ? pk : '');
+    return `<section class="th-sec lbg"><div class="th-head"><h3>Leaderboards</h3>${seg}</div>${pick}${wsel || strip ? `<div class="lb-bar">${wsel}${strip}</div>` : ''}<p class="empty-note lb-note">${note}</p>
       ${LB.err ? `<p class="ar-err">${esc(LB.err)}</p>` : !LB.rows ? '<p class="empty-note">Loading…</p>' : rows ? `<ol class="lb">${rows}</ol>` : '<p class="empty-note">Nobody here yet. Be the first!</p>'}</section>`;
   }
   function townHallHtml() {
@@ -3809,6 +3839,7 @@
     else if (act === 'hptab') { const box = a.closest('.modal-box'); box.querySelectorAll('[data-act=hptab]').forEach(b => b.setAttribute('aria-selected', b === a ? 'true' : 'false')); box.querySelectorAll('.hp-sec').forEach(s => { s.hidden = s.dataset.sec !== a.dataset.t; }); }
     else if (act === 'thtab') { TH.tab = a.dataset.t; editName = false; render(); }
     else if (act === 'lbkind') lbLoad(a.dataset.kind);
+    else if (act === 'lbweek') { LB.week = a.dataset.w === '1'; lbLoad(LB.kind); }
     else if (act === 'thclaim') thClaim(a);
     else if (act === 'mkbuy') mkBuy(a.dataset.id);
     else if (act === 'fcopen') fcsOpen();
