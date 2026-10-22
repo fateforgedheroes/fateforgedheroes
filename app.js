@@ -1019,8 +1019,16 @@
     const cl = cloud(); if (!cl || !cl.signedIn() || !unlocked('kerkers') || hoardOpen()) return;
     try {
       const r = await cl.rpc('hoard_roll');
-      if (r && r.portal) { HO.portal = r.portal; if (r.new) { HO.ann = true; if (!B) hoardAnnounce(); } }
+      if (r && r.portal) { HO.portal = r.portal; if (r.new) { HO.ann = true; if (!B) hoardAnnounce(); else hoardNote(); } }
     } catch (e) { /* a database without 0029: no portals yet */ }
+  }
+  // a portal that opens during a fight or an Auto ×10 run: a golden line in the result at once (the popup itself waits
+  // for a screen without a battle, which a run that goes on, or a new run started from the result, never leaves)
+  function hoardNote() {
+    const box = $('#modal').hidden ? null : $('#modal .modal-box.rs2');
+    if (!HO.ann || !hoardOpen() || !box || box.querySelector('.hoard-note')) return;
+    const at = box.querySelector('.rs-heroes') || box.querySelector('.rewards');
+    if (at) at.insertAdjacentHTML('afterend', '<p class="hoard-note">✨ <b>A golden portal tore open!</b> The Goblin Hoard waits at the top of the Boss Hall for 24 hours.</p>');
   }
   // a portal opened: a golden popup once, when no battle is on screen (after the result is closed)
   function hoardAnnounce() {
@@ -6870,7 +6878,7 @@
     clearInterval(repTimer);
     // when the run is over (ten battles, a defeat, Stop or no energy): its summary, and a big Auto ×10 to go again
     const done = () => {
-      lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; box.classList.add('rep-done'); el.insertAdjacentHTML('afterend', repSummary(r));
+      lastRep = r; RSUM.open = null; RSUM.sel.clear(); RSUM.selecting = false; RSUM.arm = null; box.classList.add('rep-done'); el.insertAdjacentHTML('afterend', repSummary(r)); hoardNote();
       const acts = box.querySelector('.rs-acts'), c = cfg.type === 'stage' ? stEn(cfg.i, cfg.diff) : K.bossEnergy(cfg.n);
       if (acts && !acts.querySelector('[data-go="auto10"]')) acts.insertAdjacentHTML('afterbegin', `<button class="btn rs-big violet" data-act="modal" data-go="auto10" title="Play this ${cfg.type === 'stage' ? 'stage' : 'level'} ten more times on auto"><span class="rs-bi">»</span><span>Auto ×10${enCost(c)}</span></button>`);
     };
